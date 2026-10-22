@@ -1,0 +1,39 @@
+{
+  "name": "heirloom-life-simulator",
+  "private": true,
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:preview": "vite build --mode preview && node scripts/make-artifact.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor-community/admob": "8.2.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/preferences": "7.0.4",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4",
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/figtree": "5.3.0",
+    "@fontsource/fredoka": "5.3.0",
+    "@fontsource/nunito": "5.3.0",
+    "@fontsource/oswald": "5.3.0",
+    "@revenuecat/purchases-capacitor": "13.7.0",
+    "preact": "10.26.9"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.3",
+    "@preact/preset-vite": "2.10.2",
+    "typescript": "5.8.3",
+    "vite": "6.3.5",
+    "vite-plugin-singlefile": "2.3.0",
+    "vitest": "3.2.4"
+  }
+}
