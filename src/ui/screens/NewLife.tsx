@@ -4,6 +4,7 @@ import type { Gender } from '../../engine/types';
 import { COUNTRIES, getCountry, firstNames } from '../../engine/world';
 import { newGame } from '../../engine/game';
 import { Avatar } from '../Avatar';
+import { T } from '../../i18n/ui';
 
 export function NewLife({ app }: { app: AppApi }) {
   const [gender, setGender] = useState<Gender>('female');
@@ -38,10 +39,10 @@ export function NewLife({ app }: { app: AppApi }) {
   return (
     <div class="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '12px' }}>
-        <div class="eyebrow">Heirloom: Life Simulator</div>
-        <h1 class="title-xl">Begin a new family</h1>
+        <div class="eyebrow" lang="en">Heirloom: Life Simulator</div>
+        <h1 class="title-xl">{T('Begin a new family')}</h1>
         <p class="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-          Live one life, then continue as your child. Your home, your heirlooms and your choices carry on.
+          {T('Live one life, then continue as your child. Your home, your heirlooms and your choices carry on.')}
         </p>
       </div>
 
@@ -49,39 +50,39 @@ export function NewLife({ app }: { app: AppApi }) {
         <Avatar id="p0Sano" gender="female" age={20} size={52} label="Sano Baba" />
         <div class="grow">
           <div class="item-title">Sano Baba</div>
-          <div class="item-sub">Test life · Zonguldak, Türkiye · 2 family heirlooms</div>
+          <div class="item-sub">{T('Test life · Zonguldak, Türkiye · 2 family heirlooms')}</div>
         </div>
-        <span class="chip accent">Play</span>
+        <span class="chip accent">{T('Play')}</span>
       </button>
 
       <div class="card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div class="section-head">
-          <h2 class="title-l">Custom life</h2>
+          <h2 class="title-l">{T('Custom life')}</h2>
           <button type="button" class="btn small ghost" onClick={randomize}>
-            Randomize
+            {T('Randomize')}
           </button>
         </div>
-        <div class="seg" role="group" aria-label="Gender">
+        <div class="seg" role="group" aria-label={T('Gender')}>
           <button type="button" aria-pressed={gender === 'female'} onClick={() => setGender('female')}>
-            Female
+            {T('Female')}
           </button>
           <button type="button" aria-pressed={gender === 'male'} onClick={() => setGender('male')}>
-            Male
+            {T('Male')}
           </button>
         </div>
         <div class="row" style={{ alignItems: 'stretch' }}>
           <div class="field grow">
-            <label for="first">First name</label>
+            <label for="first">{T('First name')}</label>
             <input id="first" value={first} placeholder={firstNames(countryId, gender)[0]} onInput={(e) => setFirst(e.currentTarget.value)} />
           </div>
           <div class="field grow">
-            <label for="last">Family name</label>
+            <label for="last">{T('Family name')}</label>
             <input id="last" value={last} placeholder={country.names.last[0]} onInput={(e) => setLast(e.currentTarget.value)} />
           </div>
         </div>
         <div class="row" style={{ alignItems: 'stretch' }}>
           <div class="field grow">
-            <label for="country">Country</label>
+            <label for="country">{T('Country')}</label>
             <select
               id="country"
               value={countryId}
@@ -93,13 +94,13 @@ export function NewLife({ app }: { app: AppApi }) {
             >
               {COUNTRIES.map((c) => (
                 <option value={c.id} key={c.id}>
-                  {c.name}
+                  {app.lang === 'tr' ? c.nameTr : c.name}
                 </option>
               ))}
             </select>
           </div>
           <div class="field grow">
-            <label for="city">City</label>
+            <label for="city">{T('City')}</label>
             <select id="city" value={city} onChange={(e) => setCity(e.currentTarget.value)}>
               {country.cities.map((c) => (
                 <option value={c} key={c}>
@@ -110,7 +111,7 @@ export function NewLife({ app }: { app: AppApi }) {
           </div>
         </div>
         <button type="button" class="btn primary" onClick={begin}>
-          Be born
+          {T('Be born')}
         </button>
       </div>
     </div>

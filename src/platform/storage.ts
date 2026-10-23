@@ -5,9 +5,18 @@ import { isNative } from './native';
 const GAME_KEY = 'heirloom.save.v1';
 const PROFILE_KEY = 'heirloom.profile.v1';
 
+/** First launch follows the phone's language: Turkish phones start in Turkish. */
+function deviceLang(): 'en' | 'tr' {
+  try {
+    return (navigator.language || '').toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
 export const DEFAULT_PROFILE: Profile = {
   entitlements: [],
-  settings: { themeId: 'evening', adultContent: false, sound: true },
+  settings: { themeId: 'evening', language: deviceLang(), adultContent: false, sound: true },
 };
 
 function read<T>(key: string): T | null {

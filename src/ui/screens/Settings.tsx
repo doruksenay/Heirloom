@@ -3,6 +3,13 @@ import type { AppApi } from '../app-state';
 import { THEMES, isThemeOwned } from '../../themes/registry';
 import { Icon } from '../icons';
 import { isNative } from '../../platform/native';
+import { T } from '../../i18n/ui';
+import type { Lang } from '../../engine/types';
+
+const LANGS: { id: Lang; label: string }[] = [
+  { id: 'en', label: 'English' },
+  { id: 'tr', label: 'Türkçe' },
+];
 
 export function Settings({ app }: { app: AppApi }) {
   const [ageCheck, setAgeCheck] = useState(false);
@@ -20,14 +27,26 @@ export function Settings({ app }: { app: AppApi }) {
   return (
     <div class="screen">
       <div class="row between">
-        <h1 class="title-xl">Settings</h1>
+        <h1 class="title-xl">{T('Settings')}</h1>
         <button type="button" class="btn small" onClick={() => app.go('life')}>
-          Done
+          {T('Done')}
         </button>
       </div>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h2 class="title-l">Theme</h2>
+        <h2 class="title-l">{T('Language')}</h2>
+        <div class="seg" role="group" aria-label={T('Language')}>
+          {LANGS.map((l) => (
+            <button type="button" key={l.id} lang={l.id} aria-pressed={app.lang === l.id} onClick={() => set({ language: l.id })}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+        {app.game && <div class="item-sub">{T('Stories already written stay in the language they were written in.')}</div>}
+      </section>
+
+      <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <h2 class="title-l">{T('Theme')}</h2>
         <div class="list">
           {THEMES.map((t) => {
             const ownedT = isThemeOwned(t, app.profile.entitlements);
@@ -47,16 +66,16 @@ export function Settings({ app }: { app: AppApi }) {
                   ))}
                 </div>
                 <div class="grow">
-                  <div class="item-title">{t.name}</div>
-                  <div class="item-sub">{t.description}</div>
+                  <div class="item-title">{app.lang === 'tr' && t.nameTr ? t.nameTr : t.name}</div>
+                  <div class="item-sub">{app.lang === 'tr' && t.descriptionTr ? t.descriptionTr : t.description}</div>
                 </div>
                 {active ? (
-                  <span class="chip accent">In use</span>
+                  <span class="chip accent">{T('In use')}</span>
                 ) : ownedT ? (
-                  <span class="chip">Use</span>
+                  <span class="chip">{T('Use')}</span>
                 ) : (
                   <span class="chip row" style={{ gap: '4px' }}>
-                    <Icon name="lock" size={14} /> Store
+                    <Icon name="lock" size={14} /> {T('Store')}
                   </span>
                 )}
               </button>
@@ -68,43 +87,43 @@ export function Settings({ app }: { app: AppApi }) {
       <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="toggle-row">
           <div>
-            <div class="item-title">Adult content</div>
-            <div class="item-sub">Turns on 18+ expansions you own, like Crime World.</div>
+            <div class="item-title">{T('Adult content')}</div>
+            <div class="item-sub">{T('Turns on 18+ expansions you own, like Crime World.')}</div>
           </div>
-          <button type="button" class="switch" role="switch" aria-checked={st.adultContent} aria-label="Adult content" onClick={toggleAdult} />
+          <button type="button" class="switch" role="switch" aria-checked={st.adultContent} aria-label={T('Adult content')} onClick={toggleAdult} />
         </div>
         {ageCheck && (
           <div class="banner" style={{ color: 'var(--text)' }}>
-            Adult expansions include crime, violence and mature themes. Tap the switch again to confirm you are 18 or older.
+            {T('Adult expansions include crime, violence and mature themes. Tap the switch again to confirm you are 18 or older.')}
           </div>
         )}
       </section>
 
       <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div class="item-title">Start over</div>
-        <div class="item-sub">Ends the current family. Purchases and themes stay.</div>
+        <div class="item-title">{T('Start over')}</div>
+        <div class="item-sub">{T('Ends the current family. Purchases and themes stay.')}</div>
         {confirmNew ? (
           <div class="row">
             <button type="button" class="btn small" style={{ color: 'var(--bad)' }} onClick={() => { app.endGame(); setConfirmNew(false); }}>
-              Yes, end this family
+              {T('Yes, end this family')}
             </button>
             <button type="button" class="btn small ghost" onClick={() => setConfirmNew(false)}>
-              Cancel
+              {T('Cancel')}
             </button>
           </div>
         ) : (
           <button type="button" class="btn small" style={{ alignSelf: 'flex-start' }} onClick={() => setConfirmNew(true)}>
-            New family
+            {T('New family')}
           </button>
         )}
       </section>
       {isNative() && (
         <a class="btn small ghost" href="./privacy.html" style={{ alignSelf: 'center', textDecoration: 'none' }}>
-          Privacy policy
+          {T('Privacy policy')}
         </a>
       )}
       <div class="muted" style={{ fontSize: '12px', textAlign: 'center' }}>
-        Heirloom: Life Simulator · v0.4 test build
+        {T('Heirloom: Life Simulator · {v} test build', { v: 'v0.5' })}
       </div>
     </div>
   );

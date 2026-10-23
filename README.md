@@ -2,7 +2,12 @@
 
 Nesiller boyu süren bir hayat simülasyonu. Bir hayat yaşarsın, sonra çocuğunla devam edersin; ev, aile yadigârları ve seçimlerin bir sonraki nesle geçer.
 
-Sürüm: **v0.4 (test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+Sürüm: **v0.5 (test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+
+### v0.5'te neler var
+- **Türkçe dil desteği:** arayüz, olaylar, aktiviteler, meslekler, rozetler, hedefler, yadigârlar ve mağaza tamamen Türkçe. Ayarlar'dan English / Türkçe seçilir; ilk açılışta telefonun dili kullanılır. İsim ekleri otomatik (`Ayşe'yle`, `Zonguldak'ta`, `Alp'le`, `Kemal'e`). Türkçede para `₺957.440` biçiminde yazılır. Aynı tohum iki dilde aynı hayatı üretir (testle doğrulanıyor).
+- **Kampüs genişlemesi** (`src/content/campus`, $2.99): bölüm seçimi, not ortalaması (GPA), kulüpler ve başkanlık seçimi, ev arkadaşı, hoca, vize-final, kopya, burs, eylem, kampüs aşkı, parti, yarı zamanlı iş, staj ve stajdan iş teklifi, Erasmus, bitirme tezi, kariyer fuarı, onur derecesiyle mezuniyet, yüksek lisans ve doktora, akademik kariyer (Araştırma Görevlisi → Dekan) ve Ar-Ge kariyeri. 19 olay, 12 aktivite, 2 meslek, 3 rozet, 2 hayat hedefi.
+- Yeni testler: `tests/i18n.test.ts` (Türkçesi eksik arayüz metni), `tests/i18n-sim.test.ts` (Türkçe hayatlarda İngilizce cümle kaçağı ve aynı tohum kontrolü), `tests/campus.test.ts`.
 
 ### v0.4'te neler var
 - **Boss genişlemesi** (`src/content/boss`): kafe, çay markası, moda, yemek teslimatı, teknoloji girişimi veya oyun stüdyosu kur. Çalışan al/çıkar, pazarlama, yatırımcı turları (hisse karşılığı para), satış, satın alma teklifi, halka arz, nakit krizi ve iflas. Pazar doygunluğu ve %25 kurumlar vergisiyle gerçekçi tavan. Şirket mirasla çocuğa geçer (aile şirketi). 4 yeni rozet.
@@ -55,6 +60,14 @@ npm run build:preview  # tek dosyalık paylaşılabilir test sürümü (dist-pre
 4. Ürünü `src/platform/purchases.ts` içindeki `PRODUCTS` listesine ekle.
 
 Olaylar seçimli (`choices`) ya da seçimsiz (`apply`) olabilir. Koşullar (`when`), yaş aralığı, tekrar süresi (`cooldown`) ve ağırlık (`weight`) desteklenir.
+
+## Metin yazmak ve dil eklemek
+
+- **Arayüz metinleri:** ekranlarda `T('Age up')` gibi İngilizce anahtar kullanılır, Türkçesi `src/i18n/ui.ts` içindeki `TR` sözlüğündedir. Değişken için `T('Age {n}', { n: 12 })`, tekil/çoğul için `Tn(n, 'one', 'many')`. `tests/i18n.test.ts`, ekranlarda Türkçesi eksik bir `T()` kalırsa hata verir.
+- **Hikâye metinleri:** olay ve aktivitelerde `c.t('English', 'Türkçe')`. Türkçe ekler için `src/i18n/tr-grammar.ts`: `gen('Ada')` → "Ada'nın", `loc('Zonguldak')` → "Zonguldak'ta", `dat`, `acc`, `abl`, `wth`. Akrabalık için `kin(c, kişi, 'sibling')` → "kız kardeşin".
+- **Katalog verisi:** meslekler `titlesTr`, eşyalar `nameTr`, yadigârlar `effectTr`, rozetler `nameTr/descTr`, hedefler `labelTr`, ürünler `titleTr/descriptionTr`, temalar `nameTr/descriptionTr`.
+- **Rastgelelik:** iki dildeki listeden seçim yaparken tek bir `c.rng.int` ile indeks seçilir; böylece aynı tohum iki dilde de aynı hayatı üretir.
+- **Yeni dil:** `Lang` tipine ekle (`src/engine/types.ts`), `ui.ts` içine sözlük ekle, `Ctx.t` yerine çok dilli bir yardımcıya geç. Dil, ilk açılışta telefonun diline göre seçilir; Ayarlar'dan değiştirilebilir.
 
 ## Yeni bir tema veya arayüz eklemek
 

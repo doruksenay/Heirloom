@@ -9,6 +9,7 @@ import { Summary } from './screens/Summary';
 import { Store } from './screens/Store';
 import { Settings } from './screens/Settings';
 import { AdOverlay } from './AdOverlay';
+import { T } from '../i18n/ui';
 
 const NAV: { tab: Tab; label: string; icon: string }[] = [
   { tab: 'life', label: 'Life', icon: 'life' },
@@ -42,20 +43,20 @@ export function App() {
     <div class="shell">
       {body}
       {showNav && (
-        <nav class="nav" aria-label="Main">
+        <nav class="nav" aria-label={T('Main')}>
           {NAV.map((n) => (
             <button type="button" key={n.tab} aria-current={app.tab === n.tab ? 'page' : undefined} onClick={() => app.go(n.tab)}>
               <Icon name={n.icon} />
-              {n.label}
+              {T(n.label)}
             </button>
           ))}
         </nav>
       )}
       {!showNav && (app.tab === 'store' || app.tab === 'settings') && (
-        <nav class="nav" aria-label="Main">
+        <nav class="nav" aria-label={T('Main')}>
           <button type="button" onClick={() => app.go('life')}>
             <Icon name="life" />
-            Back
+            {T('Back')}
           </button>
         </nav>
       )}

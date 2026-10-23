@@ -97,6 +97,8 @@ export interface LifeRecord {
   netWorth: number;
   legacy: number;
   heirloomNote?: string;
+  heirloomItem?: string;
+  heirName?: string;
   finalWords: string;
   ribbon?: string;
 }

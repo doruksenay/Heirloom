@@ -3,7 +3,8 @@ import type { GameState, LifeRecord, Person, Player, Profile, Gender, Education 
 import { makeCtx, ageOf, clamp } from './context';
 import { createRng, randomSeed } from './rng';
 import { getCountry, firstNames } from './world';
-import { BASE_JOBS, EDUCATION_RANK, salaryFor } from './careers';
+import { BASE_JOBS, EDUCATION_RANK, salaryFor, titleFor } from './careers';
+import { abl, acc, gen, loc } from '../i18n/tr-grammar';
 import { furniture } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
@@ -97,8 +98,8 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
 
   const mother = h.newPerson({ gender: 'female', age: rng.int(22, 38) });
   const father = h.newPerson({ gender: 'male', age: rng.int(24, 42), lastName: opts.lastName });
-  mother.jobTitle = rng.pick(BASE_JOBS).titles[0];
-  father.jobTitle = rng.pick(BASE_JOBS).titles[0];
+  mother.jobTitle = titleFor(rng.pick(BASE_JOBS), 0, s.lang);
+  father.jobTitle = titleFor(rng.pick(BASE_JOBS), 0, s.lang);
   h.addRelation(mother, 'mother', rng.int(60, 95));
   h.addRelation(father, 'father', rng.int(55, 95));
   const siblings = rng.weighted([0, 1, 2], (n) => [5, 4, 2][n]) ?? 0;
@@ -107,22 +108,33 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
   }
 
   const girlOrBoy = opts.gender === 'female' ? 'a girl' : 'a boy';
-  h.log(`You were born ${girlOrBoy} in ${opts.city}, ${country.name}.`, 'big');
   h.log(
-    `Your mother ${mother.firstName} (${h.ageOf(mother)}) and father ${father.firstName} (${h.ageOf(father)}) brought you home.`,
+    c.t(
+      `You were born ${girlOrBoy} in ${opts.city}, ${country.name}.`,
+      `${loc(opts.city)}, ${loc(country.nameTr)} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
+    ),
+    'big',
+  );
+  h.log(
+    c.t(
+      `Your mother ${mother.firstName} (${h.ageOf(mother)}) and father ${father.firstName} (${h.ageOf(father)}) brought you home.`,
+      `Annen ${mother.firstName} (${h.ageOf(mother)}) ve baban ${father.firstName} (${h.ageOf(father)}) seni kucaklarında eve getirdi.`,
+    ),
   );
 
   if (opts.scenario === 'sano') {
-    h.addHeirloom('clock', "Grandpa Mehmet's pocket watch", 'Mehmet Baba bought it with his first wage from the Zonguldak mines in 1961.');
-    h.addHeirloom('ring', "Grandma Ayşe's ring", 'Ayşe wore it at her wedding in 1964.');
-    s.dynasty.heirlooms.forEach((x) => (x.sinceYear = 1961));
-    h.log("The family's treasures, Grandpa Mehmet's pocket watch and Grandma Ayşe's ring, are waiting for you.");
+    h.addHeirloom('clock', c.t("Grandpa Mehmet's pocket watch", "Mehmet Dede'nin cep saati"), c.t('Mehmet Baba bought it with his first wage from the Zonguldak mines in 1961.', "Mehmet Baba onu 1961'de Zonguldak madenlerindeki ilk maaşıyla almıştı."));
+    h.addHeirloom('ring', c.t("Grandma Ayşe's ring", "Ayşe Nine'nin yüzüğü"), c.t('Ayşe wore it at her wedding in 1964.', "Ayşe onu 1964'teki düğününde takmıştı."));
+    s.dynasty.heirlooms.forEach((x) => (x.sinceYear = x.defId === 'ring' ? 1964 : 1961));
+    h.log(c.t("The family's treasures, Grandpa Mehmet's pocket watch and Grandma Ayşe's ring, are waiting for you.", "Ailenin hazineleri, Mehmet Dede'nin cep saati ve Ayşe Nine'nin yüzüğü, seni bekliyor."));
   } else {
     const grand = rng.pick(firstNames(opts.countryId, rng.chance(0.5) ? 'female' : 'male'));
     const defId = rng.pick(['clock', 'ring', 'quilt', 'recipes'] as const);
     const label = { clock: 'pocket watch', ring: 'ring', quilt: 'quilt', recipes: 'recipe book' }[defId];
-    h.addHeirloom(defId, `${grand}'s ${label}`, `${grand} kept it safe for decades before you were born.`);
-    h.log(`The family's oldest treasure, ${grand}'s ${label}, is waiting for you.`);
+    const labelTr = { clock: 'cep saati', ring: 'yüzüğü', quilt: 'yorganı', recipes: 'tarif defteri' }[defId];
+    const item = c.t(`${grand}'s ${label}`, `${gen(grand)} ${labelTr}`);
+    h.addHeirloom(defId, item, c.t(`${grand} kept it safe for decades before you were born.`, `${grand}, sen doğmadan önce onu yıllarca özenle sakladı.`));
+    h.log(c.t(`The family's oldest treasure, ${item}, is waiting for you.`, `Ailenin en eski hazinesi, ${item}, seni bekliyor.`));
   }
   assignGoals(s, rng);
   return s;
@@ -153,6 +165,7 @@ export function annualMortality(age: number, health: number, shift = 0): number 
 
 function deathCause(c: Ctx): string {
   const { age, p, rng } = c;
+  // stored in English; the UI and logs translate known causes (see causeTr)
   if (p.stats.health < 20) return rng.pick(['a long illness', 'heart failure', 'pneumonia']);
   if (age >= 78) return rng.pick(['old age', 'peacefully in sleep', 'heart failure', 'a stroke']);
   if (age < 40) return rng.pick(['a car accident', 'a sudden aneurysm', 'a rare infection']);
@@ -182,27 +195,27 @@ function yearlyTick(c: Ctx): string | null {
   if (p.jailYears > 0) {
     p.jailYears--;
     h.stat('happiness', -6);
-    if (p.jailYears === 0) h.log('You were released from prison. The air outside smells different.', 'big');
+    if (p.jailYears === 0) h.log(c.t('You were released from prison. The air outside smells different.', 'Cezaevinden çıktın. Dışarının havası bambaşka kokuyor.'), 'big');
   }
 
   // --- school
   if (age === 6) {
     p.school = 'primary';
     p.schoolYears = 0;
-    h.log('You started primary school.');
+    h.log(c.t('You started primary school.', 'İlkokula başladın.'));
   } else if (age === 14 && p.school === 'primary') {
     p.education = 'primary';
     p.school = 'highschool';
     p.schoolYears = 0;
-    h.log('You started high school.');
+    h.log(c.t('You started high school.', 'Liseye başladın.'));
   } else if (age === 18 && p.school === 'highschool') {
     p.school = null;
     if (p.stats.smarts >= 25 || rng.chance(0.6)) {
       p.education = 'highschool';
-      h.log('You graduated from high school!', 'good');
+      h.log(c.t('You graduated from high school!', 'Liseden mezun oldun!'), 'good');
       scheduled = 'base.after_highschool';
     } else {
-      h.log('You failed your final exams and left high school without a diploma.', 'bad');
+      h.log(c.t('You failed your final exams and left high school without a diploma.', 'Bitirme sınavlarında çaktın ve liseyi diplomasız bıraktın.'), 'bad');
       h.stat('happiness', -8);
     }
   } else if (p.school === 'university') {
@@ -211,7 +224,7 @@ function yearlyTick(c: Ctx): string | null {
     if (p.schoolYears >= 4) {
       p.school = null;
       p.education = 'university';
-      h.log('You graduated from university! The whole family came to the ceremony.', 'big');
+      h.log(c.t('You graduated from university! The whole family came to the ceremony.', 'Üniversiteden mezun oldun! Bütün aile törene geldi, teyzen bile.'), 'big');
       h.achieve('graduate');
       h.stat('happiness', 8);
     }
@@ -226,7 +239,7 @@ function yearlyTick(c: Ctx): string | null {
     p.jobYears++;
     if (p.jobYears >= 2 && rng.chance(0.1 + p.stats.smarts / 600 + p.jobYears / 100)) {
       if (h.promote()) {
-        h.log(`You were promoted to ${h.jobTitle()}. Salary +32%.`, 'good');
+        h.log(c.t(`You were promoted to ${h.jobTitle()}. Salary +32%.`, `${h.jobTitle()} oldun. Maaşına %32 zam!`), 'good');
         h.stat('happiness', 6);
       }
     }
@@ -261,19 +274,20 @@ function yearlyTick(c: Ctx): string | null {
     if (rel.kind !== 'child') rel.closeness = clamp(rel.closeness - rng.int(0, 2) + (h.hasHeirloom('recipes') ? 1 : 0));
     if (rel.kind === 'child' && pa >= 24 && pa <= 42 && rng.chance(0.07)) {
       person.kids = (person.kids ?? 0) + 1;
-      h.log(`Your ${person.gender === 'female' ? 'daughter' : 'son'} ${person.firstName} had a baby. You're a grandparent!`, 'good');
+      h.log(c.t(`Your ${person.gender === 'female' ? 'daughter' : 'son'} ${person.firstName} had a baby. You're a grandparent!`, `${person.gender === 'female' ? 'Kızın' : 'Oğlun'} ${gen(person.firstName)} bebeği oldu. Artık ${p.gender === 'female' ? 'babaanne' : 'dede'} oldun!`), 'good');
       h.stat('happiness', 5);
     }
     if (rng.chance(annualMortality(pa, person.stats.health, country.mortalityShift))) {
       person.deathYear = s.year;
       const label = { mother: 'mother', father: 'father', sibling: person.gender === 'female' ? 'sister' : 'brother', spouse: person.gender === 'female' ? 'wife' : 'husband', partner: 'partner', ex: 'ex', child: person.gender === 'female' ? 'daughter' : 'son', friend: 'friend' }[rel.kind];
       if (rel.kind === 'ex' || rel.kind === 'friend') continue;
-      h.log(`Your ${label} ${person.firstName} passed away at ${pa}.`, 'bad');
+      const labelTr = { mother: 'Annen', father: 'Baban', sibling: person.gender === 'female' ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: person.gender === 'female' ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: person.gender === 'female' ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın' }[rel.kind];
+      h.log(c.t(`Your ${label} ${person.firstName} passed away at ${pa}.`, `${labelTr} ${person.firstName}, ${pa} yaşında hayata gözlerini yumdu.`), 'bad');
       h.stat('happiness', -Math.round(rel.closeness / 6));
       if ((rel.kind === 'mother' || rel.kind === 'father') && rng.chance(0.6)) {
         const inheritance = Math.round(rng.int(2000, 40000) * country.wageFactor);
         h.money(inheritance);
-        h.log(`You inherited ${h.fmt(inheritance)} from ${person.firstName}.`);
+        h.log(c.t(`You inherited ${h.fmt(inheritance)} from ${person.firstName}.`, `${abl(person.firstName)} sana ${h.fmt(inheritance)} miras kaldı.`));
       }
     }
   }
@@ -387,7 +401,8 @@ export function rewind(s: GameState): void {
   s.player.usedRewind = true;
   s.player.rewinds = (s.player.rewinds ?? 0) + 1;
   s.pending = null;
-  makeCtx(s).h.log(`You wound ${watch.name} back. That moment never happened.`, 'neutral');
+  const rc = makeCtx(s);
+  rc.h.log(rc.t(`You wound ${watch.name} back. That moment never happened.`, `Saati geri kurdun (${watch.name}). O an hiç yaşanmadı.`), 'neutral');
 }
 
 // ---------------------------------------------------------------- activities
@@ -441,7 +456,7 @@ export function buyFurniture(s: GameState, id: string): boolean {
   c.h.stat('happiness', item.happiness);
   p.home.furniture = p.home.furniture.filter((f) => furniture(f)?.slot !== item.slot);
   p.home.furniture.push(id);
-  c.h.log(`You bought a ${item.name.toLowerCase()} for ${c.h.fmt(price)}.`);
+  c.h.log(c.t(`You bought a ${item.name.toLowerCase()} for ${c.h.fmt(price)}.`, `${c.h.fmt(price)} verip ${item.nameTr.toLocaleLowerCase('tr')} aldın.`));
   checkGoals(s);
   return true;
 }
@@ -453,15 +468,32 @@ export function furniturePrice(s: GameState, id: string): number {
 
 // ---------------------------------------------------------------- end of life & generations
 
-const FINAL_WORDS = [
-  'Wind the clock, {heir}.',
-  "Don't fight over the furniture.",
-  'I regret nothing. Well, almost nothing.',
-  'Look after each other.',
-  'Tell them I was funny.',
-  'Water the plants.',
-  'It went by so fast.',
+const FINAL_WORDS: [string, string][] = [
+  ['Wind the clock, {heir}.', 'Saati kurmayı unutma, {heir}.'],
+  ["Don't fight over the furniture.", 'Eşyalar için kavga etmeyin.'],
+  ['I regret nothing. Well, almost nothing.', 'Hiçbir şeyden pişman değilim. Yani, neredeyse hiçbir şeyden.'],
+  ['Look after each other.', 'Birbirinize iyi bakın.'],
+  ['Tell them I was funny.', 'Herkese komik olduğumu söyleyin.'],
+  ['Water the plants.', 'Çiçekleri sulayın.'],
+  ['It went by so fast.', 'Ne çabuk geçti.'],
 ];
+
+/** Turkish for the built-in causes of death (content may already pass localized causes). */
+export const CAUSE_TR: Record<string, string> = {
+  'a long illness': 'uzun süren bir hastalık',
+  'heart failure': 'kalp yetmezliği',
+  pneumonia: 'zatürre',
+  'old age': 'yaşlılık',
+  'peacefully in sleep': 'uykuda, huzur içinde',
+  'a stroke': 'felç',
+  'a car accident': 'bir trafik kazası',
+  'a sudden aneurysm': 'ani bir anevrizma',
+  'a rare infection': 'nadir bir enfeksiyon',
+  'a heart attack': 'kalp krizi',
+  cancer: 'kanser',
+};
+export const causeTr = (cause: string) => CAUSE_TR[cause] ?? cause;
+
 
 export function finishLife(s: GameState): void {
   checkGoals(s);
@@ -488,8 +520,15 @@ export function finishLife(s: GameState): void {
       p.achievements.length * 150 +
       s.dynasty.heirlooms.length * 50,
   );
-  const career = p.jobTitle ? (p.retired ? `Retired ${p.jobTitle}` : p.jobTitle) : p.education === 'university' ? 'University graduate' : 'No career';
-  const words = c.rng.pick(heir ? FINAL_WORDS : FINAL_WORDS.slice(1)).replace('{heir}', heir?.person.firstName ?? '');
+  const career = p.jobTitle
+    ? p.retired
+      ? c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`)
+      : p.jobTitle
+    : p.education === 'university'
+      ? c.t('University graduate', 'Üniversite mezunu')
+      : c.t('No career', 'Kariyeri yok');
+  const picked = c.rng.pick(heir ? FINAL_WORDS : FINAL_WORDS.slice(1));
+  const words = c.t(picked[0], picked[1]).replace('{heir}', heir?.person.firstName ?? '');
   const record: LifeRecord = {
     personId: p.id,
     name: `${p.firstName} ${p.lastName}`,
@@ -509,10 +548,12 @@ export function finishLife(s: GameState): void {
     legacy,
     heirloomNote:
       heir && s.dynasty.heirlooms.length > 0 ? `${s.dynasty.heirlooms[0].name} to ${heir.person.firstName}` : undefined,
+    heirloomItem: heir && s.dynasty.heirlooms.length > 0 ? s.dynasty.heirlooms[0].name : undefined,
+    heirName: heir && s.dynasty.heirlooms.length > 0 ? heir.person.firstName : undefined,
     finalWords: words,
   };
   record.ribbon = ribbonFor(record, p, s).id;
-  c.h.log(`You died at ${age} of ${cause}.`, 'big');
+  c.h.log(c.t(`You died at ${age} of ${cause}.`, `${age} yaşında hayata gözlerini yumdun. Sebep: ${causeTr(cause)}.`), 'big');
   s.dead = record;
   s.pending = null;
   s.dynasty.lives.push(record);
@@ -571,7 +612,7 @@ export function continueAsChild(s: GameState, childId: string): void {
       const job = rng.pick(options);
       np.jobId = job.id;
       np.jobLevel = Math.min(job.titles.length - 1, Math.floor(Math.max(0, age - 22) / 8));
-      np.jobTitle = job.titles[np.jobLevel];
+      np.jobTitle = titleFor(job, np.jobLevel, s.lang);
     }
   }
   // family links
@@ -598,7 +639,11 @@ export function continueAsChild(s: GameState, childId: string): void {
   }
   // the heirlooms go to whoever carries on, whatever the will said
   const lastLife = s.dynasty.lives[s.dynasty.lives.length - 1];
-  if (lastLife && s.dynasty.heirlooms.length) lastLife.heirloomNote = `${s.dynasty.heirlooms[0].name} to ${child.firstName}`;
+  if (lastLife && s.dynasty.heirlooms.length) {
+    lastLife.heirloomNote = `${s.dynasty.heirlooms[0].name} to ${child.firstName}`;
+    lastLife.heirloomItem = s.dynasty.heirlooms[0].name;
+    lastLife.heirName = child.firstName;
+  }
   for (const item of s.dynasty.heirlooms) {
     item.generations++;
     item.story.push(`Passed from ${prev.firstName} to ${child.firstName} in ${s.year}.`);
@@ -606,8 +651,15 @@ export function continueAsChild(s: GameState, childId: string): void {
   s.dynasty.generation++;
   s.dead = null;
   s.pending = null;
-  c2.h.log(`You lost your ${prevAsParent}, ${prev.firstName}. Gen ${s.dynasty.generation} of the ${s.dynasty.familyName} family begins with you.`, 'big');
-  if (np.money > 0) c2.h.log(`You inherited ${c2.h.fmt(np.money)}${s.dynasty.heirlooms.length ? ' and the family heirlooms' : ''}.`);
+  c2.h.log(
+    c2.t(
+      `You lost your ${prevAsParent}, ${prev.firstName}. Gen ${s.dynasty.generation} of the ${s.dynasty.familyName} family begins with you.`,
+      `${prevAsParent === 'mother' ? 'Annen' : 'Baban'} ${acc(prev.firstName)} kaybettin. ${s.dynasty.familyName} ailesinin ${s.dynasty.generation}. kuşağı seninle başlıyor.`,
+    ),
+    'big',
+  );
+  if (np.money > 0)
+    c2.h.log(c2.t(`You inherited ${c2.h.fmt(np.money)}${s.dynasty.heirlooms.length ? ' and the family heirlooms' : ''}.`, `Sana ${c2.h.fmt(np.money)}${s.dynasty.heirlooms.length ? ' ve aile yadigârları' : ''} miras kaldı.`));
   assignGoals(s, c2.rng);
 }
 

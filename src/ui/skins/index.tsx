@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import type { LogEntry, Stats } from '../../engine/types';
 import type { Skin } from '../../themes/registry';
 import { Icon } from '../icons';
+import { T } from '../../i18n/ui';
 
 /**
  * Swappable UI parts. Each theme picks one variant per slot (ThemeDef.skin).
@@ -22,10 +23,10 @@ function StatBars({ stats }: { stats: Stats }) {
       {STAT_META.map((m) => (
         <div class="stat" key={m.key}>
           <div class="stat-head">
-            <span>{m.label}</span>
+            <span>{T(m.label)}</span>
             <span class="num">{stats[m.key]}</span>
           </div>
-          <div class="bar" role="meter" aria-label={m.label} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>
+          <div class="bar" role="meter" aria-label={T(m.label)} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>
             <div style={{ width: `${stats[m.key]}%`, background: m.color }} />
           </div>
         </div>
@@ -41,7 +42,7 @@ function StatRings({ stats }: { stats: Stats }) {
     <div class="stats-rings">
       {STAT_META.map((m) => (
         <div class="ring" key={m.key}>
-          <svg width="60" height="60" viewBox="0 0 60 60" role="meter" aria-label={m.label} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>
+          <svg width="60" height="60" viewBox="0 0 60 60" role="meter" aria-label={T(m.label)} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>
             <circle cx="30" cy="30" r={r} fill="none" stroke-width="6" style={{ stroke: 'var(--surface-2)' }} />
             <circle
               cx="30"
@@ -59,7 +60,7 @@ function StatRings({ stats }: { stats: Stats }) {
               {stats[m.key]}
             </text>
           </svg>
-          <span>{m.label}</span>
+          <span>{T(m.label)}</span>
         </div>
       ))}
     </div>
@@ -91,7 +92,7 @@ function LogTimeline({ log, currentAge }: { log: LogEntry[]; currentAge: number 
   const ref = useStickToBottom(log.length);
   return (
     <div class="card log" ref={ref} aria-live="polite">
-      <div class="eyebrow">Life story</div>
+      <div class="eyebrow">{T('Life story')}</div>
       {groupByAge(log).map((g) => (
         <div class={`log-row ${g.age === currentAge ? 'current' : ''}`} key={`${g.age}-${g.entries[0].text}`}>
           <div class="log-age">{g.age}</div>
@@ -115,7 +116,7 @@ function LogCards({ log, currentAge }: { log: LogEntry[]; currentAge: number }) 
       {groupByAge(log).map((g) => (
         <div class="log-card" key={`${g.age}-${g.entries[0].text}`} style={g.age === currentAge ? { border: '1px solid var(--accent)' } : undefined}>
           <div class="eyebrow" style={g.age === currentAge ? { color: 'var(--accent)' } : undefined}>
-            Age {g.age}
+            {T('Age {n}', { n: g.age })}
           </div>
           {g.entries.map((e, i) => (
             <div class={toneClass(e.tone)} key={i}>
@@ -131,7 +132,7 @@ function LogCards({ log, currentAge }: { log: LogEntry[]; currentAge: number }) 
 function AgePill({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" class="btn primary age-pill" onClick={onClick} disabled={disabled}>
-      <Icon name="plus" size={22} /> Age up
+      <Icon name="plus" size={22} /> {T('Age up')}
     </button>
   );
 }
@@ -139,9 +140,9 @@ function AgePill({ onClick, disabled }: { onClick: () => void; disabled?: boolea
 function AgeDisc({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <div class="age-disc-wrap">
-      <button type="button" class="age-disc" onClick={onClick} disabled={disabled} aria-label="Age up">
+      <button type="button" class="age-disc" onClick={onClick} disabled={disabled} aria-label={T('Age up')}>
         <Icon name="plus" size={26} />
-        AGE UP
+        {T('AGE UP')}
       </button>
     </div>
   );

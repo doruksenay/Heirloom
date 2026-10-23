@@ -3,6 +3,7 @@ import type { Gender } from './types';
 export interface Country {
   id: string;
   name: string;
+  nameTr: string;
   cities: string[];
   /** Multiplier on salaries and prices relative to the US baseline. */
   wageFactor: number;
@@ -19,6 +20,7 @@ export const COUNTRIES: Country[] = [
   {
     id: 'us',
     name: 'United States',
+    nameTr: 'Amerika Birleşik Devletleri',
     cities: ['New York', 'Chicago', 'Austin', 'Seattle', 'Denver', 'Miami', 'Portland'],
     wageFactor: 1,
     costOfLiving: 17000,
@@ -33,6 +35,7 @@ export const COUNTRIES: Country[] = [
   {
     id: 'uk',
     name: 'United Kingdom',
+    nameTr: 'Birleşik Krallık',
     cities: ['London', 'Manchester', 'Leeds', 'Bristol', 'Glasgow', 'Liverpool'],
     wageFactor: 0.9,
     costOfLiving: 15000,
@@ -47,6 +50,7 @@ export const COUNTRIES: Country[] = [
   {
     id: 'de',
     name: 'Germany',
+    nameTr: 'Almanya',
     cities: ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Leipzig', 'Stuttgart'],
     wageFactor: 0.95,
     costOfLiving: 15000,
@@ -61,7 +65,8 @@ export const COUNTRIES: Country[] = [
   {
     id: 'tr',
     name: 'Türkiye',
-    cities: ['Istanbul', 'Ankara', 'Izmir', 'Zonguldak', 'Bursa', 'Antalya', 'Trabzon', 'Eskişehir'],
+    nameTr: 'Türkiye',
+    cities: ['İstanbul', 'Ankara', 'İzmir', 'Zonguldak', 'Bursa', 'Antalya', 'Trabzon', 'Eskişehir'],
     wageFactor: 0.45,
     costOfLiving: 7500,
     mortalityShift: 0.01,
@@ -75,6 +80,7 @@ export const COUNTRIES: Country[] = [
   {
     id: 'br',
     name: 'Brazil',
+    nameTr: 'Brezilya',
     cities: ['São Paulo', 'Rio de Janeiro', 'Salvador', 'Recife', 'Curitiba', 'Fortaleza'],
     wageFactor: 0.4,
     costOfLiving: 7000,

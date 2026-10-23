@@ -13,8 +13,8 @@ export interface AdProvider {
   showRewarded(placement: AdPlacement): Promise<boolean>;
 }
 
-export const AD_REWARDS: Record<AdPlacement, { label: string; amount: number }> = {
-  extra_activities: { label: '+2 activities this year', amount: 2 },
+export const AD_REWARDS: Record<AdPlacement, { label: string; labelTr: string; amount: number }> = {
+  extra_activities: { label: '+2 activities this year', labelTr: 'Bu yıl +2 aktivite', amount: 2 },
 };
 
 

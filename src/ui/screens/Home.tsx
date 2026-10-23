@@ -4,13 +4,14 @@ import { FURNITURE, furniture } from '../../engine/home';
 import { heirloomDef } from '../../engine/heirlooms';
 import { fmtMoney } from '../../engine/context';
 import { Icon } from '../icons';
+import { T, Tn } from '../../i18n/ui';
 
 function Room({ items, heirlooms, cat }: { items: string[]; heirlooms: string[]; cat: boolean }) {
   const has = (slot: string) => items.map((i) => furniture(i)).find((f) => f?.slot === slot);
   const sofa = has('sofa');
   return (
     <div class="room">
-      <svg viewBox="0 0 350 230" role="img" aria-label="Your living room">
+      <svg viewBox="0 0 350 230" role="img" aria-label={T('Your living room')}>
         <rect width="350" height="230" style={{ fill: 'var(--room-wall)' }} />
         <rect y="170" width="350" height="60" style={{ fill: 'var(--room-floor)' }} />
         {/* window */}
@@ -25,7 +26,7 @@ function Room({ items, heirlooms, cat }: { items: string[]; heirlooms: string[];
           </g>
         )}
         {heirlooms.includes('clock') && (
-          <g aria-label="Heirloom clock">
+          <g aria-label={T('Heirloom clock')}>
             <rect x="160" y="62" width="32" height="108" rx="4" fill="#6B4A2E" />
             <circle cx="176" cy="88" r="11" fill="#F5EEE6" />
             <path d="M176 88v-7M176 88l5 3" stroke="#1C1622" stroke-width="2" stroke-linecap="round" />
@@ -59,7 +60,7 @@ function Room({ items, heirlooms, cat }: { items: string[]; heirlooms: string[];
             <rect x="136" y="126" width="18" height="46" rx="8" fill={sofa.id === 'sofa_velvet' ? '#6A4190' : '#4FA493'} />
           </g>
         ) : (
-          <rect x="40" y="150" width="60" height="22" rx="4" fill="#8A6A52" aria-label="An old crate" />
+          <rect x="40" y="150" width="60" height="22" rx="4" fill="#8A6A52" aria-label={T('An old crate')} />
         )}
         {has('plant') && (
           <g>
@@ -96,13 +97,13 @@ export function Home({ app }: { app: AppApi }) {
       <div class="row between" style={{ alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div class="eyebrow">{p.city}</div>
-          <h1 class="title-xl">{p.home.name}</h1>
+          <h1 class="title-xl">{T(p.home.name)}</h1>
         </div>
         {p.home.owned && (
           <div style={{ textAlign: 'right' }}>
-            <div class="eyebrow">Value</div>
+            <div class="eyebrow">{T('Value')}</div>
             <div class="num" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '18px' }}>
-              {fmtMoney(p.home.value, p.countryId)}
+              {fmtMoney(p.home.value, p.countryId, app.lang)}
             </div>
           </div>
         )}
@@ -112,12 +113,12 @@ export function Home({ app }: { app: AppApi }) {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
-          <h2 class="title-l">Heirlooms</h2>
+          <h2 class="title-l">{T('Heirlooms')}</h2>
           <span class="muted" style={{ fontSize: '13px' }}>
-            Passed down, never sold
+            {T('Passed down, never sold')}
           </span>
         </div>
-        {s.dynasty.heirlooms.length === 0 && <div class="card tight muted">No heirlooms yet. Win a trophy, or keep something special long enough.</div>}
+        {s.dynasty.heirlooms.length === 0 && <div class="card tight muted">{T('No heirlooms yet. Win a trophy, or keep something special long enough.')}</div>}
         <div class="list">
           {s.dynasty.heirlooms.map((h) => {
             const def = heirloomDef(h.defId);
@@ -129,14 +130,14 @@ export function Home({ app }: { app: AppApi }) {
                 <div class="grow">
                   <div class="item-title">{h.name}</div>
                   <div class="item-sub">
-                    Since {h.sinceYear} · {h.generations} generation{h.generations > 1 ? 's' : ''}
+                    {Tn(h.generations, 'Since {y} · {n} generation', 'Since {y} · {n} generations', { y: h.sinceYear })}
                   </div>
                   <div class="item-sub" style={{ marginTop: '4px' }}>
                     {h.story[h.story.length - 1]}
                   </div>
                 </div>
                 <span class="chip accent" style={{ whiteSpace: 'normal', textAlign: 'right', maxWidth: '96px' }}>
-                  {def.effect}
+                  {app.lang === 'tr' ? def.effectTr : def.effect}
                 </span>
               </div>
             );
@@ -146,9 +147,9 @@ export function Home({ app }: { app: AppApi }) {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
-          <h2 class="title-l">Decorate</h2>
+          <h2 class="title-l">{T('Decorate')}</h2>
           <span class="muted num" style={{ fontSize: '13px' }}>
-            Bank {fmtMoney(p.money, p.countryId)}
+            {T('Bank {m}', { m: fmtMoney(p.money, p.countryId, app.lang) })}
           </span>
         </div>
         <div class="list">
@@ -161,8 +162,8 @@ export function Home({ app }: { app: AppApi }) {
                   <Icon name="sofa" />
                 </div>
                 <div class="grow">
-                  <div class="item-title">{f.name}</div>
-                  <div class="item-sub">+{f.happiness} Happiness</div>
+                  <div class="item-title">{app.lang === 'tr' ? f.nameTr : f.name}</div>
+                  <div class="item-sub">{T('+{n} Happiness', { n: f.happiness })}</div>
                 </div>
                 <button
                   type="button"
@@ -170,7 +171,7 @@ export function Home({ app }: { app: AppApi }) {
                   disabled={owned || p.money < price || p.jailYears > 0}
                   onClick={() => app.act((g) => void buyFurniture(g, f.id))}
                 >
-                  {owned ? 'Placed' : fmtMoney(price, p.countryId)}
+                  {owned ? T('Placed') : fmtMoney(price, p.countryId, app.lang)}
                 </button>
               </div>
             );

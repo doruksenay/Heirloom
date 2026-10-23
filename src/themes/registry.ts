@@ -16,6 +16,8 @@ export interface ThemeDef {
   id: string;
   name: string;
   description: string;
+  nameTr?: string;
+  descriptionTr?: string;
   entitlement: string | null; // null = free
   dark: boolean;
   /** Loads the theme's bundled font files (they ship inside the app, no network). */
@@ -29,6 +31,8 @@ export const THEMES: ThemeDef[] = [
     id: 'evening',
     name: 'Evening Album',
     description: 'Warm brass on deep plum. The default.',
+    nameTr: 'Akşam Albümü',
+    descriptionTr: 'Koyu mürdüm üstüne sıcak pirinç. Varsayılan tema.',
     entitlement: null,
     dark: true,
     tokens: {
@@ -62,6 +66,8 @@ export const THEMES: ThemeDef[] = [
     id: 'daylight',
     name: 'Daylight',
     description: 'Crisp and bright for sunny commutes.',
+    nameTr: 'Gün Işığı',
+    descriptionTr: 'Güneşli yolculuklar için net ve aydınlık.',
     entitlement: null,
     dark: false,
     tokens: {
@@ -95,6 +101,8 @@ export const THEMES: ThemeDef[] = [
     id: 'coal',
     name: 'Coal & Gold',
     description: 'Mine-shaft black, gold seams, ring gauges.',
+    nameTr: 'Kömür & Altın',
+    descriptionTr: 'Maden karası, altın damarlar, halka göstergeler.',
     entitlement: 'theme.coal',
     dark: true,
     loadFonts: () => import('../ui/fonts/coal.css'),
@@ -129,6 +137,8 @@ export const THEMES: ThemeDef[] = [
     id: 'bloom',
     name: 'Bloom',
     description: 'Soft pastels and bubbly shapes.',
+    nameTr: 'Çiçek',
+    descriptionTr: 'Yumuşak pasteller ve tombul şekiller.',
     entitlement: 'theme.bloom',
     dark: false,
     loadFonts: () => import('../ui/fonts/bloom.css'),

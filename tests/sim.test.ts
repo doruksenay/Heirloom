@@ -113,8 +113,8 @@ describe('life simulation', () => {
       generations++;
       expect(s.dead).toBeNull();
       expect(s.dynasty.generation).toBe(generations);
-      // family treasures from 1961 have been in every generation; newer ones (trophies...) in fewer
-      for (const h of s.dynasty.heirlooms) expect(h.generations).toBe(h.sinceYear === 1961 ? generations : Math.min(h.generations, generations));
+      // the starting family treasures (1961 watch, 1964 ring) have been in every generation; newer ones (trophies...) in fewer
+      for (const h of s.dynasty.heirlooms) expect(h.generations).toBe(h.sinceYear <= 1964 ? generations : Math.min(h.generations, generations));
       expect(playerAge(s)).toBeGreaterThanOrEqual(0);
     }
     expect(s.dynasty.lives.length).toBe(s.dead ? generations : generations - 1);

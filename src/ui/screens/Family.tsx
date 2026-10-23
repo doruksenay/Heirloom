@@ -2,7 +2,8 @@ import { useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
 import { interact, interactionsFor, usesWith, INTERACTIONS_PER_PERSON } from '../../engine/interactions';
 import { Icon } from '../icons';
-import { allRibbons } from '../../engine/ribbons';
+import { allRibbons, ribbonDesc, ribbonName } from '../../engine/ribbons';
+import { T, Tn, fmtInt } from '../../i18n/ui';
 import { ageOf } from '../../engine/context';
 import { playerAge } from '../../engine/game';
 import type { RelationKind } from '../../engine/types';
@@ -34,27 +35,27 @@ export function Family({ app }: { app: AppApi }) {
   return (
     <div class="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div class="eyebrow">Dynasty</div>
-        <h1 class="title-xl">The {d.familyName} family</h1>
+        <div class="eyebrow">{T('Dynasty')}</div>
+        <h1 class="title-xl">{T('The {name} family', { name: d.familyName })}</h1>
       </div>
       <div class="tiles">
         <div class="tile">
           <span class="v">{d.generation}</span>
-          <span class="k">Generations</span>
+          <span class="k">{T('Generations')}</span>
         </div>
         <div class="tile">
-          <span class="v num">{years} yrs</span>
-          <span class="k">History</span>
+          <span class="v num">{T('{n} yrs', { n: years })}</span>
+          <span class="k">{T('History')}</span>
         </div>
         <div class="tile">
           <span class="v num" style={{ color: 'var(--accent)' }}>
-            {d.legacyScore.toLocaleString('en-US')}
+            {fmtInt(d.legacyScore)}
           </span>
-          <span class="k">Legacy</span>
+          <span class="k">{T('Legacy')}</span>
         </div>
       </div>
 
-      <div class="tree" aria-label="Generations">
+      <div class="tree" aria-label={T('Generations')}>
         {d.lives.map((life, i) => (
           <div class="tree-row" key={life.personId}>
             <div class="tree-rail">
@@ -63,16 +64,16 @@ export function Family({ app }: { app: AppApi }) {
               <div class="line" />
             </div>
             <div class="tree-body">
-              <div class="eyebrow">Gen {life.generation}</div>
+              <div class="eyebrow">{T('Gen {n}', { n: life.generation })}</div>
               <div class="card tight" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div class="item-title">
                   {life.name}
                   {life.partnerName ? ` & ${life.partnerName}` : ''}
                 </div>
                 <div class="item-sub">
-                  {life.career} · lived {life.age} ({life.birthYear}–{life.deathYear})
+                  {T('{career} · lived {age} ({from}–{to})', { career: life.career, age: life.age, from: life.birthYear, to: life.deathYear })}
                 </div>
-                {life.heirloomNote && <span class="chip accent" style={{ alignSelf: 'flex-start', marginTop: '4px' }}>Left {life.heirloomNote}</span>}
+                {life.heirloomNote && <span class="chip accent" style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{T('Left {item}', { item: life.heirloomNote })}</span>}
               </div>
             </div>
           </div>
@@ -84,7 +85,7 @@ export function Family({ app }: { app: AppApi }) {
           </div>
           <div class="tree-body">
             <div class="eyebrow" style={{ color: 'var(--accent)' }}>
-              Gen {d.generation} · You
+              {T('Gen {n} · You', { n: d.generation })}
             </div>
             <div class="card tight" style={{ border: '1px solid var(--accent)' }}>
               <div class="item-title">
@@ -99,20 +100,20 @@ export function Family({ app }: { app: AppApi }) {
       </div>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <h2 class="title-l">Living family</h2>
-        {living.length === 0 && <div class="card tight muted">Nobody yet. Go out and meet people.</div>}
+        <h2 class="title-l">{T('Living family')}</h2>
+        {living.length === 0 && <div class="card tight muted">{T('Nobody yet. Go out and meet people.')}</div>}
         <div class="list">
           {living.map(({ rel, person }) => (
-            <button type="button" class="item" key={person.id} onClick={() => setOpenId(person.id)} aria-label={`${person.firstName}: open interactions`}>
+            <button type="button" class="item" key={person.id} onClick={() => setOpenId(person.id)} aria-label={T('{name}: open interactions', { name: person.firstName })}>
               <Avatar id={person.id + person.firstName} gender={person.gender} age={ageOf(s, person)} size={44} label={person.firstName} />
               <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div class="row between">
                   <div class="item-title">
                     {person.firstName} {person.lastName}
                   </div>
-                  <span class="item-sub">{KIN[rel.kind][person.gender === 'female' ? 0 : 1]} · {ageOf(s, person)}</span>
+                  <span class="item-sub">{T(KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {ageOf(s, person)}</span>
                 </div>
-                <div class="bar" role="meter" aria-label={`Closeness with ${person.firstName}`} aria-valuenow={rel.closeness} aria-valuemin={0} aria-valuemax={100}>
+                <div class="bar" role="meter" aria-label={T('Closeness with {name}', { name: person.firstName })} aria-valuenow={rel.closeness} aria-valuemin={0} aria-valuemax={100}>
                   <div style={{ width: `${rel.closeness}%`, background: 'var(--stat-looks)' }} />
                 </div>
               </div>
@@ -122,17 +123,17 @@ export function Family({ app }: { app: AppApi }) {
       </section>
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
-          <h2 class="title-l">Ribbons</h2>
+          <h2 class="title-l">{T('Ribbons')}</h2>
           <span class="muted num" style={{ fontSize: '13px' }}>
-            {(app.profile.ribbons ?? []).length}/{allRibbons().length} collected
+            {T('{n}/{max} collected', { n: (app.profile.ribbons ?? []).length, max: allRibbons().length })}
           </span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {allRibbons().map((rb) => {
             const got = (app.profile.ribbons ?? []).includes(rb.id);
             return (
-              <span key={rb.id} class={`chip ${got ? 'accent' : ''}`} title={rb.desc} style={got ? undefined : { opacity: 0.55 }}>
-                {got ? rb.name : '???'}
+              <span key={rb.id} class={`chip ${got ? 'accent' : ''}`} title={ribbonDesc(rb, app.lang)} style={got ? undefined : { opacity: 0.55 }}>
+                {got ? ribbonName(rb, app.lang) : '???'}
               </span>
             );
           })}
@@ -168,29 +169,29 @@ function PersonSheet({ app, personId, onClose }: { app: AppApi; personId: string
               {person.firstName} {person.lastName}
             </h2>
             <div class="muted">
-              {KIN[rel.kind][person.gender === 'female' ? 0 : 1]} · {age}
+              {T(KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {age}
               {person.jobTitle && age >= 18 ? ` · ${person.jobTitle}` : ''}
             </div>
           </div>
-          <button type="button" class="btn small ghost" onClick={onClose} aria-label="Close">
+          <button type="button" class="btn small ghost" onClick={onClose} aria-label={T('Close')}>
             ✕
           </button>
         </div>
         <div class="stat">
           <div class="stat-head">
-            <span>Closeness</span>
+            <span>{T('Closeness')}</span>
             <span class="num">{rel.closeness}</span>
           </div>
           <div class="bar">
             <div style={{ width: `${rel.closeness}%`, background: 'var(--stat-looks)' }} />
           </div>
         </div>
-        <div class="eyebrow">{left > 0 ? `${left} interaction${left > 1 ? 's' : ''} left with ${person.firstName} this year` : `See ${person.firstName} again next year`}</div>
+        <div class="eyebrow">{left > 0 ? Tn(left, '{n} interaction left with {name} this year', '{n} interactions left with {name} this year', { name: person.firstName }) : T('See {name} again next year', { name: person.firstName })}</div>
         <div class="list" style={{ gap: '8px' }}>
           {options.map((o) => (
             <button type="button" class="choice" key={o.id} disabled={o.disabled} onClick={() => run(o.id)}>
               <span>{o.label}</span>
-              {(o.id === 'divorce' || o.id === 'breakup' || o.id === 'argue') && <span class="chip bad">Risky</span>}
+              {(o.id === 'divorce' || o.id === 'breakup' || o.id === 'argue') && <span class="chip bad">{T('Risky')}</span>}
               {o.id === 'gift' && <Icon name="bag" size={18} />}
             </button>
           ))}

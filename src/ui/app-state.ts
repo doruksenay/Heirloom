@@ -5,6 +5,8 @@ import { loadGame, loadProfile, saveGame, saveProfile } from '../platform/storag
 import { applyTheme, getTheme, isThemeOwned, type ThemeDef } from '../themes/registry';
 import { AdMobProvider, type AdPlacement } from '../platform/ads';
 import { isNative, syncStatusBar } from '../platform/native';
+import { setUiLang } from '../i18n/ui';
+import type { Lang } from '../engine/types';
 
 export type Tab = 'life' | 'activities' | 'home' | 'family' | 'store' | 'settings';
 
@@ -12,6 +14,8 @@ export interface AppApi {
   game: GameState | null;
   profile: Profile;
   theme: ThemeDef;
+  /** Interface language; T() from i18n/ui reads the same value. */
+  lang: Lang;
   tab: Tab;
   go(tab: Tab): void;
   /** Mutate the game through an engine function, then save and re-render. */
@@ -39,6 +43,9 @@ export function useApp(): AppApi {
   const toastTimer = useRef<number | undefined>(undefined);
   const [ad, setAd] = useState<AppApi['ad']>(null);
 
+  const lang: Lang = profile.settings.language ?? 'en';
+  setUiLang(lang); // before any screen renders this frame
+
   const theme = (() => {
     const t = getTheme(profile.settings.themeId);
     return isThemeOwned(t, profile.entitlements) ? t : getTheme('evening');
@@ -63,6 +70,7 @@ export function useApp(): AppApi {
     game,
     profile,
     theme,
+    lang,
     tab,
     go: setTab,
     act,

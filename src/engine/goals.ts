@@ -20,20 +20,20 @@ const has = (s: GameState, a: string) => s.player.achievements.includes(a);
 const kids = (s: GameState) => s.player.relations.filter((r) => r.kind === 'child').length;
 
 export const BASE_GOALS: GoalDef[] = [
-  { id: 'graduate', label: 'Graduate from university', check: (s) => s.player.education === 'university' },
-  { id: 'homeowner', label: 'Own a home', check: (s) => s.player.home.owned },
-  { id: 'married', label: 'Get married', check: (s) => has(s, 'married') },
-  { id: 'parent', label: 'Become a parent', check: (s) => kids(s) >= 1 },
-  { id: 'three_kids', label: 'Raise three children', check: (s) => kids(s) >= 3 },
-  { id: 'top_job', label: 'Reach the top of a career', check: (s) => has(s, 'top_job') },
-  { id: 'wealthy', label: 'Be worth $250K (local equivalent)', check: (s) => s.player.money + (s.player.home.owned ? s.player.home.value : 0) + packNetWorth(s) >= local(s, 250_000) },
-  { id: 'age90', label: 'Live to 90', check: (s) => age(s) >= 90 },
-  { id: 'new_heirloom', label: 'Add a new heirloom to the family', check: (s) => s.dynasty.heirlooms.some((h) => h.sinceYear > s.player.birthYear) },
-  { id: 'marathon', label: 'Run a marathon', check: (s) => has(s, 'marathon') },
-  { id: 'genius', label: 'Reach 100 Smarts', check: (s) => s.player.stats.smarts >= 100 },
-  { id: 'fit50', label: 'Have 90+ Health at age 50', check: (s) => age(s) >= 50 && s.player.stats.health >= 90 },
-  { id: 'cat', label: 'Adopt a cat', check: (s) => 'pet_cat' in s.player.flags },
-  { id: 'viral', label: 'Go viral', check: (s) => has(s, 'viral') },
+  { id: 'graduate', label: 'Graduate from university', labelTr: 'Üniversiteden mezun ol', check: (s) => s.player.education === 'university' },
+  { id: 'homeowner', label: 'Own a home', labelTr: 'Ev sahibi ol', check: (s) => s.player.home.owned },
+  { id: 'married', label: 'Get married', labelTr: 'Evlen', check: (s) => has(s, 'married') },
+  { id: 'parent', label: 'Become a parent', labelTr: 'Ebeveyn ol', check: (s) => kids(s) >= 1 },
+  { id: 'three_kids', label: 'Raise three children', labelTr: 'Üç çocuk büyüt', check: (s) => kids(s) >= 3 },
+  { id: 'top_job', label: 'Reach the top of a career', labelTr: 'Bir kariyerin zirvesine çık', check: (s) => has(s, 'top_job') },
+  { id: 'wealthy', label: 'Be worth $250K (local equivalent)', labelTr: '250 bin dolar (yerel karşılığı) servete ulaş', check: (s) => s.player.money + (s.player.home.owned ? s.player.home.value : 0) + packNetWorth(s) >= local(s, 250_000) },
+  { id: 'age90', label: 'Live to 90', labelTr: '90 yaşını gör', check: (s) => age(s) >= 90 },
+  { id: 'new_heirloom', label: 'Add a new heirloom to the family', labelTr: 'Aileye yeni bir yadigâr kazandır', check: (s) => s.dynasty.heirlooms.some((h) => h.sinceYear > s.player.birthYear) },
+  { id: 'marathon', label: 'Run a marathon', labelTr: 'Maraton koş', check: (s) => has(s, 'marathon') },
+  { id: 'genius', label: 'Reach 100 Smarts', labelTr: '100 Zekâya ulaş', check: (s) => s.player.stats.smarts >= 100 },
+  { id: 'fit50', label: 'Have 90+ Health at age 50', labelTr: '50 yaşında 90+ Sağlığa sahip ol', check: (s) => age(s) >= 50 && s.player.stats.health >= 90 },
+  { id: 'cat', label: 'Adopt a cat', labelTr: 'Bir kedi sahiplen', check: (s) => 'pet_cat' in s.player.flags },
+  { id: 'viral', label: 'Go viral', labelTr: 'Viral ol', check: (s) => has(s, 'viral') },
 ];
 
 export function goalDef(id: string): GoalDef | undefined {
@@ -57,7 +57,8 @@ export function assignGoals(s: GameState, rng: Rng): void {
     if (group) for (let i = pool.length - 1; i >= 0; i--) if (group.includes(pool[i].id)) pool.splice(i, 1);
   }
   s.player.goals = picked.map((g) => ({ id: g.id, done: false }));
-  s.player.log.push({ age: age(s), year: s.year, text: `Life goals: ${picked.map((g) => g.label.toLowerCase()).join(', ')}.` });
+  const list = picked.map((g) => goalLabel(g, s.lang).toLocaleLowerCase(s.lang === 'tr' ? 'tr' : 'en')).join(', ');
+  s.player.log.push({ age: age(s), year: s.year, text: s.lang === 'tr' ? `Hayat hedeflerin: ${list}.` : `Life goals: ${list}.` });
 }
 
 /** Marks newly completed goals, logs them and pays out legacy. */
@@ -69,7 +70,10 @@ export function checkGoals(s: GameState): void {
       g.done = true;
       g.year = s.year;
       s.dynasty.legacyScore += GOAL_REWARD;
-      s.player.log.push({ age: age(s), year: s.year, text: `Goal complete: ${def.label}. +${GOAL_REWARD} legacy.`, tone: 'good' });
+      const text = s.lang === 'tr' ? `Hedef tamam: ${goalLabel(def, 'tr')}. +${GOAL_REWARD} miras puanı.` : `Goal complete: ${def.label}. +${GOAL_REWARD} legacy.`;
+      s.player.log.push({ age: age(s), year: s.year, text, tone: 'good' });
     }
   }
 }
+
+export const goalLabel = (g: GoalDef, lang?: string) => (lang === 'tr' && g.labelTr ? g.labelTr : g.label);

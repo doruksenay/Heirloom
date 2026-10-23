@@ -1,38 +1,48 @@
 import type { Ctx, Helpers } from '../content/types';
-import type { GameState, Person, RelationKind, Tone } from './types';
+import type { GameState, Lang, Person, RelationKind, Tone } from './types';
 import { createRng } from './rng';
 import { firstNames, getCountry } from './world';
 import { allJobs } from '../content/registry';
+import { titleFor } from './careers';
 
 export const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(v)));
 
 const formatters = new Map<string, Intl.NumberFormat>();
-function formatter(countryId: string, compact: boolean): Intl.NumberFormat {
-  const key = countryId + (compact ? ':c' : '');
+function formatter(countryId: string, compact: boolean, lang: Lang = 'en'): Intl.NumberFormat {
+  const key = `${countryId}:${lang}${compact ? ':c' : ''}`;
   let f = formatters.get(key);
   if (!f) {
     const { code } = getCountry(countryId).currency;
-    // English UI: English number style with the local symbol (₺1,250,000 / €12,400 / R$900)
-    f = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
-      currencyDisplay: 'narrowSymbol',
-      ...(compact ? { maximumSignificantDigits: 3 } : { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
-      notation: compact ? 'compact' : 'standard',
-    });
+    // English: ₺1,250,000 / €12,400. Turkish: ₺1.250.000 / €12.400 (symbol stays in front).
+    f =
+      compact && lang === 'tr'
+        ? new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumSignificantDigits: 3 })
+        : new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', {
+            style: 'currency',
+            currency: code,
+            currencyDisplay: 'narrowSymbol',
+            ...(compact ? { maximumSignificantDigits: 3 } : { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
+            notation: compact ? 'compact' : 'standard',
+          });
     formatters.set(key, f);
   }
   return f;
 }
 
+const symbolOf = (countryId: string) =>
+  formatter(countryId, false, 'tr').formatToParts(0).find((x) => x.type === 'currency')?.value ?? '';
+
 /** Formats game money (US-baseline dollars) in the player's local currency. */
-export function fmtMoney(n: number, countryId = 'us'): string {
-  return formatter(countryId, false).format(Math.round(n * getCountry(countryId).currency.rate));
+export function fmtMoney(n: number, countryId = 'us', lang: Lang = 'en'): string {
+  return formatter(countryId, false, lang).format(Math.round(n * getCountry(countryId).currency.rate));
 }
 
-export function fmtMoneyShort(n: number, countryId = 'us'): string {
+/** Short form for tiles: ₺957K in English, ₺957 B / ₺1,54 Mn in Turkish. */
+export function fmtMoneyShort(n: number, countryId = 'us', lang: Lang = 'en'): string {
   const v = n * getCountry(countryId).currency.rate;
-  return Math.abs(v) < 10000 ? formatter(countryId, false).format(Math.round(v)) : formatter(countryId, true).format(v);
+  if (Math.abs(v) < 10000) return formatter(countryId, false, lang).format(Math.round(v));
+  if (lang !== 'tr') return formatter(countryId, true).format(v);
+  return `${v < 0 ? '-' : ''}${symbolOf(countryId)}${formatter(countryId, true, 'tr').format(Math.abs(v))}`;
 }
 
 export function ageOf(s: GameState, person: Person): number {
@@ -109,13 +119,13 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       p.relations.push({ personId: person.id, kind, closeness: clamp(closeness), sinceYear: s.year });
     },
     ageOf: (person) => ageOf(s, person),
-    fmt: (n) => fmtMoney(n, p.countryId),
+    fmt: (n) => fmtMoney(n, p.countryId, s.lang),
     job() {
       return p.jobId ? allJobs(s.enabledPacks).find((j) => j.id === p.jobId) : undefined;
     },
     jobTitle() {
       const j = h.job();
-      return j ? j.titles[Math.min(p.jobLevel, j.titles.length - 1)] : undefined;
+      return j ? titleFor(j, p.jobLevel, s.lang ?? 'en') : undefined;
     },
     setJob(jobId) {
       p.jobId = jobId;

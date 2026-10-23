@@ -19,5 +19,17 @@ describe('turkish suffixes', () => {
     expect(abl('Zonguldak')).toBe("Zonguldak'tan");
     expect(wth('Ada')).toBe("Ada'yla");
     expect(wth('Can')).toBe("Can'la");
+    // English names ending in consonant + y sound like "i"; Turkish -ay/-oy names keep the y
+    expect(wth('Ruby')).toBe("Ruby'yle");
+    expect(gen('Emily')).toBe("Emily'nin");
+    expect(gen('Kutay')).toBe("Kutay'ın");
+    // soft-l names take front suffixes
+    expect(wth('Alp')).toBe("Alp'le");
+    expect(gen('Alp')).toBe("Alp'in");
+    expect(dat('Alp')).toBe("Alp'e");
+    expect(loc('Alp')).toBe("Alp'te");
+    expect(acc('Kemal')).toBe("Kemal'i");
+    expect(gen('Hilal')).toBe("Hilal'in");
+    expect(wth('Burak')).toBe("Burak'la");
   });
 });
