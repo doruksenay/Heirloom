@@ -134,6 +134,8 @@ export interface Settings {
   themeId: string;
   language?: Lang; // UI and story language (default English)
   adultContent: boolean; // player opted in AND confirmed 18+
+  /** Anonymous usage stats and crash reports. undefined = not asked yet (nothing is sent). */
+  analytics?: boolean;
   sound: boolean;
 }
 
@@ -142,6 +144,8 @@ export interface Profile {
   entitlements: string[];
   settings: Settings;
   ribbons?: string[]; // collected end-of-life ribbons
+  introSeen?: boolean; // first-launch "how it works" pages
+  tips?: string[]; // one-time coaching tips already dismissed
 }
 
 export interface GameState {

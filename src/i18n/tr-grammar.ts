@@ -27,12 +27,45 @@ function lastVowel(word: string): string {
 }
 
 /**
- * How the end of a name sounds. English names ending in consonant + "y" end in an "i" sound
- * (Ruby → Ruby'nin, Emily'yle), while Turkish names like Kutay or Okay keep their "y".
+ * Foreign names take suffixes by how they SOUND in Turkish, not how they are spelled:
+ * Alice (Alis) → Alice'in, George (Corc) → George'un, Jack (Cek) → Jack'in.
+ * Covers the foreign names in world.ts; add new ones here when the name lists grow.
  */
-const spoken = (w: string) => (/[^aeiouAEIOUıİöÖüÜ]y$/.test(w) ? w.slice(0, -1) + 'i' : w);
+const PRONOUNCED: Record<string, string> = {
+  Alice: 'Alis',
+  George: 'Corc',
+  Grace: 'Greys',
+  Florence: 'Florıns',
+  Jack: 'Cek',
+  Riley: 'Rayli',
+  Harper: 'Harpır',
+  Mason: 'Meysın',
+  Caleb: 'Keylıb',
+  Owen: 'Ovın',
+  Miles: 'Mayls',
+  Oliver: 'Olivır',
+  Arthur: 'Artır',
+  Hannah: 'Hana',
+  Noah: 'Nova',
+  Chloe: 'Kloi',
+  Zoe: 'Zoi',
+  Evie: 'İvi',
+  Marie: 'Mari',
+  Theo: 'Tiyo',
+  Heitor: 'Eytor',
+};
+
+/**
+ * How the end of a name sounds. Known foreign names use PRONOUNCED; English names ending in
+ * consonant + "y" end in an "i" sound (Ruby → Ruby'nin, Emily'yle), while Turkish names like Kutay keep their "y".
+ */
+const spoken = (w: string) => {
+  const lastWord = w.split(/\s+/).pop() ?? w;
+  if (PRONOUNCED[lastWord]) return PRONOUNCED[lastWord];
+  return /[^aeiouAEIOUıİöÖüÜ]y$/.test(w) ? w.slice(0, -1) + 'i' : w;
+};
 const endsWithVowel = (w: string) => VOWELS.includes(spoken(w).slice(-1));
-const endsHard = (w: string) => HARD.includes(w[w.length - 1] ?? '');
+const endsHard = (w: string) => HARD.includes(spoken(w).slice(-1));
 
 /** 4-way harmony vowel: ı i u ü */
 function v4(word: string): string {

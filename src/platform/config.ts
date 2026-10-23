@@ -19,4 +19,17 @@ export const KEYS = {
     /** Keep true until you are ready to show real ads. Real ads on your own device can get the account banned. */
     testing: true,
   },
+  /**
+   * Anonymous usage analytics (PostHog, EU cloud; free up to 1M events a month).
+   * eu.posthog.com → Project settings → Project API key (starts with "phc_"). Empty = analytics off.
+   */
+  posthog: {
+    key: '',
+    host: 'https://eu.i.posthog.com',
+  },
+  /**
+   * Crash reports (Sentry; free up to 5k errors a month).
+   * sentry.io → Project → Settings → Client Keys (DSN), like https://abc123@o123456.ingest.de.sentry.io/789. Empty = off.
+   */
+  sentryDsn: '',
 };

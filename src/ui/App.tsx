@@ -10,6 +10,39 @@ import { Store } from './screens/Store';
 import { Settings } from './screens/Settings';
 import { AdOverlay } from './AdOverlay';
 import { T } from '../i18n/ui';
+import { Intro } from './screens/Intro';
+import { Component, type ComponentChildren } from 'preact';
+import { reportError } from '../platform/analytics';
+
+/** Shows a recovery card instead of a blank screen if a screen throws; the save is untouched. */
+class Boundary extends Component<{ children: ComponentChildren; onReset: () => void }, { failed: boolean }> {
+  state = { failed: false };
+  componentDidCatch(err: unknown) {
+    reportError(err, { source: 'render' });
+    this.setState({ failed: true });
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div class="screen" style={{ justifyContent: 'center' }}>
+        <div class="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h1 class="title-l">{T('Something went wrong')}</h1>
+          <p class="muted" style={{ margin: 0 }}>{T('Your family is safe. Tap below to go back to your life.')}</p>
+          <button
+            type="button"
+            class="btn primary"
+            onClick={() => {
+              this.setState({ failed: false });
+              this.props.onReset();
+            }}
+          >
+            {T('Back to my life')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
 
 const NAV: { tab: Tab; label: string; icon: string }[] = [
   { tab: 'life', label: 'Life', icon: 'life' },
@@ -24,7 +57,8 @@ export function App() {
   const g = app.game;
 
   let body;
-  if (!g) body = app.tab === 'store' ? <Store app={app} /> : app.tab === 'settings' ? <Settings app={app} /> : <NewLife app={app} />;
+  if (!g && !app.profile.introSeen && app.tab !== 'settings' && app.tab !== 'store') body = <Intro app={app} />;
+  else if (!g) body = app.tab === 'store' ? <Store app={app} /> : app.tab === 'settings' ? <Settings app={app} /> : <NewLife app={app} />;
   else if (g.dead && app.tab !== 'store' && app.tab !== 'settings') body = <Summary app={app} />;
   else {
     const screens: Record<Tab, () => preact.JSX.Element> = {
@@ -41,7 +75,7 @@ export function App() {
 
   return (
     <div class="shell">
-      {body}
+      <Boundary onReset={() => app.go('life')}>{body}</Boundary>
       {showNav && (
         <nav class="nav" aria-label={T('Main')}>
           {NAV.map((n) => (

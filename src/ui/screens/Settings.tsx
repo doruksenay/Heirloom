@@ -4,6 +4,7 @@ import { THEMES, isThemeOwned } from '../../themes/registry';
 import { Icon } from '../icons';
 import { isNative } from '../../platform/native';
 import { T } from '../../i18n/ui';
+import { track } from '../../platform/analytics';
 import type { Lang } from '../../engine/types';
 
 const LANGS: { id: Lang; label: string }[] = [
@@ -37,7 +38,10 @@ export function Settings({ app }: { app: AppApi }) {
         <h2 class="title-l">{T('Language')}</h2>
         <div class="seg" role="group" aria-label={T('Language')}>
           {LANGS.map((l) => (
-            <button type="button" key={l.id} lang={l.id} aria-pressed={app.lang === l.id} onClick={() => set({ language: l.id })}>
+            <button type="button" key={l.id} lang={l.id} aria-pressed={app.lang === l.id} onClick={() => {
+                set({ language: l.id });
+                track('language', { lang: l.id });
+              }}>
               {l.label}
             </button>
           ))}
@@ -58,7 +62,11 @@ export function Settings({ app }: { app: AppApi }) {
                 key={t.id}
                 aria-pressed={active}
                 style={active ? { border: '1px solid var(--accent)' } : undefined}
-                onClick={() => (ownedT ? set({ themeId: t.id }) : app.go('store'))}
+                onClick={() => {
+                  if (!ownedT) return app.go('store');
+                  set({ themeId: t.id });
+                  track('theme', { id: t.id });
+                }}
               >
                 <div class="swatches" aria-hidden="true">
                   {['--bg', '--surface', '--accent', '--stat-health'].map((k) => (
@@ -100,6 +108,23 @@ export function Settings({ app }: { app: AppApi }) {
       </section>
 
       <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div class="toggle-row">
+          <div>
+            <div class="item-title">{T('Share anonymous usage data')}</div>
+            <div class="item-sub">{T('Which screens are used and crash reports. No names, no saves. Helps us fix bugs.')}</div>
+          </div>
+          <button
+            type="button"
+            class="switch"
+            role="switch"
+            aria-checked={st.analytics === true}
+            aria-label={T('Share anonymous usage data')}
+            onClick={() => set({ analytics: st.analytics !== true })}
+          />
+        </div>
+      </section>
+
+      <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="item-title">{T('Start over')}</div>
         <div class="item-sub">{T('Ends the current family. Purchases and themes stay.')}</div>
         {confirmNew ? (
@@ -123,7 +148,7 @@ export function Settings({ app }: { app: AppApi }) {
         </a>
       )}
       <div class="muted" style={{ fontSize: '12px', textAlign: 'center' }}>
-        {T('Heirloom: Life Simulator · {v} test build', { v: 'v0.5' })}
+        {T('Heirloom: Life Simulator · {v} test build', { v: `v${__APP_VERSION__}` })}
       </div>
     </div>
   );

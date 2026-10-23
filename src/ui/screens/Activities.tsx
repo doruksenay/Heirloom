@@ -7,6 +7,7 @@ import { makeCtx } from '../../engine/context';
 import type { ActivityGroup } from '../../content/types';
 import { Icon } from '../icons';
 import { T } from '../../i18n/ui';
+import { Tip } from '../Tip';
 import type { Txt } from '../../content/types';
 
 const GROUPS: ActivityGroup[] = ['Mind & Body', 'Love', 'Family', 'Campus', 'Career', 'Business', 'Fame', 'Money', 'After dark'];
@@ -34,6 +35,9 @@ export function Activities({ app }: { app: AppApi }) {
           {T('{n}/{max} this year', { n: left, max: activityLimit(s) })}
         </span>
       </div>
+      <Tip app={app} id="goals" icon="bolt">
+        {T('You get a few activities each year. Every life also has 3 goals; each one you finish adds legacy points to your family.')}
+      </Tip>
       {(s.player.goals ?? []).length > 0 && (
         <section class="card tight" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }} aria-label={T('Life goals')}>
           <div class="eyebrow">{T("This life's goals")}</div>

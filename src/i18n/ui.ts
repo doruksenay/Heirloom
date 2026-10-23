@@ -245,6 +245,51 @@ export const TR: Record<string, string> = {
   'New family': 'Yeni aile',
   'Privacy policy': 'Gizlilik politikası',
   'Heirloom: Life Simulator · {v} test build': 'Heirloom: Life Simulator · {v} test sürümü',
+  'Share anonymous usage data': 'Anonim kullanım verisi paylaş',
+  'Which screens are used and crash reports. No names, no saves. Helps us fix bugs.':
+    'Hangi ekranların kullanıldığı ve çökme raporları. İsim yok, kayıt yok. Hataları düzeltmemize yardım eder.',
+
+  // errors
+  'Something went wrong': 'Bir şeyler ters gitti',
+  'Your family is safe. Tap below to go back to your life.': 'Ailen güvende. Hayatına dönmek için aşağıya dokun.',
+  'Back to my life': 'Hayatıma dön',
+
+  // onboarding
+  'Got it': 'Anladım',
+  Skip: 'Geç',
+  Next: 'İleri',
+  'Show me': 'Göster',
+  'Live a whole life': 'Koca bir hayat yaşa',
+  'Be born, grow up, fall in love, chase a career. Every tap of Age up is one year, and your choices write the story.':
+    'Doğ, büyü, âşık ol, kariyerinin peşine düş. "Yaşlan"a her dokunuş bir yıl; hikâyeyi senin seçimlerin yazar.',
+  'Then carry on as your child': 'Sonra çocuğun olarak devam et',
+  'When you die, the story does not end. Pick one of your children and keep the family going: generation after generation.':
+    'Öldüğünde hikâye bitmez. Çocuklarından birini seç ve aileyi sürdür: kuşaktan kuşağa.',
+  'Heirlooms carry the story': 'Yadigârlar hikâyeyi taşır',
+  'A pocket watch, a ring, a piano. Heirlooms pass down with your home and your money, and each one has a power.':
+    'Bir cep saati, bir yüzük, bir piyano. Yadigârlar evin ve paranla birlikte sonraki kuşağa geçer ve her birinin bir gücü vardır.',
+  'Once per life, rewind one event': 'Her hayatta bir olayı geri al',
+  'One question before you start': 'Başlamadan önce bir soru',
+  'Can we collect anonymous usage data and crash reports? It shows us where players get stuck and what breaks. No names, no saves, nothing that identifies you. You can change this any time in Settings.':
+    'Anonim kullanım verisi ve çökme raporu toplayabilir miyiz? Oyuncuların nerede takıldığını ve neyin bozulduğunu görmemizi sağlar. İsim yok, kayıt yok, seni tanıtan hiçbir şey yok. Bunu istediğin zaman Ayarlar’dan değiştirebilirsin.',
+  'Yes, share anonymous data': 'Evet, anonim veri paylaş',
+  'No thanks': 'Hayır, teşekkürler',
+  'Each tap of Age up is one year. Things will happen, and some of them will ask you to choose.':
+    '"Yaşlan"a her dokunuş bir yıl. Başına bir şeyler gelecek; bazıları senden seçim yapmanı isteyecek.',
+  'Your family owns an heirloom: {item}. Heirlooms pass from parent to child, and each one has a power.':
+    'Ailenin bir yadigârı var: {item}. Yadigârlar ebeveynden çocuğa geçer ve her birinin bir gücü vardır.',
+  'Besides aging up, you can do a few things every year: study, exercise, meet people, look for work.':
+    'Yaşlanmanın yanında her yıl birkaç şey yapabilirsin: ders çalış, spor yap, insanlarla tanış, iş ara.',
+  'Open Activities': 'Aktiviteleri aç',
+  'You get a few activities each year. Every life also has 3 goals; each one you finish adds legacy points to your family.':
+    'Her yıl birkaç aktivite hakkın var. Her hayatın ayrıca 3 hedefi var; tamamladığın her hedef ailene miras puanı kazandırır.',
+  'Tap someone to spend time together, give a gift or have it out. Close family helps you when you are old.':
+    'Birine dokun: vakit geçir, hediye ver ya da hesaplaş. Yaşlandığında yakın olduğun aile seni yalnız bırakmaz.',
+  'This is where Heirloom begins. Continue as one of your children: they inherit your home, your heirlooms and most of your money.':
+    'Heirloom asıl şimdi başlıyor. Çocuklarından biri olarak devam et: evin, yadigârların ve paranın çoğu ona kalır.',
+  'See the family tree': 'Soy ağacını gör',
+  "Generation {n}. Your parent's life is now part of the family tree, and everything they left behind is yours.":
+    '{n}. kuşak. Annenin ya da babanın hayatı artık soy ağacında; geride bıraktığı her şey artık senin.',
 };
 
 const DICTS: Partial<Record<Lang, Record<string, string>>> = { tr: TR };

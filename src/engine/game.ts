@@ -274,7 +274,7 @@ function yearlyTick(c: Ctx): string | null {
     if (rel.kind !== 'child') rel.closeness = clamp(rel.closeness - rng.int(0, 2) + (h.hasHeirloom('recipes') ? 1 : 0));
     if (rel.kind === 'child' && pa >= 24 && pa <= 42 && rng.chance(0.07)) {
       person.kids = (person.kids ?? 0) + 1;
-      h.log(c.t(`Your ${person.gender === 'female' ? 'daughter' : 'son'} ${person.firstName} had a baby. You're a grandparent!`, `${person.gender === 'female' ? 'Kızın' : 'Oğlun'} ${gen(person.firstName)} bebeği oldu. Artık ${p.gender === 'female' ? 'babaanne' : 'dede'} oldun!`), 'good');
+      h.log(c.t(`Your ${person.gender === 'female' ? 'daughter' : 'son'} ${person.firstName} had a baby. You're a grandparent!`, `${person.gender === 'female' ? 'Kızın' : 'Oğlun'} ${gen(person.firstName)} bebeği oldu. Artık ${p.gender === 'female' ? (person.gender === 'female' ? 'anneanne' : 'babaanne') : 'dede'} oldun!`), 'good');
       h.stat('happiness', 5);
     }
     if (rng.chance(annualMortality(pa, person.stats.health, country.mortalityShift))) {

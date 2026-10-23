@@ -8,6 +8,8 @@ import { continueAsChild, heirs } from '../../engine/game';
 import { ageOf } from '../../engine/context';
 import { Avatar } from '../Avatar';
 import { Icon } from '../icons';
+import { track } from '../../platform/analytics';
+import { Tip } from '../Tip';
 
 export function Summary({ app }: { app: AppApi }) {
   const s = app.game!;
@@ -17,6 +19,7 @@ export function Summary({ app }: { app: AppApi }) {
   const tr = app.lang === 'tr';
   const rName = ribbon ? ribbonName(ribbon, app.lang) : '';
   useEffect(() => {
+    track('life_end', { age: r.age, gen: r.generation, ribbon: r.ribbon ?? '', children: r.children, goals: (s.player.goals ?? []).filter((g) => g.done).length });
     if (ribbon && !(app.profile.ribbons ?? []).includes(ribbon.id)) {
       app.updateProfile((p) => ({ ...p, ribbons: [...(p.ribbons ?? []), ribbon.id] }));
       app.toast(T('New ribbon: {name}', { name: rName }));
@@ -96,9 +99,17 @@ export function Summary({ app }: { app: AppApi }) {
         </div>
       </div>
 
+      {kids.length > 0 && (
+        <Tip app={app} id="continue" icon="family">
+          {T('This is where Heirloom begins. Continue as one of your children: they inherit your home, your heirlooms and most of your money.')}
+        </Tip>
+      )}
       <div class="list" style={{ gap: '10px' }}>
         {kids.map((k) => (
-          <button type="button" class="btn primary" key={k.id} onClick={() => app.act((g) => continueAsChild(g, k.id))} style={{ minHeight: '58px' }}>
+          <button type="button" class="btn primary" key={k.id} onClick={() => {
+              track('continue_child', { gen: s.dynasty.generation + 1 });
+              app.act((g) => continueAsChild(g, k.id));
+            }} style={{ minHeight: '58px' }}>
             {T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
           </button>
         ))}

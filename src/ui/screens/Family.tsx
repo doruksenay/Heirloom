@@ -4,6 +4,7 @@ import { interact, interactionsFor, usesWith, INTERACTIONS_PER_PERSON } from '..
 import { Icon } from '../icons';
 import { allRibbons, ribbonDesc, ribbonName } from '../../engine/ribbons';
 import { T, Tn, fmtInt } from '../../i18n/ui';
+import { Tip } from '../Tip';
 import { ageOf } from '../../engine/context';
 import { playerAge } from '../../engine/game';
 import type { RelationKind } from '../../engine/types';
@@ -101,6 +102,11 @@ export function Family({ app }: { app: AppApi }) {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <h2 class="title-l">{T('Living family')}</h2>
+        {living.length > 0 && (
+          <Tip app={app} id="family" icon="family">
+            {T('Tap someone to spend time together, give a gift or have it out. Close family helps you when you are old.')}
+          </Tip>
+        )}
         {living.length === 0 && <div class="card tight muted">{T('Nobody yet. Go out and meet people.')}</div>}
         <div class="list">
           {living.map(({ rel, person }) => (

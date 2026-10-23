@@ -6,6 +6,7 @@ import { applyTheme, getTheme, isThemeOwned, type ThemeDef } from '../themes/reg
 import { AdMobProvider, type AdPlacement } from '../platform/ads';
 import { isNative, syncStatusBar } from '../platform/native';
 import { setUiLang } from '../i18n/ui';
+import { configureAnalytics, track } from '../platform/analytics';
 import type { Lang } from '../engine/types';
 
 export type Tab = 'life' | 'activities' | 'home' | 'family' | 'store' | 'settings';
@@ -45,6 +46,7 @@ export function useApp(): AppApi {
 
   const lang: Lang = profile.settings.language ?? 'en';
   setUiLang(lang); // before any screen renders this frame
+  useEffect(() => configureAnalytics({ consent: profile.settings.analytics, lang }), [profile.settings.analytics, lang]);
 
   const theme = (() => {
     const t = getTheme(profile.settings.themeId);
@@ -72,14 +74,19 @@ export function useApp(): AppApi {
     theme,
     lang,
     tab,
-    go: setTab,
+    go(next) {
+      if (next !== tab) track('screen', { name: next });
+      setTab(next);
+    },
     act,
     start(g) {
+      track('life_start', { country: g.player.countryId, packs: g.enabledPacks.length, first_family: !(profile.tips ?? []).length });
       saveGame(g);
       setGame(g);
       setTab('life');
     },
     endGame() {
+      track('new_family', { gen: game?.dynasty.generation ?? 0, dead: !!game?.dead });
       saveGame(null);
       setGame(null);
       setTab('life');
@@ -101,17 +108,21 @@ export function useApp(): AppApi {
     },
     toastMsg,
     ad,
-    watchAd(placement) {
-      if (isNative()) return AdMobProvider.showRewarded(placement);
-      return new Promise<boolean>((resolve) => {
-        setAd({
-          placement,
-          finish: (ok) => {
-            setAd(null);
-            resolve(ok);
-          },
-        });
-      });
+    async watchAd(placement) {
+      track('ad_start', { placement });
+      const ok = isNative()
+        ? await AdMobProvider.showRewarded(placement)
+        : await new Promise<boolean>((resolve) => {
+            setAd({
+              placement,
+              finish: (done) => {
+                setAd(null);
+                resolve(done);
+              },
+            });
+          });
+      track('ad_done', { placement, rewarded: ok });
+      return ok;
     },
   };
 }

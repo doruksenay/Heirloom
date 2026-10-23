@@ -52,7 +52,23 @@ Anahtar boşken telefonda da test modu çalışır (her şey ücretsiz açılır
 
 Şu an girili olanlar Google'ın herkese açık **test** kimlikleri; test reklamı gösterir, para kazandırmaz. Kendi telefonunda gerçek reklamlara tıklama, AdMob hesabı kapatılabilir.
 
-## 6. Yayından önce kontrol listesi
+## 6. Analitik ve çökme raporları (PostHog + Sentry)
+
+Oyun ilk açılışta oyuncuya sorar. "Evet" diyenlerden anonim kullanım verisi ve çökme raporu gelir; "Hayır" diyenlerden hiçbir şey gelmez. Ayarlardan her zaman değiştirilebilir. Yerel (native) kurulum gerekmez, anahtarları girmek yeterli.
+
+1. [PostHog](https://eu.posthog.com) → AB bölgesinde ücretsiz hesap aç → Project settings → **Project API key** (`phc_...`). Bunu `src/platform/config.ts` → `posthog.key` alanına yaz.
+2. [Sentry](https://sentry.io) → ücretsiz hesap aç, platform olarak **Browser JavaScript** seç → Client Keys → **DSN**. Bunu `sentryDsn` alanına yaz.
+3. Gönderilen olaylar:
+   - `app_open`, `intro_done`, `life_start`, `age_milestone` (1, 3, 6, 12, 18, 25, 40, 60, 80, 100 yaş), `life_end`, `continue_child`, `new_family`
+   - `screen` (sekme değişimi), `tip_done`
+   - `purchase_start/done/cancel`, `restore`, `ad_start`, `ad_done`, `language`, `theme`
+4. İlk bakılacak grafik: `life_start` → `age_milestone 18` → `life_end` → `continue_child` hunisi. İnsanlar hanedan döngüsüne giriyor mu, orada görünür.
+
+**Mağaza gizlilik formları:**
+- **App Store "App Privacy":** Usage Data (Product Interaction) ve Diagnostics (Crash Data). İkisi de "Not linked to user", "Not used for tracking". AdMob için ayrıca Identifiers (Device ID) ve Advertising Data, "Used for tracking" (ATT izni istenir).
+- **Google Play "Data safety":** App activity, App info and performance (crash logs) ve Device or other IDs (AdMob). Verilerin şifreli aktarıldığını işaretle.
+
+## 7. Yayından önce kontrol listesi
 
 - [ ] `appId` değiştirildi
 - [ ] RevenueCat anahtarları ve ürünler hazır, gerçek satın alma test edildi (sandbox hesabıyla)
@@ -60,4 +76,6 @@ Anahtar boşken telefonda da test modu çalışır (her şey ücretsiz açılır
 - [ ] `public/privacy.html` içindeki köşeli parantezli alanlar dolduruldu ve sayfa bir web adresinde yayında (ör. GitHub Pages); link iki mağazaya girildi
 - [ ] Mağaza metinleri `STORE_LISTING.md` dosyasından, görseller `store-screenshots/` klasöründen yüklendi
 - [ ] RevenueCat'te `premium.no_ads` (Heirloom+) ürünü de oluşturuldu
+- [ ] Yaş derecelendirme anketi: oyun içi parayla oynanan piyango bileti olduğu için **"Simulated Gambling: Infrequent/Mild"**. Gerçek parayla kumar yok; ödül her zaman oyun içi para. Suç Dünyası için "Infrequent/Mild Mature/Suggestive Themes", "Cartoon or Fantasy Violence" ve "Alcohol, Tobacco, or Drug Use or References: Infrequent/Mild" işaretlenir. Beklenen sonuç: App Store 12+, Google Play PEGI 12 / Teen.
+- [ ] PostHog anahtarı ve Sentry DSN girildi, telefonda "Evet" deyip bir olayın PostHog'a düştüğü görüldü
 - [ ] Önce Play Console'da **kapalı test** (closed testing) ile 12+ kişiye dağıt; yeni kişisel hesaplarda Google bunu istiyor

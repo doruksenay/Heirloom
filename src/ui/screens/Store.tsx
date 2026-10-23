@@ -3,6 +3,7 @@ import type { AppApi } from '../app-state';
 import { PRODUCTS, purchases, type Product } from '../../platform/purchases';
 import { Icon } from '../icons';
 import { T, Tn } from '../../i18n/ui';
+import { track } from '../../platform/analytics';
 
 export function Store({ app }: { app: AppApi }) {
   const [section, setSection] = useState<'expansion' | 'theme' | 'premium'>('expansion');
@@ -17,7 +18,9 @@ export function Store({ app }: { app: AppApi }) {
       setConfirming(prod.id);
       return;
     }
+    track('purchase_start', { id: prod.id });
     const ok = await purchases.purchase(prod.id);
+    track(ok ? 'purchase_done' : 'purchase_cancel', { id: prod.id });
     if (!ok) return app.toast(T('Purchase was cancelled.'));
     app.updateProfile((p) => ({
       ...p,
@@ -39,6 +42,7 @@ export function Store({ app }: { app: AppApi }) {
         style={{ alignSelf: 'flex-start' }}
         onClick={async () => {
           const restored = await purchases.restore();
+          track('restore', { count: restored.length });
           app.updateProfile((p) => ({ ...p, entitlements: [...new Set([...p.entitlements, ...restored])] }));
           app.toast(restored.length ? Tn(restored.length, 'Restored {n} purchase.', 'Restored {n} purchases.') : T('No purchases to restore.'));
         }}

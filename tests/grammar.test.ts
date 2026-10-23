@@ -31,5 +31,13 @@ describe('turkish suffixes', () => {
     expect(acc('Kemal')).toBe("Kemal'i");
     expect(gen('Hilal')).toBe("Hilal'in");
     expect(wth('Burak')).toBe("Burak'la");
+    // foreign names follow pronunciation
+    expect(acc('Alice')).toBe("Alice'i");
+    expect(gen('George')).toBe("George'un");
+    expect(gen('Jack')).toBe("Jack'in");
+    expect(wth('Oliver')).toBe("Oliver'la");
+    expect(gen('Hannah')).toBe("Hannah'nın");
+    expect(gen('Chloe')).toBe("Chloe'nin");
+    expect(loc('Jack')).toBe("Jack'te");
   });
 });

@@ -7,6 +7,10 @@ import { Avatar } from '../Avatar';
 import { skinParts } from '../skins';
 import { Icon } from '../icons';
 import { T, badgeText } from '../../i18n/ui';
+import { track } from '../../platform/analytics';
+import { Tip, tipSeen } from '../Tip';
+
+const MILESTONES = [1, 3, 6, 12, 18, 25, 40, 60, 80, 100];
 
 
 export function Life({ app }: { app: AppApi }) {
@@ -96,9 +100,17 @@ export function Life({ app }: { app: AppApi }) {
         </div>
       )}
 
+      <LifeTip app={app} age={age} />
       <Log log={p.log} currentAge={age} />
       <Stats stats={p.stats} />
-      <AgeButton onClick={() => app.act(ageUp)} disabled={!!s.pending} />
+      <AgeButton
+        onClick={() => {
+          app.act(ageUp);
+          const a = playerAge(s);
+          if (MILESTONES.includes(a) && !s.dead) track('age_milestone', { age: a, gen: s.dynasty.generation });
+        }}
+        disabled={!!s.pending}
+      />
 
       {s.pending && (
         <div class="sheet-backdrop">
@@ -133,4 +145,41 @@ export function Life({ app }: { app: AppApi }) {
       )}
     </div>
   );
+}
+
+/** First-life coaching, one card at a time: how to play → heirlooms → activities; and a welcome for generation 2. */
+function LifeTip({ app, age }: { app: AppApi; age: number }) {
+  const s = app.game!;
+  if (s.pending || s.dead) return null;
+  const seen = (id: string) => tipSeen(app, id);
+  if (s.dynasty.generation >= 2 && !seen('gen2')) {
+    return (
+      <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family tree'), run: () => app.go('family') }}>
+        {T("Generation {n}. Your parent's life is now part of the family tree, and everything they left behind is yours.", { n: s.dynasty.generation })}
+      </Tip>
+    );
+  }
+  if (!seen('age_up')) {
+    return (
+      <Tip app={app} id="age_up" icon="plus">
+        {T('Each tap of Age up is one year. Things will happen, and some of them will ask you to choose.')}
+      </Tip>
+    );
+  }
+  const first = s.dynasty.heirlooms[0];
+  if (age >= 3 && first && !seen('heirlooms')) {
+    return (
+      <Tip app={app} id="heirlooms" icon="clock" action={{ label: T('Show me'), run: () => app.go('home') }}>
+        {T('Your family owns an heirloom: {item}. Heirlooms pass from parent to child, and each one has a power.', { item: first.name })}
+      </Tip>
+    );
+  }
+  if (age >= 6 && seen('heirlooms') && !seen('activities')) {
+    return (
+      <Tip app={app} id="activities" icon="bolt" action={{ label: T('Open Activities'), run: () => app.go('activities') }}>
+        {T('Besides aging up, you can do a few things every year: study, exercise, meet people, look for work.')}
+      </Tip>
+    );
+  }
+  return null;
 }
