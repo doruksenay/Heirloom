@@ -17,7 +17,8 @@ export type Category =
   | 'milestone'
   | 'heirloom'
   | 'fame'
-  | 'business';
+  | 'business'
+  | 'pets';
 
 export interface Helpers {
   stat(k: StatKey, delta: number): void;
@@ -96,7 +97,7 @@ export interface EventDef {
   tone?: Tone;
 }
 
-export type ActivityGroup = 'Mind & Body' | 'Love' | 'Family' | 'Campus' | 'Career' | 'Business' | 'Fame' | 'Money' | 'After dark';
+export type ActivityGroup = 'Mind & Body' | 'Love' | 'Family' | 'Campus' | 'Career' | 'Business' | 'Fame' | 'Money' | 'Pets' | 'After dark';
 
 export interface ActivityDef {
   id: string;

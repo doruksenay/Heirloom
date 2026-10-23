@@ -1,5 +1,6 @@
 import type { EventDef } from '../types';
 import { cap, dat, gen, kin, nm, who, wth } from './util';
+import { catName, syncFlagCat } from '../../engine/pets';
 
 // Childhood, school and teen years.
 export const youngEvents: EventDef[] = [
@@ -148,8 +149,10 @@ export const youngEvents: EventDef[] = [
         resolve: (c) => {
           if (c.rng.chance(0.65)) {
             c.h.flag('pet_cat');
+            syncFlagCat(c.p, c.s.year);
             c.h.stat('happiness', 10);
-            return c.t('Your parents gave in. You named the kitten Pamuk.', 'Ailen pes etti. Yavrunun adını Pamuk koydun.');
+            const n = catName(c.p, c.lang);
+            return c.t(`Your parents gave in. You named the kitten ${n}.`, `Ailen pes etti. Yavrunun adını ${n} koydun.`);
           }
           c.h.stat('happiness', -6);
           return c.t(

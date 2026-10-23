@@ -31,6 +31,15 @@ export interface FameState {
   awards: number;
   lastActiveYear: number;
   tours?: number; // how many steps of the tour ladder are done (0..5)
+  // v0.7 additions: all optional so older saves load unchanged
+  lastPath?: FamePath; // the path before retiring (fame_quit), for inheritance
+  oldBand?: string; // name of a band that broke up, for the reunion tour
+  trophyUids?: string[]; // dynasty heirloom uids won through fame (carried to heirs)
+  torch?: string; // id of the child who got your blessing to carry the stage name
+  legacyOf?: string; // first name of the famous parent this player inherited the spotlight from
+  legacyId?: string; // that parent's person id
+  podcast?: number; // podcast episodes recorded (0 = no podcast yet)
+  podcastName?: number; // index into PODCASTS
 }
 
 const KEY = 'fame';
@@ -89,12 +98,30 @@ const compactTr = new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumF
 /** 12.3K / 1.2M in English, "12,3 B" / "1,2 Mn" in Turkish. */
 export const compact = (n: number, lang: Lang = 'en') => (lang === 'tr' ? compactTr : compactEn).format(n);
 
+/**
+ * Soft ceiling for fans. Growth slows as fans approach it and never passes it, so fame-heavy lives
+ * (and the multiplicative boosts like "fans * 0.35") cannot compound into absurd numbers.
+ * Below ~1M fans the slowdown is under 2%.
+ */
+export const FAN_CAP = 50_000_000;
+
 export function gainFans(c: Ctx, f: FameState, n: number): number {
-  const gained = Math.max(0, Math.round(n));
+  const room = Math.max(0, FAN_CAP - f.fans);
+  const gained = Math.max(0, Math.round(room * -Math.expm1(-Math.max(0, n) / FAN_CAP)));
   f.fans += gained;
   f.lastActiveYear = c.s.year;
   f.peakFame = Math.max(f.peakFame, fameLevel(f.fans));
   return gained;
+}
+
+/** Fans that turn into income: linear up to 1M, then logarithmic, so top stars earn well but not without bound. */
+export function payingFans(fans: number): number {
+  return fans <= 1_000_000 ? fans : 1_000_000 * (1 + Math.log(fans / 1_000_000));
+}
+
+/** The path a player has, or had before retiring (older saves: inferred from what they did). */
+export function pathOrLast(f: FameState): FamePath {
+  return f.path ?? f.lastPath ?? (f.roles > 0 ? 'acting' : f.songs.length > 0 ? 'music' : 'social');
 }
 
 export function loseFans(f: FameState, share: number): number {

@@ -9,6 +9,8 @@ export interface GoalDef {
   label: string;
   labelTr?: string;
   check: (s: GameState) => boolean;
+  /** Only draw this goal for lives where it makes sense (e.g. Türkiye-only goals). Default: always. */
+  available?: (s: GameState) => boolean;
 }
 
 export const GOAL_REWARD = 200;
@@ -43,13 +45,13 @@ export function goalDef(id: string): GoalDef | undefined {
 /** Goals that overlap; a life never gets two from the same group. */
 const OVERLAPS: string[][] = [
   ['parent', 'three_kids'],
-  ['boss_founder', 'boss_exit', 'boss_ipo'],
-  ['fame_star', 'fame_world_tour'],
+  ['boss_founder', 'boss_exit', 'boss_ipo', 'boss_team50'],
+  ['fame_star', 'fame_world_tour', 'fame_wax'],
   ['crime_heist', 'crime_reformed'],
 ];
 
 export function assignGoals(s: GameState, rng: Rng): void {
-  const pool = [...BASE_GOALS, ...enabledPacks(s.enabledPacks).flatMap((p) => p.goals ?? [])].filter((g) => !g.check(s));
+  const pool = [...BASE_GOALS, ...enabledPacks(s.enabledPacks).flatMap((p) => p.goals ?? [])].filter((g) => (g.available?.(s) ?? true) && !g.check(s));
   const picked: GoalDef[] = [];
   while (picked.length < GOALS_PER_LIFE && pool.length) {
     const g = pool.splice(Math.floor(rng.next() * pool.length), 1)[0];

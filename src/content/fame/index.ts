@@ -1,7 +1,10 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../types';
+import type { GameState, Player } from '../../engine/types';
 import { cap, gen, wage } from '../base/util';
-import { bandNames, compact as compactN, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, peekFame, songTitle, type FamePath } from './state';
-import type { GameState } from '../../engine/types';
+import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, pathOrLast, payingFans, peekFame, songTitle, type FamePath } from './state';
+import { compact, fameOf, free, hasPath } from './util';
+import { moreFameEvents } from './events-more';
+import { moreFameActivities } from './activities-more';
 
 // "Fame" expansion: music, social media and acting careers, the single-player side of Popmundo.
 export const FAME_ENTITLEMENT = 'pack.fame';
@@ -25,11 +28,6 @@ function nextTour(f: { tours?: number }) {
   return done < TOURS.length ? TOURS[done] : TOURS[TOURS.length - 1]; // after the world tour, repeat it
 }
 
-const fameOf = (c: Ctx) => fameLevel(peekFame(c.p)?.fans ?? 0);
-const hasPath = (c: Ctx) => !!peekFame(c.p)?.path;
-const free = (c: Ctx) => c.p.jailYears === 0;
-/** Fan counts in the story language: 12.3K / 12,3 B. */
-const compact = (c: Ctx | GameState, n: number) => compactN(n, c.lang ?? 'en');
 
 function choosePath(path: FamePath, line: string, lineTr: string): ChoiceDef {
   return {
@@ -279,6 +277,8 @@ const events: EventDef[] = [
               c.t(`${c.p.firstName}'s ${trophy}`, `${gen(c.p.firstName)} ${trophyTrPoss}`),
               c.t(`${c.p.firstName} won it on stage in ${c.s.year}.`, `${c.p.firstName} bunu ${c.s.year} yılında sahnede kazandı.`),
             );
+            // remember it, so collectors can come knocking (fame.trophy_auction), even generations later
+            f.trophyUids = [...(f.trophyUids ?? []), c.s.dynasty.heirlooms[c.s.dynasty.heirlooms.length - 1].uid];
             c.h.stat('happiness', 15);
             return c.t(
               `You won! You forgot everyone's name in your speech except your grandmother's. The ${trophy} goes on the family shelf.`,
@@ -328,6 +328,7 @@ const events: EventDef[] = [
           const f = fameState(c.p);
           const name = f.band!.name;
           f.band = null;
+          f.oldBand = name;
           loseFans(f, 0.1);
           return c.t(`${name} broke up. Your solo career starts now.`, `${name} dağıldı. Solo kariyerin şimdi başlıyor.`);
         },
@@ -634,7 +635,7 @@ const activities: ActivityDef[] = [
       c.h.money(-cost);
       tracks.forEach((s) => (s.released = true));
       const title = tracks.sort((a, b) => b.quality - a.quality)[0].title;
-      const sales = Math.round((quality ** 2 / 50) * (1 + f.fans / 50000) * (f.label === 'major' ? 2.5 : f.label ? 1.4 : 1));
+      const sales = Math.round((quality ** 2 / 50) * (1 + Math.sqrt(f.fans / 50000)) * (f.label === 'major' ? 2.5 : f.label ? 1.4 : 1));
       f.albums.push({ title, year: c.s.year, quality, sales });
       const g = gainFans(c, f, sales * 40);
       c.h.money(wage(c, sales * (f.label === 'major' ? 400 : 800)));
@@ -742,7 +743,20 @@ const activities: ActivityDef[] = [
     run: (c) => {
       c.h.stat('happiness', 5);
       const g = gainFans(c, fameState(c.p), fameState(c.p).fans * 0.03);
-      return c.t(`You signed autographs for three hours. ${compact(c, g)} new fans and one sore wrist.`, `Üç saat imza dağıttın. ${compact(c, g)} yeni hayran ve bir ağrıyan bilek.`);
+      const i = c.rng.int(0, 2);
+      const n = compact(c, g);
+      return c.t(
+        [
+          `You signed autographs for three hours. ${n} new fans and one sore wrist.`,
+          `You held a meet-and-greet in a shopping mall. ${n} new fans, and a security guard asked for a selfie.`,
+          `You took photos with fans until the café ran out of tea. ${n} new fans.`,
+        ][i],
+        [
+          `Üç saat imza dağıttın. ${n} yeni hayran ve bir ağrıyan bilek.`,
+          `Bir AVM'de hayranlarınla buluştun. ${n} yeni hayran; güvenlik görevlisi bile fotoğraf istedi.`,
+          `Kafede çay bitene kadar hayranlarınla fotoğraf çektirdin. ${n} yeni hayran.`,
+        ][i],
+      );
     },
   },
   {
@@ -755,6 +769,7 @@ const activities: ActivityDef[] = [
     run: (c) => {
       const f = fameState(c.p);
       const title = fameTitle(f, c.lang);
+      f.lastPath = f.path ?? undefined;
       f.path = null;
       c.h.stat('happiness', 3);
       return c.t(`You retired from the spotlight as a ${title}. Your fans will remember.`, `Spot ışıklarına bir ${title} olarak veda ettin. Hayranların seni unutmayacak.`);
@@ -768,11 +783,11 @@ function onYear(c: Ctx) {
   if (!f || (!f.path && f.fans === 0)) return;
   // income
   if (f.path === 'music') {
-    const streams = f.fans * 0.12 + f.albums.reduce((a, al) => a + al.sales * 30, 0);
+    const streams = payingFans(f.fans) * 0.12 + f.albums.reduce((a, al) => a + al.sales * 30, 0);
     c.h.money(wage(c, streams * (f.label === 'major' ? 0.6 : 1)));
     f.albums.forEach((al) => (al.sales = Math.round(al.sales * 0.6)));
   } else if (f.path === 'social' && f.fans >= 10000) {
-    c.h.money(wage(c, f.fans * 0.2));
+    c.h.money(wage(c, payingFans(f.fans) * 0.2));
   }
   // fans drift away when you stop working
   const idle = c.s.year - f.lastActiveYear;
@@ -783,15 +798,44 @@ function onYear(c: Ctx) {
   if (fameLevel(f.fans) >= 80) c.h.achieve('superstar');
 }
 
+// ------------------------------------------------------------------ dynasty
+/** Fame trophies stay tracked in the family; a blessed (or simply famous) parent's name opens doors for the heir. */
+function onInherit(prev: Player, next: Player, s: GameState): string | void {
+  const f = peekFame(prev);
+  if (!f) return;
+  const alive = new Set(s.dynasty.heirlooms.map((h) => h.uid));
+  const trophies = (f.trophyUids ?? []).filter((u) => alive.has(u));
+  const blessed = f.torch === next.id;
+  if (!trophies.length && !blessed && f.peakFame < 50) return;
+  const nf = fameState(next);
+  nf.trophyUids = trophies;
+  nf.lastActiveYear = s.year;
+  if (!blessed && f.peakFame < 50) return;
+  nf.legacyOf = prev.firstName;
+  nf.legacyId = prev.id;
+  if (!blessed) return;
+  const tr = s.lang === 'tr';
+  const path = pathOrLast(f);
+  nf.path = path;
+  nf.fans = Math.round(Math.min(f.fans, 2_000_000) * 0.15) + 2000;
+  nf.peakFame = fameLevel(nf.fans);
+  const fans = compact(s, nf.fans);
+  const what = { music: ['music', 'müzik'], social: ['social media', 'sosyal medya'], acting: ['acting', 'oyunculuk'] }[path];
+  return tr
+    ? `${prev.firstName} sana sahne adını ve ${what[1]} kariyerini emanet etti. ${fans} hayran seni bekliyor.`
+    : `${prev.firstName} left you the stage name and a career in ${what[0]}. ${fans} fans are waiting for you.`;
+}
+
 export const famePack: ContentPack = {
   id: 'fame',
   title: 'Fame',
   description: 'Music, social media and acting. Form a band, write songs, release albums, go viral, survive scandals.',
   rating: 'all',
   entitlement: FAME_ENTITLEMENT,
-  events,
-  activities,
+  events: [...events, ...moreFameEvents],
+  activities: [...activities, ...moreFameActivities],
   onYear,
+  onInherit,
   lifeTiles: (s) => {
     const f = peekFame(s.player);
     if (!f || (!f.path && f.fans === 0)) return [];
@@ -805,9 +849,14 @@ export const famePack: ContentPack = {
   goals: [
     { id: 'fame_star', label: 'Reach 60 Fame', labelTr: '60 Şöhrete ulaş', check: (s) => (peekFame(s.player)?.peakFame ?? 0) >= 60 },
     { id: 'fame_world_tour', label: 'Finish a world tour', labelTr: 'Bir dünya turnesini tamamla', check: (s) => s.player.achievements.includes('world_tour') },
+    { id: 'fame_wax', label: 'Get your own wax figure', labelTr: 'Kendi balmumu heykeline kavuş', check: (s) => s.player.achievements.includes('wax') },
   ],
   ribbons: [
     { id: 'superstar', name: 'Superstar', desc: 'Reached 80+ Fame.', nameTr: 'Süperstar', descTr: '80+ Şöhrete ulaştı.', test: (_r, p) => (peekFame(p)?.peakFame ?? 0) >= 80 },
+    { id: 'showbiz_dynasty', name: 'Showbiz Dynasty', desc: 'Followed a famous parent into the spotlight and reached 50+ Fame.', nameTr: 'Şov Dünyası Hanedanı', descTr: 'Ünlü bir ebeveynin izinden gidip 50+ Şöhrete ulaştı.', test: (_r, p) => {
+      const f = peekFame(p);
+      return !!f?.legacyOf && f.peakFame >= 50;
+    } },
     { id: 'world_tour', name: 'Around the World', desc: 'Finished a 50-city world tour.', nameTr: 'Devr-i Âlem', descTr: '50 şehirlik bir dünya turnesini tamamladı.', test: (_r, p) => p.achievements.includes('world_tour') },
     { id: 'controversial', name: 'Controversial', desc: 'Three or more public scandals.', nameTr: 'Olay Adam', descTr: 'Üç ya da daha fazla kamuoyu skandalı.', test: (_r, p) => (peekFame(p)?.scandals ?? 0) >= 3 },
     { id: 'one_hit', name: 'One-Hit Wonder', desc: 'Was famous once, then faded away.', nameTr: 'Tek Hit Harikası', descTr: 'Bir zamanlar ünlüydü, sonra unutuldu.', test: (_r, p) => {

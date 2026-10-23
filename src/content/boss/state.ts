@@ -51,6 +51,23 @@ export interface Company {
   stage: Stage;
   valuation: number;
   lastProfit: number;
+  // Added in v0.7. Older saves do not have these, so read them through the helpers below.
+  /** Which generation of the family runs it: 1 = the founder, 2 = their child, ... */
+  gen?: number;
+  /** Staff morale 0..100 (default 50). Nudges yearly growth a little either way. */
+  morale?: number;
+  /** Person id of a cofounder, if one joined. */
+  cofounderId?: string;
+  /** Cities (and countries) the company operates in, counting home. */
+  cities?: number;
+  /** Franchise outlets run by other people; each pays a small yearly royalty. */
+  franchises?: number;
+  /** Product lines launched on top of the first. */
+  lines?: number;
+  /** Year an exclusive deal with one big client was signed. */
+  client?: number;
+  /** One-time milestones already celebrated: 'ten', 'fifty', 'portrait'. */
+  marks?: string[];
 }
 
 export interface BossState {
@@ -70,6 +87,14 @@ export function bossState(p: Player): BossState {
 
 export const peekBoss = (p: Player) => p.ext?.[KEY] as BossState | undefined;
 export const companyOf = (p: Player) => peekBoss(p)?.company ?? null;
+
+export const genOf = (c: Company) => c.gen ?? 1;
+export const moraleOf = (c: Company) => c.morale ?? 50;
+export const companyAge = (c: Company, year: number) => year - c.founded;
+export const hasMark = (c: Company, m: string) => !!c.marks?.includes(m);
+export function addMark(c: Company, m: string) {
+  c.marks = [...(c.marks ?? []).filter((x) => x !== m), m];
+}
 
 const STAGE_FACTOR: Record<Stage, number> = { garage: 0.6, startup: 1, scaleup: 1.3, public: 1.6 };
 

@@ -1,5 +1,6 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { acc, cap, dat, gen, kin, nm, single, wage, who, wth } from './util';
+import { acc, cap, dat, gen, kin, nm, single, wage, who, wth, officeJob } from './util';
+import { catName, syncFlagCat } from '../../engine/pets';
 
 // v0.2 content: friends, pets, work, home, kids, old age, and events that create new heirlooms.
 
@@ -128,12 +129,13 @@ export const moreEvents: EventDef[] = [
     when: (c) => c.h.has('pet_cat') && c.s.year - c.p.flags['pet_cat'] >= 15,
     text: '',
     apply: (c) => {
+      const n = catName(c.p, c.lang); // read the name before the cat leaves the pet list
       c.h.unflag('pet_cat');
       c.h.flag('cat_memory');
       c.h.stat('happiness', -10);
       return c.t(
-        'Pamuk passed away peacefully on the windowsill, in the sun spot. Seventeen good years.',
-        'Pamuk, pencere kenarındaki güneşli köşesinde huzur içinde gözlerini yumdu. On yedi güzel yıl.',
+        `${n} passed away peacefully on the windowsill, in the sun spot. So many good years.`,
+        `${n}, pencere kenarındaki güneşli köşesinde huzur içinde gözlerini yumdu. Ne güzel yıllardı.`,
       );
     },
     tone: 'bad',
@@ -153,8 +155,10 @@ export const moreEvents: EventDef[] = [
         label: (c) => c.t('Bring it in', 'İçeri al'),
         resolve: (c) => {
           c.h.flag('pet_cat');
+          syncFlagCat(c.p, c.s.year);
           c.h.stat('happiness', 10);
-          return c.t('You adopted the kitten and named it Pamuk II.', 'Yavruyu sahiplendin ve adını II. Pamuk koydun.');
+          const n = catName(c.p, c.lang);
+          return c.t(`You adopted the kitten and named it ${n}.`, `Yavruyu sahiplendin ve adını ${n} koydun.`);
         },
         tone: 'good',
       },
@@ -293,7 +297,7 @@ export const moreEvents: EventDef[] = [
     minAge: 22,
     maxAge: 64,
     cooldown: 6,
-    when: (c) => !!c.p.jobId && c.p.jobYears >= 2,
+    when: (c) => officeJob(c) && !!c.p.jobId && c.p.jobYears >= 2,
     title: (c) => c.t('You have not had a raise in two years.', 'İki yıldır zam görmedin.'),
     text: (c) => c.t('Your annual review is tomorrow.', 'Yıllık performans görüşmen yarın.'),
     choices: [

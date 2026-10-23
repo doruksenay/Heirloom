@@ -2,7 +2,8 @@ import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../type
 import { cap, dat, kin, kinWord, nm, wage } from '../base/util';
 import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
-import { INDUSTRIES, STAGE_NAMES, bossState, stageName, companyOf, peekBoss, valuate, type Company, type Industry } from './state';
+import { INDUSTRIES, STAGE_NAMES, bossState, stageName, companyOf, genOf, peekBoss, valuate, type Company, type Industry } from './state';
+import { afterYear, moraleGrowth, moreActivities, moreEvents } from './extra';
 
 // "Boss" expansion: start a company, grow it, raise money, sell it, take it public, or lose everything.
 export const BOSS_ENTITLEMENT = 'pack.boss';
@@ -37,6 +38,7 @@ function industryChoice(id: Industry): ChoiceDef {
         stage: 'garage',
         valuation: 0,
         lastProfit: 0,
+        gen: 1,
       };
       company.valuation = valuate(company);
       bossState(c.p).company = company;
@@ -631,7 +633,7 @@ function onYear(c: Ctx) {
   if (!b || !comp) return;
   const ind = INDUSTRIES[comp.industry];
   const capacity = (comp.employees + 1) * wage(c, ind.revPerHead);
-  let growth = ind.growth + comp.hype / 250 + (c.p.stats.smarts - 50) / 600 + (c.rng.next() * 2 - 1) * ind.volatility;
+  let growth = ind.growth + comp.hype / 250 + (c.p.stats.smarts - 50) / 600 + moraleGrowth(comp) + (c.rng.next() * 2 - 1) * ind.volatility;
   if (growth > 0) growth *= Math.max(0, 1 - comp.revenue / wage(c, ind.market)); // the market saturates
   if (comp.revenue > capacity) growth = Math.min(growth, 0.01 - (comp.revenue / capacity - 1) * 0.2);
   if (c.p.jailYears > 0) growth -= 0.3;
@@ -642,6 +644,7 @@ function onYear(c: Ctx) {
   comp.lastProfit = profit;
   comp.cash += profit;
   comp.hype = Math.max(0, comp.hype - 6);
+  afterYear(c, comp);
   comp.valuation = valuate(comp);
   b.peakValuation = Math.max(b.peakValuation, comp.valuation);
   if (!c.p.jobId) c.p.jobTitle = c.t(`Founder & CEO of ${comp.name}`, `${comp.name} Kurucusu ve CEO'su`);
@@ -656,8 +659,8 @@ export const bossPack: ContentPack = {
   description: 'Start a company, hire, raise money, sell it or take it public. Pass the family business down.',
   rating: 'all',
   entitlement: BOSS_ENTITLEMENT,
-  events,
-  activities,
+  events: [...events, ...moreEvents],
+  activities: [...activities, ...moreActivities],
   onYear,
   netWorth: (s) => {
     const comp = companyOf(s.player);
@@ -668,13 +671,16 @@ export const bossPack: ContentPack = {
     if (!comp) return;
     const tr = s.lang === 'tr';
     const nb = bossState(next);
-    nb.company = { ...comp };
+    // the cofounder retires with the old boss; milestones and the family generation count carry on
+    const g = genOf(comp) + 1;
+    nb.company = { ...comp, gen: g, cofounderId: undefined, marks: [...(comp.marks ?? [])] };
     nb.peakValuation = comp.valuation;
     if (!next.jobId) next.jobTitle = tr ? `${comp.name} CEO'su` : `CEO of ${comp.name}`;
     bossState(prev).company = null;
+    const extra = g >= 3 ? (tr ? ` Şirketi yöneten ${g}. kuşak sensin.` : ` You are generation ${g} to run it.`) : '';
     return tr
-      ? `Aile şirketinin başına geçtin: ${comp.name}. ${comp.founderName} tarafından ${comp.founded} yılında kurulmuştu.`
-      : `You took over the family business, ${comp.name}, founded by ${comp.founderName} in ${comp.founded}.`;
+      ? `Aile şirketinin başına geçtin: ${comp.name}. ${comp.founderName} tarafından ${comp.founded} yılında kurulmuştu.${extra}`
+      : `You took over the family business, ${comp.name}, founded by ${comp.founderName} in ${comp.founded}.${extra}`;
   },
   lifeTiles: (s) => {
     const comp = companyOf(s.player);
@@ -690,10 +696,15 @@ export const bossPack: ContentPack = {
     { id: 'boss_founder', label: 'Start a company', labelTr: 'Bir şirket kur', check: (s) => s.player.achievements.includes('founder') },
     { id: 'boss_exit', label: 'Sell a company', labelTr: 'Bir şirket sat', check: (s) => s.player.achievements.includes('exit') },
     { id: 'boss_ipo', label: 'Take a company public', labelTr: 'Bir şirketi halka arz et', check: (s) => s.player.achievements.includes('ipo') },
+    { id: 'boss_team50', label: 'Lead a team of 50', labelTr: '50 kişilik bir ekibi yönet', check: (s) => (companyOf(s.player)?.employees ?? 0) + 1 >= 50 },
   ],
   ribbons: [
     { id: 'unicorn', name: 'Unicorn', desc: 'Built a billion-dollar company.', nameTr: 'Tek Boynuzlu At', descTr: 'Milyar dolarlık bir şirket kurdu.', test: (_r, p) => p.achievements.includes('unicorn') },
     { id: 'self_made', name: 'Self-Made', desc: 'Sold a company and died a millionaire.', nameTr: 'Kendi Yağıyla Kavrulan', descTr: 'Bir şirket sattı ve milyoner olarak öldü.', test: (r, p) => (peekBoss(p)?.exits ?? 0) > 0 && r.netWorth >= local(p.countryId, 1_000_000) },
+    { id: 'three_generations', name: 'Three Generations', desc: 'Ran a family company in its third generation or later.', nameTr: 'Üç Kuşak', descTr: 'Üçüncü kuşağa ulaşmış bir aile şirketini yönetti.', test: (_r, p) => {
+      const comp = companyOf(p);
+      return !!comp && genOf(comp) >= 3;
+    } },
     { id: 'dynasty_business', name: 'Family Business', desc: 'Ran a company founded by an ancestor.', nameTr: 'Aile Şirketi', descTr: 'Atalarından birinin kurduğu şirketi yönetti.', test: (_r, p) => {
       const comp = companyOf(p);
       return !!comp && comp.founderName !== p.firstName;

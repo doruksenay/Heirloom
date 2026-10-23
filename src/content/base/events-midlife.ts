@@ -2,12 +2,13 @@ import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { salaryFor, titleFor } from '../../engine/careers';
 import { getCountry } from '../../engine/world';
-import { acc, cap, dat, eligibleJobs, gen, kin, loc, nm, single, wage, who, wth } from './util';
+import { acc, cap, dat, eligibleJobs, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
 
 // Ages 25–64: work, kids, love, money, health and the small absurdities of the middle of life.
 
 // ------------------------------------------------ helpers
-const hasJob = (c: Ctx) => !!c.p.jobId && !c.p.retired;
+// office-style work events: not for athletes, soldiers, farmers and the like
+const hasJob = officeJob;
 const kidsAged = (c: Ctx, lo: number, hi: number) =>
   c.h.relatives('child').filter((k) => {
     const a = c.h.ageOf(k.person);

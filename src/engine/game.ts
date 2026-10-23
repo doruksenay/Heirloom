@@ -5,7 +5,7 @@ import { createRng, randomSeed } from './rng';
 import { getCountry, firstNames } from './world';
 import { BASE_JOBS, EDUCATION_RANK, salaryFor, titleFor } from './careers';
 import { abl, acc, dat, gen, loc } from '../i18n/tr-grammar';
-import { furniture } from './home';
+import { furniture, hasGarden } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
@@ -23,6 +23,9 @@ export interface NewLifeOptions {
   /** Built-in test scenario with a preset family history. */
   scenario?: 'sano';
 }
+
+/** "Türkiye'de", "Almanya'da", but "Amerika Birleşik Devletleri'nde" (a compound name already ends in a possessive). */
+const countryLocTr = (name: string) => (/Devletleri$/.test(name) ? `${name}'nde` : loc(name));
 
 const txt = (t: string | ((c: Ctx) => string) | undefined, c: Ctx) => (typeof t === 'function' ? t(c) : t);
 
@@ -98,8 +101,9 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
 
   const mother = h.newPerson({ gender: 'female', age: rng.int(22, 38) });
   const father = h.newPerson({ gender: 'male', age: rng.int(24, 42), lastName: opts.lastName });
-  mother.jobTitle = titleFor(rng.pick(BASE_JOBS), 0, s.lang);
-  father.jobTitle = titleFor(rng.pick(BASE_JOBS), 0, s.lang);
+  const parentJobs = BASE_JOBS.filter((j) => !j.eventOnly);
+  mother.jobTitle = titleFor(rng.pick(parentJobs), 0, s.lang);
+  father.jobTitle = titleFor(rng.pick(parentJobs), 0, s.lang);
   h.addRelation(mother, 'mother', rng.int(60, 95));
   h.addRelation(father, 'father', rng.int(55, 95));
   const siblings = rng.weighted([0, 1, 2], (n) => [5, 4, 2][n]) ?? 0;
@@ -111,7 +115,7 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
   h.log(
     c.t(
       `You were born ${girlOrBoy} in ${opts.city}, ${country.name}.`,
-      `${loc(opts.city)}, ${loc(country.nameTr)} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
+      `${loc(opts.city)}, ${countryLocTr(country.nameTr)} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
     ),
     'big',
   );
@@ -237,7 +241,8 @@ function yearlyTick(c: Ctx): string | null {
     const salary = salaryFor(job, p.jobLevel, country.wageFactor);
     h.money(salary * 0.75);
     p.jobYears++;
-    if (p.jobYears >= 2 && rng.chance(0.1 + p.stats.smarts / 600 + p.jobYears / 100)) {
+    // ranked jobs (soldier, officer) climb by years of service in their own yearly logic instead
+    if (!job.ranked && p.jobYears >= 2 && rng.chance(0.1 + p.stats.smarts / 600 + p.jobYears / 100)) {
       if (h.promote()) {
         h.log(c.t(`You were promoted to ${h.jobTitle()}. Salary +32%.`, `${h.jobTitle()} oldun. Maaşına %32 zam!`), 'good');
         h.stat('happiness', 6);
@@ -449,6 +454,7 @@ export function buyFurniture(s: GameState, id: string): boolean {
   const item = furniture(id);
   const p = s.player;
   if (!item || p.home.furniture.includes(id) || p.jailYears > 0) return false;
+  if (item.slot === 'garden' && !hasGarden(p)) return false; // garden pieces need a home with a garden
   const price = Math.round(item.price * getCountry(p.countryId).wageFactor);
   if (p.money < price) return false;
   const c = makeCtx(s);

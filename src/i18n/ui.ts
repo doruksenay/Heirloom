@@ -70,6 +70,7 @@ export const TR: Record<string, string> = {
   life: 'hayat',
   milestone: 'dönüm noktası',
   heirloom: 'yadigâr',
+  pets: 'evcil hayvan',
 
   // choice badges (content gives these in English; they are translated here)
   Risky: 'Riskli',
@@ -104,6 +105,7 @@ export const TR: Record<string, string> = {
   Business: 'İş',
   Fame: 'Şöhret',
   Money: 'Para',
+  Pets: 'Evcil Hayvanlar',
   'After dark': 'Gece hayatı',
 
   // ad overlay
@@ -127,6 +129,22 @@ export const TR: Record<string, string> = {
   'Bank {m}': 'Banka {m}',
   '+{n} Happiness': '+{n} Mutluluk',
   Placed: 'Yerleştirildi',
+  'They stay with the house': 'Evle birlikte kalırlar',
+  'No pets yet. Adopt one from Activities.': 'Henüz evcil hayvanın yok. Aktiviteler bölümünden sahiplenebilirsin.',
+  'In memory: {names}': 'Anısına: {names}',
+  '{n} trick': '{n} hüner',
+  '{n} tricks': '{n} hüner',
+  '{n} year old': '{n} yaşında',
+  '{n} years old': '{n} yaşında',
+  'Family pet': 'Aile yadigârı dost',
+  'Needs a garden': 'Bahçe gerekir',
+  Basics: 'Temel parçalar',
+  Homeowner: 'Ev sahibi',
+  Renting: 'Kiracı',
+  'Group furniture': 'Eşyaları grupla',
+  'By room': 'Odaya göre',
+  'By style': 'Tarza göre',
+  'Complete a style set for +1 Happiness every year.': 'Bir tarz setini tamamla, her yıl +1 Mutluluk kazan.',
 
   // family
   Dynasty: 'Hanedan',

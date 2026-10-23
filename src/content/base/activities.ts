@@ -1,6 +1,6 @@
 import type { ActivityDef } from '../types';
 import type { Ctx } from '../types';
-import { acc, cap, gen as gen2, kin, loc, single, wage, wth } from './util';
+import { acc, cap, gen as gen2, kin, single, wage, wth } from './util';
 
 /** Picks one [English, Turkish] line with a single rng call, so both languages stay in step. */
 const line = (c: Ctx, lines: [string, string][]) => {
@@ -316,30 +316,7 @@ export const baseActivities: ActivityDef[] = [
   },
 
   // ------------------------------------------------ Money
-  {
-    id: 'buy_home',
-    label: (c) => c.t('Buy a home', 'Ev satın al'),
-    description: (c) => c.t('Stop paying rent', 'Kiraya son ver'),
-    group: 'Money',
-    minAge: 20,
-    available: (c) => !c.p.home.owned && c.p.money >= wage(c, 120000),
-    run: (c) => {
-      const price = wage(c, 120000);
-      c.h.money(-price);
-      c.p.home = {
-        name: c.t(`Your flat in ${c.p.city}`, `${loc(c.p.city)}ki dairen`),
-        value: price,
-        owned: true,
-        furniture: c.p.home.furniture,
-      };
-      c.h.stat('happiness', 10);
-      c.h.achieve('homeowner');
-      return c.t(
-        `You bought a flat in ${c.p.city} for ${c.h.fmt(price)}. It's yours. All yours. Including the leaky tap.`,
-        `${loc(c.p.city)} ${c.h.fmt(price)} vererek bir daire aldın. Senin. Tamamen senin. Damlatan musluğu da dahil.`,
-      );
-    },
-  },
+  // buying, selling and moving homes live in activities-home.ts (home_search, home_sell, home_renovate)
   {
     id: 'lottery',
     label: (c) => c.t('Buy a lottery ticket', 'Piyango bileti al'),

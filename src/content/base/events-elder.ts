@@ -2,6 +2,8 @@ import type { ChoiceDef, Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { firstNames } from '../../engine/world';
 import { acc, cap, dat, gen, kin, nm, single, wage, who, wth } from './util';
+import { catName } from '../../engine/pets';
+import { houseState } from '../../engine/home';
 
 // Old age (58+): grandchildren, health, retirement life, love and loss, legacy.
 
@@ -879,7 +881,7 @@ export const elderEvents: EventDef[] = [
       const pool = namePool(c);
       const a = pool.splice(c.rng.int(0, pool.length - 1), 1)[0];
       const b = pool.splice(c.rng.int(0, pool.length - 1), 1)[0];
-      const third = c.h.has('pet_cat') || c.h.has('cat_memory') ? 'Pamuk' : pool.length ? pool[c.rng.int(0, pool.length - 1)] : '';
+      const third = c.h.has('pet_cat') || c.h.has('cat_memory') ? catName(c.p, c.lang) : pool.length ? pool[c.rng.int(0, pool.length - 1)] : '';
       c.h.stat('smarts', -1);
       if (third)
         return c.t(
@@ -1471,6 +1473,7 @@ export const elderEvents: EventDef[] = [
           const amt = Number(c.vars.amt);
           c.p.home.value = Math.max(0, c.p.home.value - amt);
           c.p.home.name = c.t('Your small flat', 'Küçük dairen');
+          houseState(c.p).tier = 'flat';
           c.h.money(amt);
           c.h.stat('happiness', 2);
           return c.t(

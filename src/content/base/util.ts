@@ -38,9 +38,16 @@ export function eligibleJobs(c: Ctx) {
     (j) =>
       EDUCATION_RANK[j.education] <= EDUCATION_RANK[c.p.education] &&
       j.minSmarts <= c.p.stats.smarts + 10 &&
-      j.id !== c.p.jobId,
+      j.id !== c.p.jobId &&
+      (!j.requires || j.requires(c)),
   );
 }
+
+/** Jobs without an office, a boss or a pay review (athletes, soldiers, farmers…). Generic office events skip them. */
+const NON_OFFICE = new Set(['athlete', 'coach', 'soldier', 'officer', 'artist', 'farmer', 'fisher', 'taxi']);
+
+/** Has a regular job with a boss and colleagues. */
+export const officeJob = (c: Ctx) => !!c.p.jobId && !c.p.retired && !NON_OFFICE.has(c.p.jobId);
 
 export function oneOf<T>(c: Ctx, list: readonly T[]): T {
   return c.rng.pick(list);

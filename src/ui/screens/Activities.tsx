@@ -10,7 +10,7 @@ import { T } from '../../i18n/ui';
 import { Tip } from '../Tip';
 import type { Txt } from '../../content/types';
 
-const GROUPS: ActivityGroup[] = ['Mind & Body', 'Love', 'Family', 'Campus', 'Career', 'Business', 'Fame', 'Money', 'After dark'];
+const GROUPS: ActivityGroup[] = ['Mind & Body', 'Love', 'Family', 'Campus', 'Career', 'Business', 'Fame', 'Money', 'Pets', 'After dark'];
 
 export function Activities({ app }: { app: AppApi }) {
   const s = app.game!;

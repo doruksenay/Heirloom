@@ -1,6 +1,7 @@
 import type { EventDef } from '../types';
 import { titleFor } from '../../engine/careers';
-import { acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs } from './util';
+import { acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, officeJob } from './util';
+import { catName, syncFlagCat } from '../../engine/pets';
 
 const TOPICS_EN = ['the dishes', 'your phone screen time', 'whose family to visit for the holidays', 'money', 'the thermostat'];
 const TOPICS_TR = ['bulaşıklar', 'telefona gömülmen', 'bayramda kimin ailesine gidileceği', 'para', 'kombinin derecesi'];
@@ -275,7 +276,7 @@ export const adultEvents: EventDef[] = [
     category: 'work',
     minAge: 22,
     maxAge: 64,
-    when: (c) => !!c.p.jobId && !c.p.retired,
+    when: (c) => officeJob(c) && !!c.p.jobId && !c.p.retired,
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: c.age + c.rng.int(3, 12) }).id;
     },
@@ -348,7 +349,7 @@ export const adultEvents: EventDef[] = [
     minAge: 20,
     weight: 5,
     cooldown: 8,
-    when: (c) => !!c.p.jobId && !c.p.retired,
+    when: (c) => officeJob(c) && !!c.p.jobId && !c.p.retired,
     text: '',
     apply: (c) => {
       if (c.rng.chance(0.4)) {
@@ -626,10 +627,12 @@ export const adultEvents: EventDef[] = [
         label: (c) => c.t('Adopt it', 'Sahiplen'),
         resolve: (c) => {
           c.h.flag('pet_cat');
+          syncFlagCat(c.p, c.s.year);
           c.h.stat('happiness', 8);
+          const n = catName(c.p, c.lang);
           return c.t(
-            'You adopted the cat and named it Pamuk. It ignores you lovingly.',
-            'Kediyi sahiplendin ve adını Pamuk koydun. Seni sevgiyle görmezden geliyor.',
+            `You adopted the cat and named it ${n}. It ignores you lovingly.`,
+            `Kediyi sahiplendin ve adını ${n} koydun. Seni sevgiyle görmezden geliyor.`,
           );
         },
       },
@@ -654,8 +657,8 @@ export const adultEvents: EventDef[] = [
       const watch = c.s.dynasty.heirlooms.find((x) => x.defId === 'clock')!;
       c.h.stat('happiness', -1);
       return c.t(
-        `Pamuk knocked ${watch.name} off the shelf. It survived. Barely.`,
-        `Pamuk yadigâr saati rafından aşağı itti: ${watch.name}. Kurtuldu. Kıl payı.`,
+        `${catName(c.p, c.lang)} knocked ${watch.name} off the shelf. It survived. Barely.`,
+        `${catName(c.p, c.lang)} yadigâr saati rafından aşağı itti: ${watch.name}. Kurtuldu. Kıl payı.`,
       );
     },
   },
