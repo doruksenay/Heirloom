@@ -13,6 +13,8 @@ const acting = (c: Ctx) => isPath(c, 'acting');
 const released = (c: Ctx) => (peekFame(c.p)?.songs ?? []).filter((s) => s.released);
 const kidsAged = (c: Ctx, min: number, max: number) => c.h.relatives('child').filter((k) => c.h.ageOf(k.person) >= min && c.h.ageOf(k.person) <= max);
 const pp = (c: Ctx): Person => c.h.person(String(c.vars.pid));
+/** Children of duet age who have not asked yet. */
+const duetKids = (c: Ctx) => kidsAged(c, 10, 35).filter((k) => !c.h.has(`fame_duet:${k.person.id}`));
 const pn = (c: Ctx) => pp(c)?.firstName ?? '';
 /** Same text in both languages, path-dependent: [music, social, acting]. */
 const byPath = (c: Ctx, en: [string, string, string], tr: [string, string, string]) => {
@@ -27,6 +29,12 @@ const scandal = (c: Ctx, share: number) => {
 
 /** Bigger stars who might call. Proper names, the same in both languages. */
 const STARS = ['Lara Vega', 'Kaan Tempo', 'Mira Sol', 'DJ Poyraz', 'Nova Reyes', 'Selin Mavi'];
+/** Which of STARS are women (for she/he in English). */
+const STAR_FEMALE = new Set(['Lara Vega', 'Mira Sol', 'Nova Reyes', 'Selin Mavi']);
+const inTR = (c: Ctx) => c.p.countryId === 'tr';
+/** him / her and he / she for the person in c.vars.pid (English only). */
+const himOf = (c: Ctx) => (pp(c)?.gender === 'female' ? 'her' : 'him');
+const heOf = (c: Ctx) => (pp(c)?.gender === 'female' ? 'she' : 'he');
 /** Rival creators' handles. */
 const HANDLES = ['@tostkral', '@vlogbaba', '@glowupgizem', '@kahvefali', '@gymbro_deniz', '@minikmutfak'];
 const ADS = ['A fabric softener', 'A bank', 'A car company', 'A yoghurt brand'];
@@ -46,7 +54,7 @@ export const moreFameEvents: EventDef[] = [
       c.vars.star = STARS[c.rng.int(0, STARS.length - 1)];
     },
     title: (c) => c.t(`${c.vars.star} wants to record a song with you.`, `${c.vars.star} seninle şarkı kaydetmek istiyor.`),
-    text: (c) => c.t('They have a private jet. You have a bus pass.', 'Onun özel jeti var. Senin akbilin.'),
+    text: (c) => c.t(`${STAR_FEMALE.has(String(c.vars.star)) ? 'She has' : 'He has'} a private jet. You have a bus pass.`, 'Onun özel jeti var. Senin akbilin.'),
     choices: [
       {
         id: 'yes',
@@ -347,7 +355,7 @@ export const moreFameEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -3);
           fs(c).skill = Math.min(100, fs(c).skill + 1);
-          return c.t('Inspiration came back eight months later, on a ferry, while you had no pen.', 'İlham sekiz ay sonra bir vapurda geri geldi. Tam da yanında kalem yokken.');
+          return c.t('Inspiration came back eight months later, on a night bus, while you had no pen.', 'İlham sekiz ay sonra bir gece otobüsünde geri geldi. Tam da yanında kalem yokken.');
         },
       },
     ],
@@ -385,9 +393,10 @@ export const moreFameEvents: EventDef[] = [
     category: 'fame',
     weight: 25,
     cooldown: 8,
-    when: (c) => music(c) && free(c) && fs(c).fans >= 10000 && kidsAged(c, 10, 35).length > 0,
+    // each child asks once: after a duet (or a "no") they stop practising in the bathroom
+    when: (c) => music(c) && free(c) && fs(c).fans >= 10000 && duetKids(c).length > 0,
     setup: (c) => {
-      c.vars.pid = c.rng.pick(kidsAged(c, 10, 35)).person.id;
+      c.vars.pid = c.rng.pick(duetKids(c)).person.id;
     },
     title: (c) => c.t(`${pn(c)} wants to sing a duet with you.`, `${pn(c)} seninle düet yapmak istiyor.`),
     text: (c) =>
@@ -400,6 +409,7 @@ export const moreFameEvents: EventDef[] = [
         id: 'duet',
         label: (c) => c.t('Record the duet', 'Düeti kaydet'),
         resolve: (c) => {
+          c.h.flag(`fame_duet:${c.vars.pid}`);
           const f = fs(c);
           const n = pn(c);
           c.h.closeness(String(c.vars.pid), 12);
@@ -421,8 +431,9 @@ export const moreFameEvents: EventDef[] = [
       },
       {
         id: 'protect',
-        label: (c) => c.t('Keep them out of the business', 'Onu bu sektörden uzak tut'),
+        label: (c) => c.t(`Keep ${himOf(c)} out of the business`, 'Onu bu sektörden uzak tut'),
         resolve: (c) => {
+          c.h.flag(`fame_duet:${c.vars.pid}`);
           c.h.closeness(String(c.vars.pid), -5);
           const n = pn(c);
           return c.t(
@@ -464,7 +475,10 @@ export const moreFameEvents: EventDef[] = [
             if (score >= 55) {
               const g = gainFans(c, f, f.fans * 0.12 + 20000);
               c.h.stat('happiness', 4);
-              return c.t(`You finished in the top ten. Respectable. ${compact(c, g)} new fans across Europe.`, `İlk ona girdin. Gayet saygın bir derece. Avrupa'nın dört bir yanından ${compact(c, g)} yeni hayran.`);
+              const europe = ['tr', 'uk', 'de'].includes(c.p.countryId);
+              return europe
+                ? c.t(`You finished in the top ten. Respectable. ${compact(c, g)} new fans across Europe.`, `İlk ona girdin. Gayet saygın bir derece. Avrupa'nın dört bir yanından ${compact(c, g)} yeni hayran.`)
+                : c.t(`You finished in the top ten. Respectable. ${compact(c, g)} new fans around the world.`, `İlk ona girdin. Gayet saygın bir derece. Dünyanın dört bir yanından ${compact(c, g)} yeni hayran.`);
             }
             c.h.stat('happiness', -6);
             const g = gainFans(c, f, f.fans * 0.04);
@@ -694,6 +708,7 @@ export const moreFameEvents: EventDef[] = [
     id: 'fame.stalker',
     category: 'fame',
     minAge: 16,
+    maxAge: 85,
     cooldown: 12,
     when: (c) => hasPath(c) && free(c) && fameOf(c) >= 40,
     title: (c) => c.t('Someone has been following you everywhere.', 'Biri her yerde peşinden geliyor.'),
@@ -746,6 +761,7 @@ export const moreFameEvents: EventDef[] = [
     id: 'fame.dizi_audition',
     category: 'fame',
     minAge: 16,
+    maxAge: 70,
     cooldown: 6,
     when: (c) => acting(c) && free(c) && fs(c).roles >= 1,
     title: (c) => c.t('A huge historical drama series is casting.', 'Dev bir tarihî dizi için oyuncu aranıyor.'),
@@ -782,7 +798,10 @@ export const moreFameEvents: EventDef[] = [
       },
       {
         id: 'taster',
-        label: (c) => c.t("Audition for the sultan's food taster", 'Padişahın çeşnicibaşısı rolüne seçmelere gir'),
+        label: (c) =>
+          inTR(c)
+            ? c.t("Audition for the sultan's food taster", 'Padişahın çeşnicibaşısı rolüne seçmelere gir')
+            : c.t("Audition for the king's food taster", 'Kralın çeşnicibaşısı rolüne seçmelere gir'),
         resolve: (c) => {
           const f = fs(c);
           f.roles++;
@@ -822,7 +841,7 @@ export const moreFameEvents: EventDef[] = [
         resolve: (c) => {
           const pay = wage(c, 30000);
           c.h.money(pay);
-          const g = gainFans(c, fs(c), fs(c).fans * 0.05);
+          const g = gainFans(c, fs(c), fs(c).fans * 0.05 + 1000);
           return c.t(
             `You signed for three more of the same. ${c.h.fmt(pay)} and ${compact(c, g)} new fans. Typecasting pays very well.`,
             `Aynı rolden üç tane daha imzaladın. ${c.h.fmt(pay)} ve ${compact(c, g)} yeni hayran. Aynı rolü oynamak çok iyi para ediyor.`,
@@ -850,7 +869,7 @@ export const moreFameEvents: EventDef[] = [
           const f = fs(c);
           if (c.rng.chance(0.4 + f.skill / 300)) {
             f.roles++;
-            const g = gainFans(c, f, f.fans * 0.2);
+            const g = gainFans(c, f, f.fans * 0.2 + 2000);
             return c.t(`Nobody knew you were funny. Now everybody does. ${compact(c, g)} new fans.`, `Kimse komik olduğunu bilmiyordu. Artık herkes biliyor. ${compact(c, g)} yeni hayran.`);
           }
           c.h.stat('happiness', -4);
@@ -922,7 +941,7 @@ export const moreFameEvents: EventDef[] = [
           const partner = c.h.partner();
           if (partner) c.h.closeness(partner.person.id, -6);
           if (c.rng.chance(0.3)) {
-            const g = gainFans(c, f, f.fans * 0.1);
+            const g = gainFans(c, f, f.fans * 0.1 + 1000);
             return c.t(
               `You stayed in character for three months. The performance had critics whispering "award". ${compact(c, g)} new fans.`,
               `Üç ay karakterden çıkmadın. Eleştirmenler kulaktan kulağa "ödül" diye fısıldıyor. ${compact(c, g)} yeni hayran.`,
@@ -985,7 +1004,7 @@ export const moreFameEvents: EventDef[] = [
         resolve: (c) => {
           const f = fs(c);
           f.scandals++;
-          const g = gainFans(c, f, f.fans * 0.05);
+          const g = gainFans(c, f, f.fans * 0.05 + 800);
           return c.t(
             `The footage leaked. Half the country is on your side. The other half bought chairs. ${compact(c, g)} new fans anyway.`,
             `Görüntüler sızdı. Ülkenin yarısı senin tarafında, öbür yarısı sandalye aldı. Yine de ${compact(c, g)} yeni hayran.`,
@@ -1054,19 +1073,20 @@ export const moreFameEvents: EventDef[] = [
     choices: [
       {
         id: 'go',
-        label: (c) => c.t('Show up and dance', 'Git ve halay çek'),
+        label: (c) => (inTR(c) ? c.t('Show up and dance', 'Git ve halay çek') : c.t('Show up and dance', 'Git ve dans et')),
         resolve: (c) => {
           const f = fs(c);
           c.h.money(-wage(c, 200));
           c.h.stat('happiness', 8);
           const big = c.rng.chance(0.3);
           const g = gainFans(c, f, big ? f.fans * 0.2 + 10000 : f.fans * 0.03 + 1000);
+          // pinning money on the couple is a Turkish (and Balkan) custom; elsewhere you raise a glass
+          const [en, tr] = inTR(c)
+            ? ['You danced until 2 am and pinned money on the couple.', 'Gece ikiye kadar halay çektin, çifte para taktın.']
+            : ['You danced until 2 am and gave a toast nobody asked for.', 'Gece ikiye kadar dans ettin, kimsenin istemediği bir kadeh konuşması yaptın.'];
           return big
-            ? c.t(
-                `You danced until 2 am and pinned money on the couple. The video went everywhere: ${compact(c, g)} new fans.`,
-                `Gece ikiye kadar halay çektin, çifte para taktın. Video her yere yayıldı: ${compact(c, g)} yeni hayran.`,
-              )
-            : c.t(`You danced until 2 am and pinned money on the couple. ${compact(c, g)} new fans, mostly aunties.`, `Gece ikiye kadar halay çektin, çifte para taktın. ${compact(c, g)} yeni hayran; çoğu teyze.`);
+            ? c.t(`${en} The video went everywhere: ${compact(c, g)} new fans.`, `${tr} Video her yere yayıldı: ${compact(c, g)} yeni hayran.`)
+            : c.t(`${en} ${compact(c, g)} new fans, mostly aunties.`, `${tr} ${compact(c, g)} yeni hayran; çoğu teyze.`);
         },
         tone: 'good',
       },
@@ -1195,9 +1215,9 @@ export const moreFameEvents: EventDef[] = [
     category: 'fame',
     weight: 20,
     cooldown: 8,
-    when: (c) => fameOf(c) >= 45 && kidsAged(c, 3, 15).length > 0,
+    when: (c) => fameOf(c) >= 45 && kidsAged(c, 6, 15).length > 0,
     setup: (c) => {
-      c.vars.pid = c.rng.pick(kidsAged(c, 3, 15)).person.id;
+      c.vars.pid = c.rng.pick(kidsAged(c, 6, 15)).person.id;
     },
     title: (c) => c.t(`Paparazzi photographed ${pn(c)} outside school.`, `Paparaziler ${acc(pn(c))} okul çıkışında görüntüledi.`),
     text: (c) => c.t('The photo is on every gossip site with a silly caption.', 'Fotoğraf saçma bir başlıkla bütün magazin sitelerinde.'),
@@ -1286,6 +1306,7 @@ export const moreFameEvents: EventDef[] = [
     id: 'fame.reunion_tour',
     category: 'fame',
     minAge: 50,
+    maxAge: 85,
     once: true,
     when: (c) => {
       const f = peekFame(c.p);
@@ -1336,7 +1357,7 @@ export const moreFameEvents: EventDef[] = [
       c.vars.pid = c.rng.pick(kidsAged(c, 16, 40)).person.id;
     },
     title: (c) => c.t(`${pn(c)} wants to follow in your footsteps.`, `${pn(c)} senin izinden gitmek istiyor.`),
-    text: (c) => c.t('They want to use your name on stage and are asking for your blessing.', 'Sahnede senin adını kullanmak için izin istiyor.'),
+    text: (c) => c.t(`${heOf(c) === 'she' ? 'She wants' : 'He wants'} to use your name on stage and is asking for your blessing.`, 'Sahnede senin adını kullanmak için izin istiyor.'),
     choices: [
       {
         id: 'bless',
@@ -1355,7 +1376,7 @@ export const moreFameEvents: EventDef[] = [
       },
       {
         id: 'dentist',
-        label: (c) => c.t('Tell them to become a dentist', 'Diş hekimi olmasını söyle'),
+        label: (c) => c.t(`Tell ${himOf(c)} to become a dentist`, 'Diş hekimi olmasını söyle'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), -6);
           const n = pn(c);
@@ -1369,6 +1390,8 @@ export const moreFameEvents: EventDef[] = [
     category: 'fame',
     weight: 30,
     minAge: 14,
+    // "nepo baby" is something columnists call the young: an heir who takes over at 50 has earned the grey hair
+    maxAge: 40,
     once: true,
     when: (c) => {
       const f = peekFame(c.p);
@@ -1479,7 +1502,11 @@ export const moreFameEvents: EventDef[] = [
       {
         id: 'keep',
         label: (c) => c.t('Keep it on the family shelf', 'Ailenin vitrininde kalsın'),
-        resolve: (c) => c.t('You said no. It stays on the family shelf and gets dusted every bayram.', 'Hayır dedin. Ailenin vitrininde kalıyor; her bayram tozu alınıyor.'),
+        resolve: (c) =>
+          c.t(
+            `You said no. It stays on the family shelf and gets dusted every ${inTR(c) ? 'bayram' : 'holiday'}.`,
+            'Hayır dedin. Ailenin vitrininde kalıyor; her bayram tozu alınıyor.',
+          ),
       },
     ],
   },

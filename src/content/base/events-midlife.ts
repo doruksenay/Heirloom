@@ -3,6 +3,7 @@ import type { Person } from '../../engine/types';
 import { salaryFor, titleFor } from '../../engine/careers';
 import { getCountry } from '../../engine/world';
 import { acc, cap, dat, eligibleJobs, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
+import { byCountry, cityOf, didFor, he, He, him, his, His, inTr, markFor, type ByCountry } from './events-flavour';
 
 // Ages 25–64: work, kids, love, money, health and the small absurdities of the middle of life.
 
@@ -15,6 +16,12 @@ const kidsAged = (c: Ctx, lo: number, hi: number) =>
     return a >= lo && a <= hi;
   });
 const pid = (c: Ctx) => String(c.vars.pid);
+/** What a child of this age still wants: a phone (11–15), a tattoo (16–17), a car or a tattoo (18+). */
+const kidWant = (c: Ctx, kid: Person) => {
+  const a = c.h.ageOf(kid);
+  const opts = a <= 15 ? ['phone'] : a <= 17 ? ['tattoo'] : ['car', 'tattoo'];
+  return opts.find((o) => !didFor(c, `kw_${o}`, kid.id));
+};
 const amt = (c: Ctx, key = 'amt') => Number(c.vars[key]);
 /** "Your daughter Ada" / "Kızın Ada" for the child stored in vars.pid. */
 const yourKid = (c: Ctx) => {
@@ -58,6 +65,54 @@ const DIETS: [string, string][] = [
   ['keto', 'keto diyeti'],
   ['the cabbage soup diet', 'lahana çorbası diyeti'],
 ];
+// ------------------------------------------------ in-laws
+/** The spouse's mother: created once per spouse and kept in p.ext, so every visit is the same woman. */
+const INLAWS = 'base_inlaws';
+type InlawRec = { id: string; die: number };
+const inlawRec = (c: Ctx, spouseId: string): InlawRec | undefined =>
+  (c.p.ext?.[INLAWS] as Record<string, InlawRec> | undefined)?.[spouseId];
+const inlawOf = (c: Ctx, spouseId: string): Person | undefined => {
+  const r = inlawRec(c, spouseId);
+  return r ? c.s.people[r.id] : undefined;
+};
+/** She is not in p.relations, so the engine never ages her out; her age at death is rolled when you meet her. */
+const inlawAlive = (c: Ctx, spouseId: string) => {
+  const r = inlawRec(c, spouseId);
+  const p = r && c.s.people[r.id];
+  return !!p && p.deathYear === undefined && c.s.year - p.birthYear < r!.die;
+};
+function newInlaw(c: Ctx, spouse: Person): Person {
+  const mil = c.h.newPerson({ gender: 'female', age: c.h.ageOf(spouse) + c.rng.int(24, 32), lastName: spouse.lastName });
+  const die = c.rng.int(74, 94);
+  c.p.ext = c.p.ext ?? {};
+  c.p.ext[INLAWS] = { ...((c.p.ext[INLAWS] as Record<string, InlawRec> | undefined) ?? {}), [spouse.id]: { id: mil.id, die } };
+  return mil;
+}
+
+/**
+ * The street-food business a friend wants you to co-sign for, by country:
+ * [English business, Turkish business, English dish, Turkish dish (dative), Turkish dish, English food word, Turkish food word].
+ */
+const TRUCK: ByCountry<[string, string, string, string, string, string, string]> = {
+  tr: ['kebab truck', 'döner arabası', 'a wrap', 'bir dürüme', 'dürüm', 'kebab', 'Döner'],
+  de: ['döner stand', 'döner büfesi', 'a wrap', 'bir dürüme', 'dürüm', 'kebab', 'Döner'],
+  uk: ['kebab van', 'kebapçı minibüsü', 'a wrap', 'bir dürüme', 'dürüm', 'kebab', 'Kebap'],
+  us: ['taco truck', 'taco kamyoneti', 'a taco', 'bir takoya', 'taco', 'taco', 'Taco'],
+  br: ['pastel stand', 'pastel tezgâhı', 'a pastel', 'bir pastele', 'pastel', 'pastel', 'Pastel'],
+  other: ['food truck', 'yemek kamyoneti', 'a dish', 'bir yemeğe', 'yemek', 'street-food', 'Sokak lezzetleri'],
+};
+const truck = (c: Ctx) => byCountry(c, TRUCK);
+
+/** Something hot to celebrate surviving heartburn with: [English, Turkish with "-la/-le"]. */
+const SPICY: ByCountry<[string, string]> = {
+  tr: ['a spicy Adana kebab', 'acılı Adana kebabıyla'],
+  us: ['a double chili cheeseburger', 'acılı duble bir çizburgerle'],
+  uk: ['a vindaloo', 'yakıcı bir vindaloo körisiyle'],
+  de: ['an extra-hot currywurst', 'ekstra acılı bir körili sosisle'],
+  br: ['a huge feijoada', 'koca bir tabak feijoadayla'],
+  other: ['a very spicy curry', 'çok acılı bir köriyle'],
+};
+
 const FAME_ROLES: [string, string][] = [
   ['a TV chef', 'televizyon şefi'],
   ['a pop singer', 'pop şarkıcısı'],
@@ -454,11 +509,11 @@ export const midlifeEvents: EventDef[] = [
     },
     title: (c) => c.t(`HR asks you to train a new hire named ${nm(c)}.`, `İK senden yeni gelen ${acc(nm(c))} yetiştirmeni istiyor.`),
     text: (c) =>
-      c.t('They sit at your desk. With your stapler. You have seen this movie.', 'Senin masanda oturuyor. Senin zımbanla. Bu filmi daha önce izledin.'),
+      c.t(`${He(who(c))} sits at your desk. With your stapler. You have seen this movie.`, 'Senin masanda oturuyor. Senin zımbanla. Bu filmi daha önce izledin.'),
     choices: [
       {
         id: 'teach',
-        label: (c) => c.t('Teach them everything', 'Bildiğin her şeyi öğret'),
+        label: (c) => c.t(`Teach ${him(who(c))} everything`, 'Bildiğin her şeyi öğret'),
         resolve: (c) => {
           if (c.rng.chance(0.5)) {
             c.h.setJob(null);
@@ -680,7 +735,7 @@ export const midlifeEvents: EventDef[] = [
         : c.t(`${yourKid(c)} brought home a report card with three failing grades.`, `${cap(kin(c, who(c), 'child'))} ${gen(nm(c))} karnesinde üç zayıf var.`),
     text: (c) =>
       c.vars.good
-        ? c.t('They are pretending not to care. They care.', 'Umursamıyormuş gibi yapıyor. Umursuyor.')
+        ? c.t(`${He(who(c))} is pretending not to care. ${He(who(c))} cares.`, 'Umursamıyormuş gibi yapıyor. Umursuyor.')
         : c.t('The report card was "lost" for two days before it reached you.', 'Karne sana ulaşmadan önce iki gün boyunca "kayıptı".'),
     choices: [
       {
@@ -690,7 +745,7 @@ export const midlifeEvents: EventDef[] = [
           c.h.closeness(pid(c), 6);
           return c.vars.good
             ? c.t(
-                `You told ${nm(c)} you're proud of the work, not the numbers. They rolled their eyes and smiled.`,
+                `You told ${nm(c)} you're proud of the work, not the numbers. ${He(who(c))} rolled ${his(who(c))} eyes and smiled.`,
                 `${dat(nm(c))} notlarla değil, emekle gurur duyduğunu söyledin. Göz devirdi ama gülümsedi.`,
               )
             : c.t(
@@ -726,7 +781,7 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'mine',
-        label: (c) => c.t('Tell them about your own report cards', 'Kendi karnelerini anlat'),
+        label: (c) => c.t(`Tell ${him(who(c))} about your own report cards`, 'Kendi karnelerini anlat'),
         resolve: (c) => {
           c.h.closeness(pid(c), 3);
           c.h.stat('happiness', 2);
@@ -744,12 +799,13 @@ export const midlifeEvents: EventDef[] = [
     minAge: 25,
     weight: 6,
     cooldown: 4,
-    when: (c) => kidsAged(c, 11, 24).length > 0,
+    // each child asks for each thing once: the same kid does not get a first driving licence twice
+    when: (c) => kidsAged(c, 11, 24).some((k) => !!kidWant(c, k.person)),
     setup: (c) => {
-      const kid = c.rng.pick(kidsAged(c, 11, 24)).person;
-      const a = c.h.ageOf(kid);
+      const kid = c.rng.pick(kidsAged(c, 11, 24).filter((k) => !!kidWant(c, k.person))).person;
       c.vars.pid = kid.id;
-      c.vars.item = a <= 15 ? 'phone' : a <= 17 ? 'tattoo' : c.rng.chance(0.7) ? 'car' : 'tattoo';
+      c.vars.item = kidWant(c, kid)!;
+      markFor(c, `kw_${c.vars.item}`, kid.id);
       c.vars.amt = wage(c, c.vars.item === 'phone' ? 900 : c.vars.item === 'car' ? 7000 : 200);
     },
     title: (c) => {
@@ -759,9 +815,9 @@ export const midlifeEvents: EventDef[] = [
       return c.t(`${k} wants a tattoo. A big one. Of a wolf.`, `${k} dövme yaptırmak istiyor. Kocaman bir kurt.`);
     },
     text: (c) => {
-      if (c.vars.item === 'phone') return c.t('Their current phone is eleven months old. Ancient.', 'Şu anki telefonu on bir aylık. Antika.');
-      if (c.vars.item === 'car') return c.t('They have sent you fourteen listings since breakfast.', 'Kahvaltıdan beri sana on dört ilan linki attı.');
-      return c.t('They have already picked the spot. It is their neck.', 'Yerini bile seçmiş: boynu.');
+      if (c.vars.item === 'phone') return c.t(`${His(who(c))} current phone is eleven months old. Ancient.`, 'Şu anki telefonu on bir aylık. Antika.');
+      if (c.vars.item === 'car') return c.t(`${He(who(c))} has sent you fourteen listings since breakfast.`, 'Kahvaltıdan beri sana on dört ilan linki attı.');
+      return c.t(`${He(who(c))} has already picked the spot. It is ${his(who(c))} neck.`, 'Yerini bile seçmiş: boynu.');
     },
     choices: [
       {
@@ -774,7 +830,7 @@ export const midlifeEvents: EventDef[] = [
           c.h.closeness(pid(c), 8);
           if (c.vars.item === 'phone')
             return c.t(
-              `You bought ${nm(c)} the phone. You haven't seen their face since, only the top of their head.`,
+              `You bought ${nm(c)} the phone. You haven't seen ${his(who(c))} face since, only the top of ${his(who(c))} head.`,
               `${dat(nm(c))} telefonu aldın. O günden beri yüzünü görmedin, sadece tepesini.`,
             );
           if (c.vars.item === 'car')
@@ -802,7 +858,7 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'half',
-        label: (c) => c.t('Pay half, they earn the rest', 'Yarısı senden, yarısı ondan'),
+        label: (c) => c.t(`Pay half, ${he(who(c))} earns the rest`, 'Yarısı senden, yarısı ondan'),
         requires: (c) => c.p.money >= amt(c) / 2,
         requiresLabel: 'Not enough money',
         resolve: (c) => {
@@ -840,7 +896,7 @@ export const midlifeEvents: EventDef[] = [
     choices: [
       {
         id: 'hobby',
-        label: (c) => c.t('Turn their room into a hobby room', 'Odasını hobi odası yap'),
+        label: (c) => c.t(`Turn ${his(who(c))} room into a hobby room`, 'Odasını hobi odası yap'),
         resolve: (c) => {
           c.h.stat('happiness', 5);
           return c.t('You turned the room into a hobby room. Within a week it was a storage room.', 'Odayı hobi odasına çevirdin. Bir hafta içinde depoya döndü.');
@@ -857,12 +913,12 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'call',
-        label: (c) => c.t('Call them every day', 'Her gün ara'),
+        label: (c) => c.t(`Call ${him(who(c))} every day`, 'Her gün ara'),
         resolve: (c) => {
           c.h.closeness(pid(c), 3);
           c.h.stat('happiness', 1);
           return c.t(
-            `You called ${nm(c)} every day. On day nine they asked if you were "okay." You were not.`,
+            `You called ${nm(c)} every day. On day nine ${he(who(c))} asked if you were "okay." You were not.`,
             `${acc(nm(c))} her gün aradın. Dokuzuncu gün "İyi misin?" diye sordu. Değildin.`,
           );
         },
@@ -886,11 +942,11 @@ export const midlifeEvents: EventDef[] = [
       return c.t(`Your ${k} ${nm(c)} got a job offer in ${en}.`, `${cap(k)} ${dat(nm(c))} ${loc(tr)} iş teklifi geldi.`);
     },
     text: (c) =>
-      c.t('They are asking what you think. They have already bought a winter coat.', 'Senin fikrini soruyor. Ama kışlık montu çoktan almış.'),
+      c.t(`${He(who(c))} is asking what you think. ${He(who(c))} has already bought a winter coat.`, 'Senin fikrini soruyor. Ama kışlık montu çoktan almış.'),
     choices: [
       {
         id: 'go',
-        label: (c) => c.t('Tell them to go', '"Git, uç" de'),
+        label: (c) => c.t(`Tell ${him(who(c))} to go`, '"Git, uç" de'),
         resolve: (c) => {
           c.h.stat('happiness', -2);
           c.h.closeness(pid(c), 8);
@@ -903,7 +959,7 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'guilt',
-        label: (c) => c.t('Remind them who changed their diapers', 'Bezini kimin değiştirdiğini hatırlat'),
+        label: (c) => c.t(`Remind ${him(who(c))} who changed ${his(who(c))} diapers`, 'Bezini kimin değiştirdiğini hatırlat'),
         resolve: (c) => {
           if (c.rng.chance(0.3)) {
             c.h.closeness(pid(c), -4);
@@ -937,13 +993,21 @@ export const midlifeEvents: EventDef[] = [
     id: 'base.inlaws',
     category: 'family',
     minAge: 25,
+    maxAge: 72,
     weight: 5,
     cooldown: 8,
-    when: (c) => c.h.relatives('spouse').length > 0,
+    // the same mother-in-law every time, and only while she is alive
+    when: (c) => {
+      const sp = c.h.relatives('spouse')[0];
+      if (!sp) return false;
+      const mil = inlawOf(c, sp.person.id);
+      if (mil) return inlawAlive(c, sp.person.id);
+      return c.h.ageOf(sp.person) <= 55; // not met yet: she must plausibly still be alive
+    },
     setup: (c) => {
       const sp = c.h.relatives('spouse')[0].person;
       c.vars.pid = sp.id;
-      c.vars.qid = c.h.newPerson({ gender: 'female', age: c.h.ageOf(sp) + c.rng.int(24, 32), lastName: sp.lastName }).id;
+      c.vars.qid = (inlawOf(c, sp.id) ?? newInlaw(c, sp)).id;
     },
     title: (c) =>
       c.t(`Your mother-in-law ${nm(c, 'qid')} is coming to stay for two weeks.`, `Kayınvaliden ${nm(c, 'qid')} iki haftalığına size geliyor.`),
@@ -990,13 +1054,14 @@ export const midlifeEvents: EventDef[] = [
     id: 'base.family_group',
     category: 'family',
     minAge: 25,
+    maxAge: 59, // from 60 on, base.elder_family_group takes over
     weight: 5,
     cooldown: 6,
     when: (c) => c.h.relatives(['mother', 'father', 'sibling']).length > 0,
     setup: (c) => {
       c.vars.v = c.rng.int(0, FAMILY_CHAT.length - 1);
     },
-    title: (c) => c.t('The family WhatsApp group is on fire again.', 'Aile WhatsApp grubu yine karıştı.'),
+    title: (c) => c.t('The family group chat is on fire again.', 'Aile grubu yine karıştı.'),
     text: (c) => {
       const [en, tr] = FAMILY_CHAT[amt(c, 'v')];
       return c.t(en, tr);
@@ -1126,13 +1191,13 @@ export const midlifeEvents: EventDef[] = [
     },
     text: (c) =>
       c.t(
-        `${nm(c, 'qid')} brings homemade baklava and calls ${nm(c)} "my dear."`,
-        `${nm(c, 'qid')} elinde ev baklavasıyla geldi ve ${dat(nm(c))} "Canım" diye hitap ediyor.`,
+        `${nm(c, 'qid')} brings ${byCountry(c, { tr: 'homemade baklava', other: 'a homemade cake' })} and calls ${nm(c)} "my dear."`,
+        `${nm(c, 'qid')} elinde ${byCountry(c, { tr: 'ev baklavasıyla', other: 'ev yapımı bir kekle' })} geldi ve ${dat(nm(c))} "Canım" diye hitap ediyor.`,
       ),
     choices: [
       {
         id: 'welcome',
-        label: (c) => c.t('Welcome them warmly', 'Kucak aç'),
+        label: (c) => c.t(`Welcome ${him(who(c, 'qid'))} warmly`, 'Kucak aç'),
         resolve: (c) => {
           c.h.closeness(pid(c), 8);
           c.h.stat('happiness', 3);
@@ -1156,13 +1221,13 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'investigate',
-        label: (c) => c.t('Look into their past', 'Geçmişini araştır'),
+        label: (c) => c.t(`Look into ${his(who(c, 'qid'))} past`, 'Geçmişini araştır'),
         resolve: (c) => {
           c.h.stat('smarts', 1);
           if (c.rng.chance(0.2)) {
             c.h.closeness(pid(c), -3);
             return c.t(
-              `${nm(c, 'qid')} has three ex-spouses and a karaoke machine. You are keeping an eye on them.`,
+              `${nm(c, 'qid')} has three ex-spouses and a karaoke machine. You are keeping an eye on ${him(who(c, 'qid'))}.`,
               `${nm(c, 'qid')} üç kere boşanmış ve evinde karaoke makinesi var. Gözün üzerinde.`,
             );
           }
@@ -1350,13 +1415,13 @@ export const midlifeEvents: EventDef[] = [
       c.t(`At a friend's dinner, you're seated next to ${nm(c, 'qid')}.`, `Bir arkadaşının sofrasında seni ${gen(nm(c, 'qid'))} yanına oturttular.`),
     text: (c) =>
       c.t(
-        'They are starting over too, they look a little tired, and they laugh at your jokes.',
+        `${He(who(c, 'qid'))} is starting over too, looks a little tired, and laughs at your jokes.`,
         'O da hayata yeniden başlıyor, o da biraz yorgun ve senin esprilerine gülüyor.',
       ),
     choices: [
       {
         id: 'number',
-        label: (c) => c.t('Ask for their number', 'Numarasını iste'),
+        label: (c) => c.t(`Ask for ${his(who(c, 'qid'))} number`, 'Numarasını iste'),
         resolve: (c) => {
           c.h.addRelation(who(c, 'qid'), 'partner', 55);
           c.h.stat('happiness', 10);
@@ -1410,7 +1475,7 @@ export const midlifeEvents: EventDef[] = [
     text: (c) =>
       c.t(
         `A ${c.h.fmt(amt(c))} flat in ${c.p.city}. Twenty percent down, the rest over many, many years.`,
-        `${loc(c.p.city)} ${c.h.fmt(amt(c))} değerinde bir daire. Yüzde yirmi peşin, gerisi uzun, çok uzun yıllara yayılıyor.`,
+        `${loc(cityOf(c))} ${c.h.fmt(amt(c))} değerinde bir daire. Yüzde yirmi peşin, gerisi uzun, çok uzun yıllara yayılıyor.`,
       ),
     choices: [
       {
@@ -1422,7 +1487,7 @@ export const midlifeEvents: EventDef[] = [
           const interest = Math.round(price * 0.8 * 0.2);
           c.h.money(-(price + interest));
           c.p.home = {
-            name: c.t(`Your flat in ${c.p.city}`, `${loc(c.p.city)}ki dairen`),
+            name: c.t(`Your flat in ${c.p.city}`, `${loc(cityOf(c))}ki dairen`),
             value: price,
             owned: true,
             furniture: c.p.home.furniture,
@@ -1455,7 +1520,8 @@ export const midlifeEvents: EventDef[] = [
     minAge: 25,
     maxAge: 60,
     weight: 4,
-    cooldown: 10,
+    once: true, // "nobody ever mentioned KediCoin again"
+
     when: (c) => c.p.money > wage(c, 2000),
     setup: (c) => {
       c.vars.amt = Math.min(Math.round(c.p.money * 0.25), wage(c, 15000));
@@ -1612,13 +1678,15 @@ export const midlifeEvents: EventDef[] = [
     maxAge: 60,
     weight: 4,
     cooldown: 10,
-    when: (c) => c.h.relatives('friend').length > 0,
+    // each friend asks once; the same friend opening a second food truck reads as a bug
+    when: (c) => c.h.relatives('friend').some((f) => !didFor(c, 'guar', f.person.id)),
     setup: (c) => {
-      c.vars.pid = c.rng.pick(c.h.relatives('friend')).person.id;
+      c.vars.pid = c.rng.pick(c.h.relatives('friend').filter((f) => !didFor(c, 'guar', f.person.id))).person.id;
+      markFor(c, 'guar', String(c.vars.pid));
       c.vars.amt = wage(c, c.rng.int(4000, 10000));
     },
     title: (c) => c.t(`Your friend ${nm(c)} asks you to co-sign a bank loan.`, `Arkadaşın ${nm(c)} çekeceği krediye kefil olmanı istiyor.`),
-    text: (c) => c.t(`It's for a kebab truck. "It can't fail," says ${nm(c)}.`, `Bir döner arabası için. ${nm(c)} "Batması imkânsız" diyor.`),
+    text: (c) => c.t(`It's for a ${truck(c)[0]}. "It can't fail," says ${nm(c)}.`, `Bir ${truck(c)[1]} için. ${nm(c)} "Batması imkânsız" diyor.`),
     choices: [
       {
         id: 'sign',
@@ -1630,13 +1698,13 @@ export const midlifeEvents: EventDef[] = [
             c.h.closeness(pid(c), -15);
             c.h.stat('happiness', -6);
             return c.t(
-              `The kebab truck went under. The bank called you, not ${nm(c)}. You paid ${c.h.fmt(amt(c))}.`,
-              `Döner arabası battı. Banka ${acc(nm(c))} değil, seni aradı. Cebinden ${c.h.fmt(amt(c))} çıktı.`,
+              `The ${truck(c)[0]} went under. The bank called you, not ${nm(c)}. You paid ${c.h.fmt(amt(c))}.`,
+              `${cap(truck(c)[1])} battı. Banka ${acc(nm(c))} değil, seni aradı. Cebinden ${c.h.fmt(amt(c))} çıktı.`,
             );
           }
           c.h.closeness(pid(c), 12);
           c.h.stat('happiness', 3);
-          return c.t(`The kebab truck is a hit. ${nm(c)} named a wrap after you.`, `Döner arabası tuttu. ${nm(c)} bir dürüme senin adını verdi.`);
+          return c.t(`The ${truck(c)[0]} is a hit. ${nm(c)} named ${truck(c)[2]} after you.`, `${cap(truck(c)[1])} tuttu. ${nm(c)} ${truck(c)[3]} senin adını verdi.`);
         },
       },
       {
@@ -1659,9 +1727,9 @@ export const midlifeEvents: EventDef[] = [
           c.h.closeness(pid(c), 4);
           if (c.rng.chance(0.5)) {
             c.h.money(lent);
-            return c.t(`You lent ${nm(c)} a little. They paid it back with a free lunch on top.`, `${dat(nm(c))} biraz borç verdin. Geri ödedi, üstüne bir de bedava dürüm ısmarladı.`);
+            return c.t(`You lent ${nm(c)} a little. ${He(who(c))} paid it back with a free lunch on top.`, `${dat(nm(c))} biraz borç verdin. Geri ödedi, üstüne bir de bedava ${truck(c)[4]} ısmarladı.`);
           }
-          return c.t(`You lent ${nm(c)} a little. Consider it a donation to the kebab arts.`, `${dat(nm(c))} biraz borç verdin. Döner sanatına bağış say.`);
+          return c.t(`You lent ${nm(c)} a little. Consider it a donation to the ${truck(c)[5]} arts.`, `${dat(nm(c))} biraz borç verdin. ${truck(c)[6]} sanatına bağış say.`);
         },
       },
     ],
@@ -1829,11 +1897,12 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'kebab',
-        label: (c) => c.t('Celebrate with a kebab', 'Kurtuluşu kebapla kutla'),
+        label: (c) => (inTr(c) ? c.t('Celebrate with a kebab', 'Kurtuluşu kebapla kutla') : c.t('Celebrate with something spicy', 'Kurtuluşu acılı bir şeyle kutla')),
         resolve: (c) => {
           c.h.stat('health', -3);
           c.h.stat('happiness', 4);
-          return c.t('You celebrated surviving heartburn with a spicy kebab. Bold.', 'Mide yanmasından sağ kurtulmanı acılı Adana kebabıyla kutladın. Cesur hamle.');
+          const [en, tr] = byCountry(c, SPICY);
+          return c.t(`You celebrated surviving heartburn with ${en}. Bold.`, `Mide yanmasından sağ kurtulmanı ${tr} kutladın. Cesur hamle.`);
         },
       },
     ],
@@ -1928,7 +1997,9 @@ export const midlifeEvents: EventDef[] = [
         label: (c) => c.t('Go and be yourself', 'Git ve kendin ol'),
         resolve: (c) => {
           c.h.stat('happiness', 5);
-          if (single(c) && c.rng.chance(0.25)) {
+          // the old crush turns up at one reunion, not at every one
+          if (single(c) && !c.h.has('reunion_crush') && c.rng.chance(0.25)) {
+            c.h.flag('reunion_crush');
             const crush = c.h.newPerson({ gender: opposite(c), age: c.age });
             c.h.addRelation(crush, 'partner', 50);
             return c.t(
@@ -1972,7 +2043,7 @@ export const midlifeEvents: EventDef[] = [
       return c.t(`Your old classmate ${nm(c, 'qid')} is now famous as ${en}.`, `Eski sınıf arkadaşın ${nm(c, 'qid')} artık ünlü bir ${tr}.`);
     },
     text: (c) =>
-      c.t('They are on a billboard near your house, smiling at you every morning.', 'Evinin yakınındaki dev bir reklam panosundan her sabah sana gülümsüyor.'),
+      c.t(`${He(who(c, 'qid'))} is on a billboard near your house, smiling at you every morning.`, 'Evinin yakınındaki dev bir reklam panosundan her sabah sana gülümsüyor.'),
     choices: [
       {
         id: 'message',
@@ -1992,7 +2063,7 @@ export const midlifeEvents: EventDef[] = [
       },
       {
         id: 'brag',
-        label: (c) => c.t('Tell everyone you knew them', 'Herkese tanıdığını söyle'),
+        label: (c) => c.t(`Tell everyone you knew ${him(who(c, 'qid'))}`, 'Herkese tanıdığını söyle'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
           return c.t(
@@ -2078,7 +2149,9 @@ export const midlifeEvents: EventDef[] = [
           c.h.stat('smarts', 1);
           return c.t(
             "You counted ballots until midnight. Someone's grandma brought pastries. Democracy smells like pastries sometimes.",
-            'Gece yarısına kadar oy saydın. Birinin ninesi poğaça getirdi. Demokrasi bazen poğaça kokuyor.',
+            inTr(c)
+              ? 'Gece yarısına kadar oy saydın. Birinin ninesi poğaça getirdi. Demokrasi bazen poğaça kokuyor.'
+              : 'Gece yarısına kadar oy saydın. Birinin ninesi kurabiye getirdi. Demokrasi bazen kurabiye kokuyor.',
           );
         },
         tone: 'good',
@@ -2164,7 +2237,10 @@ export const midlifeEvents: EventDef[] = [
             return c.t('A triumph. Your guests asked for the recipe. You sent a link and took the credit.', 'Zafer! Misafirler tarifi istedi. Sen linki attın, alkışları da topladın.');
           }
           c.h.stat('happiness', -4);
-          return c.t('It collapsed in the oven. You ordered pide and called it "deconstructed."', 'Fırında çöktü. Pide söyleyip adına "dekonstrüksiyon" dedin.');
+          return c.t(
+            `It collapsed in the oven. You ordered ${inTr(c) ? 'pide' : 'pizza'} and called it "deconstructed."`,
+            `Fırında çöktü. ${inTr(c) ? 'Pide' : 'Pizza'} söyleyip adına "dekonstrüksiyon" dedin.`,
+          );
         },
       },
       {

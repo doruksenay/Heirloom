@@ -1,6 +1,6 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../types';
 import type { GameState, Player } from '../../engine/types';
-import { cap, gen, wage } from '../base/util';
+import { aOrAn, cap, gen, wage } from '../base/util';
 import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, pathOrLast, payingFans, peekFame, songTitle, type FamePath } from './state';
 import { compact, fameOf, free, hasPath } from './util';
 import { moreFameEvents } from './events-more';
@@ -22,6 +22,15 @@ export const TOURS = [
   { cities: 50, fans: 1_000_000, name: 'world tour', pitch: 'Fifty cities on five continents. Stadiums. Private jet. Your face on buildings.', done: 'You played fifty cities around the world. A stadium in another continent sang your song back to you.',
     nameTr: 'dünya turnesi', pitchTr: 'Beş kıtada elli şehir. Stadyumlar. Özel jet. Binalarda kocaman suratın.', doneTr: 'Dünya çapında elli şehirde çaldın. Başka bir kıtadaki koca bir stadyum şarkını sana geri söyledi.' },
 ] as const;
+
+/** Years "Chase fame" stays closed after you said "Not yet", and after you retired from the spotlight. */
+export const FAME_LATER_YEARS = 8;
+export const FAME_QUIT_YEARS = 5;
+/** Too old to start a fame career from scratch (comebacks and reunions still happen). */
+export const FAME_START_MAX_AGE = 60;
+const since = (c: Ctx, flag: string) => (flag in c.p.flags ? c.s.year - c.p.flags[flag] : Infinity);
+/** "Chase fame" is open: no path yet, not just declined, not just retired. */
+export const canStartFame = (c: Ctx) => !hasPath(c) && since(c, 'fame_later') >= FAME_LATER_YEARS && since(c, 'fame_quit') >= FAME_QUIT_YEARS;
 
 function nextTour(f: { tours?: number }) {
   const done = f.tours ?? 0;
@@ -61,6 +70,9 @@ const bandChoice = (i: number): ChoiceDef => ({
   tone: 'big',
 });
 
+/** Band members who are still alive (a band can outlive a drummer). */
+const bandAlive = (c: Ctx) => (peekFame(c.p)?.band?.members ?? []).filter((id) => c.s.people[id] && c.s.people[id].deathYear === undefined);
+
 const BRANDS = ['a suspicious energy drink', 'a teeth-whitening pen', 'a crypto app', 'a meal-kit company', 'a luxury hotel'];
 const BRANDS_TR = ['şüpheli bir enerji içeceği', 'bir diş beyazlatma kalemi', 'bir kripto uygulaması', 'bir hazır yemek kiti şirketi', 'lüks bir otel'];
 /** Genitive forms for "___ reklamını yaptın". */
@@ -78,7 +90,14 @@ const events: EventDef[] = [
       choosePath('music', 'You decided to become a musician. Your neighbors decided to buy earplugs.', 'Müzisyen olmaya karar verdin. Komşuların da kulak tıkacı almaya karar verdi.'),
       choosePath('social', 'You decided to become a content creator. You bought a ring light the same day.', 'İçerik üreticisi olmaya karar verdin. Aynı gün bir halka ışık aldın.'),
       choosePath('acting', 'You decided to become an actor. You practiced crying in the mirror for an hour.', 'Oyuncu olmaya karar verdin. Bir saat boyunca aynanın karşısında ağlama çalıştın.'),
-      { id: 'later', label: (c) => c.t('Not yet', 'Şimdi değil'), resolve: (c) => c.t('You decided fame can wait.', 'Şöhret biraz bekleyebilir dedin.') },
+      {
+        id: 'later',
+        label: (c) => c.t('Not yet', 'Şimdi değil'),
+        resolve: (c) => {
+          c.h.flag('fame_later'); // closes "Chase fame" for a few years
+          return c.t('You decided fame can wait. It will be a while before you think about it again.', 'Şöhret biraz bekleyebilir dedin. Bir süre aklına bile gelmeyecek.');
+        },
+      },
     ],
   },
   {
@@ -94,6 +113,7 @@ const events: EventDef[] = [
     id: 'fame.label_offer',
     category: 'fame',
     minAge: 16,
+    maxAge: 60,
     once: true,
     when: (c) => isPath(c, 'music') && !fameState(c.p).label && fameState(c.p).fans >= 5000,
     setup: (c) => {
@@ -165,7 +185,10 @@ const events: EventDef[] = [
     cooldown: 3,
     when: (c) => fameOf(c) >= 50 && free(c),
     title: (c) => c.t('Paparazzi are waiting outside your favorite café.', 'En sevdiğin kafenin önünde paparaziler bekliyor.'),
-    text: (c) => c.t('You have no make-up, yesterday\'s clothes and a simit in your hand.', 'Makyaj yok, üstünde dünkü kıyafetler, elinde bir simit.'),
+    text: (c) =>
+      c.p.countryId === 'tr'
+        ? c.t("You have no make-up, yesterday's clothes and a simit in your hand.", 'Makyaj yok, üstünde dünkü kıyafetler, elinde bir simit.')
+        : c.t("You have no make-up, yesterday's clothes and a half-eaten croissant in your hand.", 'Makyaj yok, üstünde dünkü kıyafetler, elinde yarısı yenmiş bir kruvasan.'),
     choices: [
       {
         id: 'smile',
@@ -296,19 +319,20 @@ const events: EventDef[] = [
     id: 'fame.bandmate_quits',
     category: 'fame',
     cooldown: 6,
-    when: (c) => !!peekFame(c.p)?.band && peekFame(c.p)!.band!.members.length > 0,
+    maxAge: 85,
+    when: (c) => bandAlive(c).length > 0,
     setup: (c) => {
-      c.vars.pid = c.rng.pick(fameState(c.p).band!.members);
+      c.vars.pid = c.rng.pick(bandAlive(c));
     },
     title: (c) => {
       const n = c.h.person(String(c.vars.pid)).firstName;
       return c.t(`${n} wants to leave the band.`, `${n} gruptan ayrılmak istiyor.`);
     },
-    text: (c) => c.t('Creative differences. Also, they want a salary.', 'Sanatsal görüş ayrılıkları. Bir de maaş istiyor.'),
+    text: (c) => c.t(`Creative differences. Also, ${c.h.he(c.h.person(String(c.vars.pid)))} wants a salary.`, 'Sanatsal görüş ayrılıkları. Bir de maaş istiyor.'),
     choices: [
       {
         id: 'convince',
-        label: (c) => c.t('Convince them to stay', 'Kalması için ikna et'),
+        label: (c) => c.t(`Convince ${c.h.person(String(c.vars.pid)).gender === 'female' ? 'her' : 'him'} to stay`, 'Kalması için ikna et'),
         resolve: (c) => {
           if (c.rng.chance(0.5)) {
             c.h.closeness(String(c.vars.pid), 8);
@@ -442,6 +466,7 @@ const events: EventDef[] = [
     id: 'fame.reality_show',
     category: 'fame',
     once: true,
+    maxAge: 70,
     when: (c) => hasPath(c) && fameOf(c) >= 30 && fameOf(c) < 70,
     title: (c) => c.t('A reality show wants you as a contestant.', 'Bir realite şovu seni yarışmacı olarak istiyor.'),
     text: (c) => c.t('Eight celebrities, one villa, unlimited cameras.', 'Sekiz ünlü, bir villa, sınırsız kamera.'),
@@ -526,7 +551,9 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('Music, social media or acting', 'Müzik, sosyal medya ya da oyunculuk'),
     group: 'Fame',
     minAge: 10,
-    available: (c) => !hasPath(c) && free(c),
+    maxAge: FAME_START_MAX_AGE,
+    available: (c) => canStartFame(c) && free(c),
+    hideWhenUnavailable: true,
     run: () => ({ event: 'fame.choose_path' }),
   },
   // music
@@ -575,6 +602,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('Find three bandmates', 'Üç grup arkadaşı bul'),
     group: 'Fame',
     minAge: 13,
+    maxAge: 70,
     available: (c) => isPath(c, 'music') && !fameState(c.p).band && free(c),
     run: () => ({ event: 'fame.band_name' }),
   },
@@ -768,11 +796,13 @@ const activities: ActivityDef[] = [
     available: (c) => hasPath(c),
     run: (c) => {
       const f = fameState(c.p);
-      const title = fameTitle(f, c.lang);
+      // a title in the middle of a sentence is a common noun: "as an extra", "bir figüran olarak"
+      const title = c.lang === 'tr' ? fameTitle(f, 'tr').toLocaleLowerCase('tr') : fameTitle(f, 'en').toLowerCase();
       f.lastPath = f.path ?? undefined;
       f.path = null;
+      c.h.flag('fame_quit');
       c.h.stat('happiness', 3);
-      return c.t(`You retired from the spotlight as a ${title}. Your fans will remember.`, `Spot ışıklarına bir ${title} olarak veda ettin. Hayranların seni unutmayacak.`);
+      return c.t(`You retired from the spotlight as ${aOrAn(title)}. Your fans will remember.`, `Spot ışıklarına bir ${title} olarak veda ettin. Hayranların seni unutmayacak.`);
     },
   },
 ];

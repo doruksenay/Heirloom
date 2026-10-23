@@ -63,7 +63,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { health: 1, happiness: 2 },
     price: 400,
     neglect: 8,
-    names: ['Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Max', 'Rocky', 'Biscuit', 'Bella', 'Charlie', 'Zeytin', 'Coco'],
+    names: ['Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Max', 'Rocky', 'Biscuit', 'Bella', 'Charlie', 'Zeytin', 'Coco', 'Buddy', 'Daisy', 'Bailey'],
   },
   {
     kind: 'cat',
@@ -73,7 +73,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 2 },
     price: 250,
     neglect: 5,
-    names: ['Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Luna', 'Oliver', 'Lokum', 'Mia', 'Simba'],
+    names: ['Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Luna', 'Oliver', 'Lokum', 'Mia', 'Simba', 'Whiskers', 'Cleo', 'Milo'],
   },
   {
     kind: 'bird',
@@ -93,7 +93,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 1 },
     price: 50,
     neglect: 2,
-    names: ['Nemo', 'Dory', 'Balon', 'Fokur', 'Şirin', 'Goldie', 'Pul'],
+    names: ['Nemo', 'Dory', 'Balon', 'Fokur', 'Şirin', 'Goldie', 'Pul', 'Bubbles'],
   },
   {
     kind: 'rabbit',
@@ -103,7 +103,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 1, health: 1 },
     price: 150,
     neglect: 6,
-    names: ['Pofuduk', 'Havuç', 'Bunny', 'Kartopu', 'Kar Tanesi', 'Coco'],
+    names: ['Pofuduk', 'Havuç', 'Bunny', 'Kartopu', 'Kar Tanesi', 'Coco', 'Thumper', 'Clover', 'Hazel'],
   },
   {
     kind: 'turtle',
@@ -123,7 +123,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { health: 2, happiness: 2 },
     price: 6000,
     neglect: 8,
-    names: ['Rüzgâr', 'Yıldız', 'Kısmet', 'Spirit', 'Ruby', 'Atlas'],
+    names: ['Rüzgâr', 'Yıldız', 'Kısmet', 'Spirit', 'Ruby', 'Atlas', 'Storm', 'Maple'],
   },
 ];
 
@@ -142,7 +142,21 @@ export function displayName(pet: Pick<Pet, 'name' | 'num'>, lang: Lang | undefin
 
 export const kindLabel = (k: PetKind, lang: Lang | undefined) => (lang === 'tr' ? petKind(k).nameTr : petKind(k).name);
 
-type HasExt = Pick<Player, 'flags'> & { ext?: Record<string, unknown> };
+type HasExt = Pick<Player, 'flags'> & { ext?: Record<string, unknown>; countryId?: string };
+
+/** Pet names that only make sense for a family in Türkiye. Elsewhere the international names are used. */
+const TURKISH_PET_NAMES = new Set([
+  'Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Zeytin', 'Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Lokum',
+  'Maviş', 'Cıvcıv', 'Limon', 'Balon', 'Fokur', 'Şirin', 'Pul', 'Pofuduk', 'Havuç', 'Kartopu', 'Kar Tanesi',
+  'Tosbik', 'Yavaş', 'Rüzgâr', 'Yıldız', 'Kısmet',
+]);
+
+/** Name pool for a new pet of this kind in this country (Turkish families use both kinds of names). */
+export const petNames = (kind: PetKind, countryId: string | undefined): string[] =>
+  countryId === 'tr' ? petKind(kind).names : petKind(kind).names.filter((n) => !TURKISH_PET_NAMES.has(n));
+
+/** The family cat's default name: Pamuk in Türkiye, Snowball elsewhere. */
+const defaultCatName = (p: HasExt) => (p.countryId === 'tr' ? 'Pamuk' : 'Snowball');
 
 /** The pet state, created on first use. */
 export function petState(p: HasExt): PetState {
@@ -213,7 +227,7 @@ export function syncFlagCat(p: HasExt, year: number): Pet | undefined {
     const def = petKind('cat');
     const since = p.flags['pet_cat'];
     // a kitten when it arrived; lifespan in the middle of the range, so base.cat_old (15+ years) gets to say goodbye first
-    return addPet(p, { kind: 'cat', name: 'Pamuk', year, age: Math.max(0, Math.min(10, year - since)), lifespan: Math.round((def.life[0] + def.life[1]) / 2) + 2, closeness: 70, flagCat: true });
+    return addPet(p, { kind: 'cat', name: defaultCatName(p), year, age: Math.max(0, Math.min(10, year - since)), lifespan: Math.round((def.life[0] + def.life[1]) / 2) + 2, closeness: 70, flagCat: true });
   }
   if (linked && !('pet_cat' in p.flags)) {
     linked.alive = false;
@@ -226,7 +240,7 @@ export function syncFlagCat(p: HasExt, year: number): Pet | undefined {
 /** Name of the family cat the old flag-based events talk about (falls back to "Pamuk"). */
 export function catName(p: HasExt, lang: Lang | undefined): string {
   const cat = petsOf(p).find((x) => x.flagCat && x.alive) ?? alivePets(p, 'cat')[0];
-  return cat ? displayName(cat, lang) : 'Pamuk';
+  return cat ? displayName(cat, lang) : defaultCatName(p);
 }
 
 /** Marks a pet as dead. Clears the old cat flag when the family cat goes, so flag-based events stay in step. */

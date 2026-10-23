@@ -6,9 +6,12 @@ import { allRibbons, ribbonDesc, ribbonName } from '../../engine/ribbons';
 import { T, Tn, fmtInt } from '../../i18n/ui';
 import { Tip } from '../Tip';
 import { ageOf } from '../../engine/context';
-import { playerAge } from '../../engine/game';
+import { TORCH_AGE, canPassTorch, passTorch, playerAge, torchHeirs } from '../../engine/game';
+import type { LifeRecord } from '../../engine/types';
+import { track } from '../../platform/analytics';
 import type { RelationKind } from '../../engine/types';
 import { Avatar } from '../Avatar';
+import { cityName } from '../../engine/places';
 
 const KIN: Record<RelationKind, [string, string]> = {
   mother: ['Mother', 'Mother'],
@@ -19,14 +22,24 @@ const KIN: Record<RelationKind, [string, string]> = {
   ex: ['Ex', 'Ex'],
   child: ['Daughter', 'Son'],
   friend: ['Friend', 'Friend'],
+  grandparent: ['Grandmother', 'Grandfather'],
 };
-const ORDER: RelationKind[] = ['spouse', 'partner', 'child', 'mother', 'father', 'sibling', 'friend', 'ex'];
+const ORDER: RelationKind[] = ['spouse', 'partner', 'child', 'mother', 'father', 'grandparent', 'sibling', 'friend', 'ex'];
+
+/** "Engineer · lived 81 (2026–2107)", or for a hand-over "… · handed over at 68, lived 84". */
+function lifeLine(life: LifeRecord): string {
+  if (!life.handedOver) return T('{career} · lived {age} ({from}–{to})', { career: life.career, age: life.age, from: life.birthYear, to: life.deathYear });
+  if (life.diedYear === undefined) return T('{career} · handed over at {age}, still living (born {from})', { career: life.career, age: life.age, from: life.birthYear });
+  return T('{career} · handed over at {age}, lived {died} ({from}–{to})', { career: life.career, age: life.age, died: life.diedYear - life.birthYear, from: life.birthYear, to: life.diedYear });
+}
 
 export function Family({ app }: { app: AppApi }) {
   const s = app.game!;
   const p = s.player;
   const d = s.dynasty;
   const [openId, setOpenId] = useState<string | null>(null);
+  const [torchOpen, setTorchOpen] = useState(false);
+  const age = playerAge(s);
   const years = s.year - d.startYear;
   const living = p.relations
     .map((rel) => ({ rel, person: s.people[rel.personId] }))
@@ -71,10 +84,8 @@ export function Family({ app }: { app: AppApi }) {
                   {life.name}
                   {life.partnerName ? ` & ${life.partnerName}` : ''}
                 </div>
-                <div class="item-sub">
-                  {T('{career} · lived {age} ({from}–{to})', { career: life.career, age: life.age, from: life.birthYear, to: life.deathYear })}
-                </div>
-                {life.heirloomNote && <span class="chip accent" style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{T('Left {item}', { item: life.heirloomNote })}</span>}
+                <div class="item-sub">{lifeLine(life)}</div>
+                {life.heirloomNote && <span class="chip accent" style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{life.handedOver ? T('Handed on {item}', { item: life.heirloomNote }) : T('Left {item}', { item: life.heirloomNote })}</span>}
               </div>
             </div>
           </div>
@@ -93,7 +104,7 @@ export function Family({ app }: { app: AppApi }) {
                 {p.firstName} {p.lastName}
               </div>
               <div class="item-sub">
-                {playerAge(s)} · {p.jobTitle && p.jobId ? p.jobTitle : p.city}
+                {playerAge(s)} · {p.jobTitle && p.jobId ? p.jobTitle : cityName(p.city, app.lang)}
               </div>
             </div>
           </div>
@@ -127,6 +138,7 @@ export function Family({ app }: { app: AppApi }) {
           ))}
         </div>
       </section>
+      {age >= TORCH_AGE && !s.dead && <TorchCard app={app} onOpen={() => setTorchOpen(true)} />}
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
           <h2 class="title-l">{T('Ribbons')}</h2>
@@ -146,6 +158,7 @@ export function Family({ app }: { app: AppApi }) {
         </div>
       </section>
       {openId && <PersonSheet app={app} personId={openId} onClose={() => setOpenId(null)} />}
+      {torchOpen && <TorchSheet app={app} onClose={() => setTorchOpen(false)} />}
     </div>
   );
 }
@@ -202,6 +215,99 @@ function PersonSheet({ app, personId, onClose }: { app: AppApi; personId: string
             </button>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** "Pass the torch": from 65, hand the family to an adult child or grandchild and play on as them. */
+function TorchCard({ app, onOpen }: { app: AppApi; onOpen: () => void }) {
+  const s = app.game!;
+  const options = torchHeirs(s);
+  const p = s.player;
+  const why = p.jailYears > 0 ? T('Not from a prison cell.') : options.length === 0 ? T('You need an adult child or grandchild to take over.') : null;
+  return (
+    <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div class="row" style={{ gap: '10px' }}>
+        <div class="icon-box" style={{ width: '36px', height: '36px', flex: 'none' }}>
+          <Icon name="family" size={20} />
+        </div>
+        <h2 class="title-l">{T('Pass the torch')}</h2>
+      </div>
+      <p class="muted" style={{ margin: 0, lineHeight: 1.45 }}>
+        {T('Retire from the story and continue as an adult child or grandchild. You stay in their life as family, and they inherit the rest when you are gone.')}
+      </p>
+      {why ? (
+        <div class="banner">{why}</div>
+      ) : (
+        <button type="button" class="btn primary" disabled={!canPassTorch(s)} onClick={onOpen}>
+          {T('Choose your heir ({n} eligible)', { n: options.length })}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function TorchSheet({ app, onClose }: { app: AppApi; onClose: () => void }) {
+  const s = app.game!;
+  const [picked, setPicked] = useState<string | null>(null);
+  const options = torchHeirs(s);
+  const me = s.player;
+  const chosen = options.find((o) => o.person.id === picked);
+  const relLabel = (kind: 'child' | 'grandchild', female: boolean) =>
+    kind === 'child' ? T(female ? 'Daughter' : 'Son') : T(female ? 'Granddaughter' : 'Grandson');
+  const confirm = () => {
+    if (!chosen) return;
+    track('pass_torch', { age: playerAge(s), gen: s.dynasty.generation, grandchild: chosen.kind === 'grandchild' });
+    onClose();
+    app.act((g) => passTorch(g, chosen.person.id));
+  };
+  return (
+    <div class="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="torch-title">
+        <div class="row between">
+          <h2 id="torch-title" class="title-l" style={{ fontSize: '22px' }}>
+            {T('Who carries on?')}
+          </h2>
+          <button type="button" class="btn small ghost" onClick={onClose} aria-label={T('Close')}>
+            ✕
+          </button>
+        </div>
+        <div class="list" style={{ gap: '8px' }}>
+          {options.map(({ person, kind }) => (
+            <button
+              type="button"
+              class="item"
+              key={person.id}
+              aria-pressed={picked === person.id}
+              style={picked === person.id ? { border: '1px solid var(--accent)' } : undefined}
+              onClick={() => setPicked(person.id)}
+            >
+              <Avatar id={person.id + person.firstName} gender={person.gender} age={ageOf(s, person)} size={44} label={person.firstName} />
+              <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+                <div class="item-title">
+                  {person.firstName} {person.lastName}
+                </div>
+                <div class="item-sub">
+                  {relLabel(kind, person.gender === 'female')} · {ageOf(s, person)}
+                  {person.jobTitle ? ` · ${person.jobTitle}` : ''}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+        {chosen && (
+          <p class="muted" style={{ margin: 0, lineHeight: 1.45 }}>
+            {T('Your life as {me} ends here, at {age}. {name} gets the home, the heirlooms and half your savings; the rest stays with you until you die.', {
+              me: me.firstName,
+              age: playerAge(s),
+              name: chosen.person.firstName,
+            })}
+          </p>
+        )}
+        <button type="button" class="btn primary" disabled={!chosen} onClick={confirm} style={{ minHeight: '58px' }}>
+          {chosen ? T('Hand over to {name}', { name: chosen.person.firstName }) : T('Pick someone first')}
+        </button>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import type { EventDef } from '../types';
-import { cap, dat, eligibleJobs, gen, kin, nm, wage } from '../base/util';
+import { aOrAn, cap, dat, eligibleJobs, gen, kin, nm, wage } from '../base/util';
 import { titleFor } from '../../engine/careers';
 import { arrest, crimeState, free, gotAway, goneStraight, heatOf, peekCrime, reform } from './state';
 
@@ -38,7 +38,7 @@ export const afterEvents: EventDef[] = [
             c.h.setJob(String(c.vars.job));
             c.h.stat('happiness', 8);
             return c.t(
-              `The manager said everyone deserves a second chance. You are now a ${c.h.jobTitle()}. He still counts the teaspoons.`,
+              `The manager said everyone deserves a second chance. You are now ${aOrAn(c.h.jobTitle() ?? '')}. He still counts the teaspoons.`,
               `Müdür herkesin ikinci bir şansı hak ettiğini söyledi. Artık ${c.h.jobTitle()} olarak çalışıyorsun. Çay kaşıklarını yine de sayıyor.`,
             );
           }
@@ -55,7 +55,7 @@ export const afterEvents: EventDef[] = [
             c.h.setJob(String(c.vars.job));
             c.h.flag('lied_on_cv');
             return c.t(
-              `You left the box blank and got the job as ${c.h.jobTitle()}. Every time HR emails you, your heart stops.`,
+              `You left the box blank and got the job as ${aOrAn(c.h.jobTitle() ?? '')}. Every time HR emails you, your heart stops.`,
               `Kutucuğu boş bıraktın ve ${c.h.jobTitle()} olarak işe girdin. İnsan kaynaklarından her e-posta geldiğinde kalbin duruyor.`,
             );
           }
@@ -190,9 +190,17 @@ export const afterEvents: EventDef[] = [
     id: 'crime.redemption',
     category: 'crime',
     minAge: 21,
+    maxAge: 80,
     weight: 12,
     cooldown: 4,
-    when: (c) => free(c) && c.p.criminalRecord > 0 && !peekCrime(c.p)?.fugitive && goneStraight(c, 3) && !c.p.achievements.includes('reformed'),
+    // after "Not yet" the youth center waits a good while before asking again
+    when: (c) =>
+      free(c) &&
+      c.p.criminalRecord > 0 &&
+      !peekCrime(c.p)?.fugitive &&
+      goneStraight(c, 3) &&
+      !c.p.achievements.includes('reformed') &&
+      !('crime_talk_later' in c.p.flags && c.s.year - c.p.flags.crime_talk_later < 10),
     title: (c) => c.t('The youth center wants you to give a talk.', 'Gençlik merkezi senden bir konuşma yapmanı istiyor.'),
     text: (c) => c.t('They need someone who has "been there" to talk to teenagers about bad decisions.', 'Gençlere kötü kararları anlatacak, "o yollardan geçmiş" birine ihtiyaçları var.'),
     choices: [
@@ -214,7 +222,10 @@ export const afterEvents: EventDef[] = [
       {
         id: 'decline',
         label: (c) => c.t('Not yet', 'Henüz değil'),
-        resolve: (c) => c.t('You said you were not ready. The coordinator left the door open.', 'Henüz hazır olmadığını söyledin. Koordinatör kapıyı açık bıraktı.'),
+        resolve: (c) => {
+          c.h.flag('crime_talk_later');
+          return c.t('You said you were not ready. The coordinator left the door open.', 'Henüz hazır olmadığını söyledin. Koordinatör kapıyı açık bıraktı.');
+        },
       },
     ],
   },
@@ -233,6 +244,9 @@ export const afterEvents: EventDef[] = [
       c.vars.name = lg.name;
       c.vars.stash = lg.stash;
       c.vars.record = lg.record;
+      // the parent handed over the torch and is still around (and can be asked)
+      const parent = lg.id ? c.h.person(lg.id) : undefined;
+      c.vars.alive = parent && parent.deathYear === undefined ? 1 : 0;
     },
     title: (c) => c.t('A shoebox in the attic.', 'Tavan arasında bir ayakkabı kutusu.'),
     text: (c) => {
@@ -256,6 +270,12 @@ export const afterEvents: EventDef[] = [
             c.h.money(stash);
             c.h.stat('happiness', 4);
             return c.t(`You kept the ${c.h.fmt(stash)}. Some family traditions are harder to break than others.`, `Paranın hepsini aldın: ${c.h.fmt(stash)}. Bazı aile gelenekleri ötekilerden daha zor bozuluyor.`);
+          }
+          if (Number(c.vars.alive)) {
+            return c.t(
+              `You put the clippings back exactly where you found them. You have not said a word to ${c.vars.name}. Yet.`,
+              `Kupürleri bulduğun yere, aynen bulduğun gibi geri koydun. ${dat(String(c.vars.name))} henüz tek kelime etmedin.`,
+            );
           }
           return c.t(
             `You put the clippings in a drawer. Sometimes you read them and wonder who ${c.vars.name} really was.`,

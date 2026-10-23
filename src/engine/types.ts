@@ -2,7 +2,7 @@ export type Gender = 'female' | 'male';
 export type StatKey = 'happiness' | 'health' | 'smarts' | 'looks';
 export type Stats = Record<StatKey, number>;
 
-export type RelationKind = 'mother' | 'father' | 'sibling' | 'partner' | 'spouse' | 'ex' | 'child' | 'friend';
+export type RelationKind = 'mother' | 'father' | 'sibling' | 'partner' | 'spouse' | 'ex' | 'child' | 'friend' | 'grandparent';
 export type Education = 'none' | 'primary' | 'highschool' | 'university';
 export type Tone = 'good' | 'bad' | 'big' | 'neutral';
 
@@ -17,6 +17,10 @@ export interface Person {
   jobTitle?: string;
   /** Number of children this (non-player) person has; used for grandchildren counts. */
   kids?: number;
+  /** Real records of this person's children (the player's grandchildren), when they exist. Can be shorter than `kids` in old saves. */
+  childIds?: string[];
+  /** Money this person leaves to the player when they die (a retired former player keeps part of their savings). */
+  estate?: number;
 }
 
 export interface Relation {
@@ -61,6 +65,8 @@ export interface Player extends Person {
   usedRewind: boolean;
   rewinds?: number; // rewinds used this life (Heirloom+ allows two)
   goals?: { id: string; done: boolean; year?: number }[];
+  /** Gross salary of the last job held; sets the pension. */
+  lastSalary?: number;
   jailYears: number;
   criminalRecord: number;
   achievements: string[];
@@ -101,6 +107,12 @@ export interface LifeRecord {
   heirName?: string;
   finalWords: string;
   ribbon?: string;
+  /** The player passed the torch at `age` instead of dying; they live on as a relative of the heir. */
+  handedOver?: boolean;
+  /** For a hand-over: the heir who was chosen. */
+  heirId?: string;
+  /** For a hand-over: the year this person finally died as a relative. */
+  diedYear?: number;
 }
 
 export interface Dynasty {

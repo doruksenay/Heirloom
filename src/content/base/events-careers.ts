@@ -1,5 +1,7 @@
 import type { Ctx, EventDef } from '../types';
 import { loc, wage } from './util';
+import { promoteAnyway } from '../../engine/context';
+import { byCountry, cityOf, coastal, inTr, type ByCountry } from './events-flavour';
 import { canEnlist, canTryOut, isJob } from './activities-careers';
 
 // v0.7 careers: job-specific events. Every event is guarded by the player's current job.
@@ -20,6 +22,46 @@ function fire(c: Ctx): void {
 }
 
 const CLUBS = ['Atlas FC', 'Porto Verde', 'Northbridge United', 'Kartal SK', 'Real Montaña'];
+
+/** What a patrol partner is eating: [English, Turkish genitive-possessive "…in yarısında"]. */
+const PATROL_SNACK: ByCountry<[string, string]> = {
+  tr: ['simit', 'simidinin'],
+  us: ['donut', 'donutunun'],
+  uk: ['sausage roll', 'sosisli böreğinin'],
+  de: ['pretzel', 'pretzelinin'],
+  br: ['cheese bread', 'peynirli ekmeğinin'],
+  other: ['sandwich', 'sandviçinin'],
+};
+
+/** Fishing words for the player's city: the sea and its fish on the coast, a lake inland. */
+function waters(c: Ctx) {
+  if (!coastal(c))
+    return {
+      run: c.t('The fish are biting on the lake, but a storm is coming.', 'Gölde balık bol ama fırtına geliyor.'),
+      boats: c.t('Every boat on the lake is waiting to see who goes out first.', 'Göldeki bütün tekneler önce kimin açılacağını bekliyor.'),
+      port: c.t('jetty', 'iskele'),
+      portIn: c.t('Stay ashore and mend nets', 'Kıyıda kal, ağ ör'),
+      big: c.t('a catfish as big as a sofa', 'kanepe büyüklüğünde bir yayın balığını'),
+      back: c.t('Let it go', 'Suya geri bırak'),
+      backLine: c.t('You let it go. Nobody at the jetty believes your story, and that is fine.', 'Onu suya geri bıraktın. İskelede kimse hikâyene inanmıyor; olsun.'),
+    };
+  const [fish, fishTr] = byCountry<[string, string]>(c, {
+    tr: ['İzmir', 'Antalya'].includes(c.p.city) ? ['sardines', 'Sardalya'] : ['anchovies', 'Hamsi'],
+    de: ['herring', 'Ringa'],
+    uk: ['mackerel', 'Uskumru'],
+    br: ['sardines', 'Sardalya'],
+    other: ['mackerel', 'Uskumru'],
+  });
+  return {
+    run: c.t(`The ${fish} are running, but a storm is coming.`, `${fishTr} geldi ama fırtına da geliyor.`),
+    boats: c.t('Every boat in the harbor is waiting to see who goes out first.', 'Limandaki bütün tekneler önce kimin açılacağını bekliyor.'),
+    port: c.t('harbor', 'liman'),
+    portIn: c.t('Stay in port and mend nets', 'Limanda kal, ağ ör'),
+    big: c.t('a bluefin tuna as big as a sofa', 'kanepe büyüklüğünde bir orkinosu'),
+    back: c.t('Let it go', 'Denize geri bırak'),
+    backLine: c.t('You let it go. Nobody at the harbor believes your story, and that is fine.', 'Onu denize geri bıraktın. Limanda kimse hikâyene inanmıyor; olsun.'),
+  };
+}
 
 export const careerEvents: EventDef[] = [
   // ================================================================ getting in
@@ -59,7 +101,7 @@ export const careerEvents: EventDef[] = [
         resolve: (c) => {
           if (c.rng.chance(0.3)) {
             c.h.setJob('athlete');
-            c.h.promote();
+            promoteAnyway(c); // signed straight into the first team
             c.h.stat('happiness', 10);
             return c.t(
               `You scored twice in the trial and went straight in. Your new title: ${c.h.jobTitle()}.`,
@@ -89,7 +131,8 @@ export const careerEvents: EventDef[] = [
     once: true,
     weight: 6,
     when: (c) => canEnlist(c) && !c.p.jobId && !c.p.retired,
-    title: (c) => c.t('The recruitment officer looks you up and down.', 'Askerlik şubesindeki subay seni tepeden tırnağa süzüyor.'),
+    title: (c) =>
+      c.t('The recruitment officer looks you up and down.', inTr(c) ? 'Askerlik şubesindeki subay seni tepeden tırnağa süzüyor.' : 'Ordunun asker alma bürosundaki subay seni tepeden tırnağa süzüyor.'),
     text: (c) =>
       c.t('Steady pay, free boots and a haircut you did not ask for.', 'Düzenli maaş, bedava postal ve senin istemediğin bir saç tıraşı.'),
     choices: [
@@ -331,7 +374,7 @@ export const careerEvents: EventDef[] = [
         label: (c) => c.t('Take the whistle', 'Düdüğü al'),
         resolve: (c) => {
           c.h.setJob('coach');
-          if (c.h.has('athlete_star')) c.h.promote();
+          if (c.h.has('athlete_star')) promoteAnyway(c); // a former star starts one rung up
           c.h.stat('happiness', 6);
           return c.t(
             `Your new title: ${c.h.jobTitle()}. You already yell "Spread out!" in your sleep.`,
@@ -757,8 +800,8 @@ export const careerEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 3);
           return c.t(
-            'You stayed with your soldiers. They surprised you with canteen baklava.',
-            'Askerlerinin yanında kaldın. Kantinden aldıkları baklavayla sana sürpriz yaptılar.',
+            `You stayed with your soldiers. They surprised you with canteen ${inTr(c) ? 'baklava' : 'cake'}.`,
+            `Askerlerinin yanında kaldın. Kantinden aldıkları ${inTr(c) ? 'baklavayla' : 'pastayla'} sana sürpriz yaptılar.`,
           );
         },
       },
@@ -1131,9 +1174,8 @@ export const careerEvents: EventDef[] = [
     minAge: 16,
     weight: 20,
     when: on('fisher'),
-    title: (c) => c.t('The anchovies are running, but a storm is coming.', 'Hamsi geldi ama fırtına da geliyor.'),
-    text: (c) =>
-      c.t('Every boat in the harbor is waiting to see who goes out first.', 'Limandaki bütün tekneler önce kimin açılacağını bekliyor.'),
+    title: (c) => waters(c).run,
+    text: (c) => waters(c).boats,
     choices: [
       {
         id: 'out',
@@ -1145,8 +1187,8 @@ export const careerEvents: EventDef[] = [
             c.h.money(gain);
             c.h.stat('happiness', 6);
             return c.t(
-              `You came back with the nets bursting: ${c.h.fmt(gain)}. The whole harbor bought you tea.`,
-              `Ağlar patlayacak kadar dolu döndün; kazancın ${c.h.fmt(gain)}. Bütün liman sana çay ısmarladı.`,
+              `You came back with the nets bursting: ${c.h.fmt(gain)}. The whole ${waters(c).port} bought you tea.`,
+              `Ağlar patlayacak kadar dolu döndün; kazancın ${c.h.fmt(gain)}. Bütün ${waters(c).port} sana çay ısmarladı.`,
             );
           }
           c.h.stat('health', -8);
@@ -1160,7 +1202,7 @@ export const careerEvents: EventDef[] = [
       },
       {
         id: 'mend',
-        label: (c) => c.t('Stay in port and mend nets', 'Limanda kal, ağ ör'),
+        label: (c) => waters(c).portIn,
         badge: 'Safe',
         resolve: (c) => {
           c.h.stat('happiness', 2);
@@ -1193,8 +1235,8 @@ export const careerEvents: EventDef[] = [
     title: (c) => c.t('Something enormous is pulling on your line.', 'Oltana devasa bir şey takıldı.'),
     text: (c) =>
       c.t(
-        'After an hour of fighting, you land a bluefin tuna as big as a sofa.',
-        'Bir saatlik mücadeleden sonra kanepe büyüklüğünde bir orkinosu tekneye aldın.',
+        `After an hour of fighting, you land ${waters(c).big}.`,
+        `Bir saatlik mücadeleden sonra ${waters(c).big} tekneye aldın.`,
       ),
     choices: [
       {
@@ -1223,13 +1265,10 @@ export const careerEvents: EventDef[] = [
       },
       {
         id: 'free',
-        label: (c) => c.t('Let it go', 'Denize geri bırak'),
+        label: (c) => waters(c).back,
         resolve: (c) => {
           c.h.stat('happiness', 4);
-          return c.t(
-            'You let it go. Nobody at the harbor believes your story, and that is fine.',
-            'Onu denize geri bıraktın. Limanda kimse hikâyene inanmıyor; olsun.',
-          );
+          return waters(c).backLine;
         },
       },
     ],
@@ -1548,7 +1587,7 @@ export const careerEvents: EventDef[] = [
             return (
               c.t(
                 `You won! Your library will stand in ${c.p.city} for a hundred years.`,
-                `Kazandın! Kütüphanen ${loc(c.p.city)} yüz yıl ayakta kalacak.`,
+                `Kazandın! Kütüphanen ${loc(cityOf(c))} yüz yıl ayakta kalacak.`,
               ) + promo(c)
             );
           }
@@ -1774,7 +1813,7 @@ export const careerEvents: EventDef[] = [
         resolve: (c) => {
           c.h.money(-wage(c, 30000));
           if (c.rng.chance(0.65)) {
-            while (c.h.promote());
+            while (promoteAnyway(c)); // your own clinic: straight to the top title
             c.h.stat('happiness', 8);
             return c.t(
               `Your clinic opened with flowers at the door. New title: ${c.h.jobTitle()}.`,
@@ -2121,7 +2160,7 @@ export const careerEvents: EventDef[] = [
           c.h.stat('happiness', -5);
           return c.t(
             'He complained to the education office. You spent a week writing a report about glue.',
-            "Milli Eğitim'e şikâyet etti. Bir haftanı yapıştırıcı hakkında rapor yazarak geçirdin.",
+            `${inTr(c) ? "Milli Eğitim'e" : 'Eğitim müdürlüğüne'} şikâyet etti. Bir haftanı yapıştırıcı hakkında rapor yazarak geçirdin.`,
           );
         },
       },
@@ -2220,7 +2259,10 @@ export const careerEvents: EventDef[] = [
     when: on('police'),
     title: (c) => c.t('A suspect on a motorbike just ran a red light.', 'Motosikletli bir şüpheli kırmızı ışıkta geçti.'),
     text: (c) =>
-      c.t('Your partner is mid-simit. The motorbike is getting away.', 'Ekip arkadaşın simidinin yarısında. Motosiklet uzaklaşıyor.'),
+      c.t(
+        `Your partner is mid-${byCountry(c, PATROL_SNACK)[0]}. The motorbike is getting away.`,
+        `Ekip arkadaşın ${byCountry(c, PATROL_SNACK)[1]} yarısında. Motosiklet uzaklaşıyor.`,
+      ),
     choices: [
       {
         id: 'foot',

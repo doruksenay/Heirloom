@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
 import { activitiesFor } from '../../content/registry';
-import { activityLimit, activityUsesLeft, doActivity, grantBonusActions, hasPlus, playerAge } from '../../engine/game';
+import { activityLimit, activityUsesLeft, allowedInJail, doActivity, grantBonusActions, hasPlus, playerAge } from '../../engine/game';
 import { goalDef, goalLabel } from '../../engine/goals';
 import { AD_REWARDS } from '../../platform/ads';
 import { makeCtx } from '../../engine/context';
@@ -52,7 +52,7 @@ export function Activities({ app }: { app: AppApi }) {
               <span class={`chip ${g.done ? 'accent' : ''}`} aria-hidden="true" style={{ width: '26px', textAlign: 'center', padding: '4px 0' }}>
                 {g.done ? '✓' : '·'}
               </span>
-              <span style={g.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{goalDef(g.id) ? goalLabel(goalDef(g.id)!, s.lang) : g.id}</span>
+              <span style={g.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{goalDef(g.id) ? goalLabel(goalDef(g.id)!, s.lang, s) : g.id}</span>
             </div>
           ))}
         </section>
@@ -86,7 +86,7 @@ export function Activities({ app }: { app: AppApi }) {
             .filter((a) => a.group === g)
             .map((a) => {
               const usedUp = (s.player.actionsThisYear[a.id] ?? 0) >= (a.perYear ?? 1);
-              const ok = (!a.available || a.available(probe)) && (s.player.jailYears === 0 || a.group === 'Mind & Body');
+              const ok = (!a.available || a.available(probe)) && (s.player.jailYears === 0 || allowedInJail(a));
               return { a, usedUp, ok };
             }),
         })).filter((x) => x.rows.length > 0)}

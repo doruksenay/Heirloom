@@ -1,9 +1,12 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { firstNames } from '../../engine/world';
+import { familyFirstNames, freshFirstNames } from '../../engine/context';
 import { acc, cap, dat, gen, kin, nm, single, wage, who, wth } from './util';
 import { catName } from '../../engine/pets';
-import { houseState } from '../../engine/home';
+import { currentTier, homeTier, houseState } from '../../engine/home';
+import { tierPrice } from './activities-home';
+import { him, inTr } from './events-flavour';
 
 // Old age (58+): grandchildren, health, retirement life, love and loss, legacy.
 
@@ -19,6 +22,8 @@ export interface Grandkid {
   by: number;
   /** id of the player's child who is the parent */
   p: string;
+  /** id of the real Person record (set by addGrandbaby, or by syncGrandkids in game.ts on the next yearly tick) */
+  id?: string;
 }
 export interface ElderState {
   gk: Grandkid[];
@@ -60,7 +65,8 @@ export function grandkids(c: Ctx): Grandkid[] {
       const h = hash(`${parent.id}:${i}:${c.s.dynasty.familyName}`);
       const g: 'female' | 'male' = h & 1 ? 'female' : 'male';
       const names = firstNames(c.p.countryId, g);
-      const taken = new Set([c.p.firstName, parent.firstName, ...out.map((x) => x.n)]);
+      // never reuse a name anyone in the family or lineage already has
+      const taken = new Set([...familyFirstNames(c.s), c.p.firstName, parent.firstName, ...out.map((x) => x.n)]);
       const start = (h >>> 1) % names.length;
       let n = names[start];
       for (let t = 1; t < names.length && taken.has(n); t++) n = names[(start + t) % names.length];
@@ -83,12 +89,14 @@ export function ensureGrandkids(c: Ctx): Grandkid[] {
 }
 
 export const gkAge = (c: Ctx, g: Grandkid) => c.s.year - g.by;
-const gkIn = (c: Ctx, lo: number, hi: number) => grandkids(c).some((g) => gkAge(c, g) >= lo && gkAge(c, g) <= hi);
+/** False once the grandchild's real person record has died. */
+const gkAlive = (c: Ctx, g: Grandkid) => !g.id || c.s.people[g.id]?.deathYear === undefined;
+const gkIn = (c: Ctx, lo: number, hi: number) => grandkids(c).some((g) => gkAlive(c, g) && gkAge(c, g) >= lo && gkAge(c, g) <= hi);
 
 /** Picks a grandchild aged lo..hi (call from setup only) and stores its index in c.vars.gk. */
-function pickGk(c: Ctx, lo: number, hi: number, key = 'gk') {
+function pickGk(c: Ctx, lo: number, hi: number, key = 'gk', ok: (g: Grandkid) => boolean = () => true) {
   const all = ensureGrandkids(c);
-  const idx = all.map((g, i) => [g, i] as const).filter(([g]) => gkAge(c, g) >= lo && gkAge(c, g) <= hi);
+  const idx = all.map((g, i) => [g, i] as const).filter(([g]) => gkAlive(c, g) && gkAge(c, g) >= lo && gkAge(c, g) <= hi && ok(g));
   const pick = idx.length ? idx[c.rng.int(0, idx.length - 1)][1] : 0;
   c.vars[key] = pick;
 }
@@ -96,6 +104,26 @@ const gk = (c: Ctx, key = 'gk'): Grandkid => elderState(c).gk[Number(c.vars[key]
 const gkn = (c: Ctx, key = 'gk') => gk(c, key).n;
 /** "granddaughter" / "grandson" (English only; Turkish says "torunun"). */
 const gkWord = (g: Grandkid) => (g.g === 'female' ? 'granddaughter' : 'grandson');
+/** English pronouns for the grandchild in vars.gk. */
+const gkHe = (c: Ctx) => (gk(c).g === 'female' ? 'She' : 'He');
+const gkHim = (c: Ctx) => (gk(c).g === 'female' ? 'her' : 'him');
+/** Flag key for a grandchild's wedding: each grandchild marries once per life. Shared with other packs' weddings. */
+export const gkWedKey = (g: Grandkid) => `gkwed:${g.p}:${g.n}`;
+
+/**
+ * For other packs' grandchild weddings (e.g. tr.torun_dugun): picks a living, unmarried grandchild aged lo..hi,
+ * marks the wedding so base.elder_gk_wedding never marries the same one again, and returns it. One rng call.
+ * Call `canMarryGrandkid` from `when` first.
+ */
+export const canMarryGrandkid = (c: Ctx, lo = 23, hi = 38) =>
+  grandkids(c).some((g) => gkAlive(c, g) && gkAge(c, g) >= lo && gkAge(c, g) <= hi && !c.h.has(gkWedKey(g)));
+export function marryGrandkid(c: Ctx, lo = 23, hi = 38, key = 'gk'): Grandkid | undefined {
+  if (!canMarryGrandkid(c, lo, hi)) return undefined;
+  pickGk(c, lo, hi, key, (g) => !c.h.has(gkWedKey(g)));
+  const g = elderState(c).gk[Number(c.vars[key])];
+  if (g) c.h.flag(gkWedKey(g));
+  return g;
+}
 
 const children = (c: Ctx) => c.h.relatives('child');
 /** First names of living children and all grandchildren, without duplicates. */
@@ -105,6 +133,10 @@ const He = (c: Ctx, p: Person) => cap(c.h.he(p));
 const money = (c: Ctx) => c.h.fmt(Number(c.vars.amt));
 const setHealth = (p: Person, d: number) => (p.stats.health = Math.max(0, Math.min(100, Math.round(p.stats.health + d))));
 const legacy = (c: Ctx, n: number) => (c.s.dynasty.legacyScore += n);
+/** Homes big enough to downsize from. */
+const BIG_HOMES = ['house', 'villa', 'farm'];
+/** What a small flat costs in this country. */
+const flatValue = (c: Ctx) => tierPrice(c, homeTier('flat')!);
 
 /** Pushes a line onto an heirloom's story, if the family still has it. */
 function storyOf(c: Ctx, defId: string, line: string) {
@@ -171,7 +203,7 @@ export const elderEvents: EventDef[] = [
       c.vars.g = g;
       const pool = firstNames(c.p.countryId, g);
       const taken = new Set([kid.person.firstName, c.p.firstName, ...all.map((x) => x.n)]);
-      const free = pool.filter((n) => !taken.has(n));
+      const free = freshFirstNames(c.s, g).filter((n) => !taken.has(n));
       c.vars.trendy = c.rng.pick(free.length ? free : pool);
       // the name you would push for: your own, your spouse's, or your parent's
       const sp = c.p.relations.find((r) => r.kind === 'spouse' && c.s.people[r.personId]?.gender === g);
@@ -262,12 +294,12 @@ export const elderEvents: EventDef[] = [
     minAge: 58,
     maxAge: 88,
     cooldown: 5,
-    when: (c) => grandkids(c).some((g) => gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && c.h.relatives('child').some((k) => k.person.id === g.p)),
+    when: (c) => grandkids(c).some((g) => gkAlive(c, g) && gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && c.h.relatives('child').some((k) => k.person.id === g.p)),
     setup: (c) => {
       const all = ensureGrandkids(c);
       const ok = all
         .map((g, i) => [g, i] as const)
-        .filter(([g]) => gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && children(c).some((k) => k.person.id === g.p));
+        .filter(([g]) => gkAlive(c, g) && gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && children(c).some((k) => k.person.id === g.p));
       const [g, i] = ok[c.rng.int(0, ok.length - 1)];
       c.vars.gk = i;
       c.vars.pid = g.p;
@@ -303,7 +335,7 @@ export const elderEvents: EventDef[] = [
       },
       {
         id: 'spoil',
-        label: (c) => c.t('Spoil them rotten', 'Şımart da şımart'),
+        label: (c) => c.t(`Spoil ${gkHim(c)} rotten`, 'Şımart da şımart'),
         resolve: (c) => {
           c.h.stat('happiness', 7);
           c.h.closeness(String(c.vars.pid), -4);
@@ -344,7 +376,7 @@ export const elderEvents: EventDef[] = [
       const his = gk(c).g === 'female' ? 'her' : 'his';
       return c.t(`${gkn(c)} needs ${money(c)} for ${need[0].replace('{his}', his)}.`, `${gkn(c)}, ${need[1]} ${money(c)} istiyor.`);
     },
-    text: (c) => c.t('They called on a Sunday. They never call on a Sunday.', 'Pazar günü aradı. Pazar günleri hiç aramaz.'),
+    text: (c) => c.t(`${gkHe(c)} called on a Sunday. ${gkHe(c)} never calls on a Sunday.`, 'Pazar günü aradı. Pazar günleri hiç aramaz.'),
     choices: [
       {
         id: 'give',
@@ -378,7 +410,7 @@ export const elderEvents: EventDef[] = [
       },
       {
         id: 'no',
-        label: (c) => c.t('Tell them to earn it', 'Çalışıp kazansın de'),
+        label: (c) => c.t(`Tell ${gkHim(c)} to earn it`, 'Çalışıp kazansın de'),
         resolve: (c) => {
           c.h.stat('happiness', -1);
           return c.t(
@@ -407,12 +439,12 @@ export const elderEvents: EventDef[] = [
     choices: [
       {
         id: 'mistakes',
-        label: (c) => c.t('Tell them about your own mistakes', 'Kendi hatalarını anlat'),
+        label: (c) => c.t(`Tell ${gkHim(c)} about your own mistakes`, 'Kendi hatalarını anlat'),
         resolve: (c) => {
           c.h.stat('happiness', 5);
           c.h.stat('smarts', 1);
           return c.t(
-            `You told ${gkn(c)} about your worst decisions. They laughed, then went quiet, then wrote some of it down.`,
+            `You told ${gkn(c)} about your worst decisions. ${gkHe(c)} laughed, then went quiet, then wrote some of it down.`,
             `${dat(gkn(c))} hayatındaki en kötü kararları anlattın. Önce güldü, sonra sustu, sonra bir kısmını not aldı.`,
           );
         },
@@ -459,7 +491,7 @@ export const elderEvents: EventDef[] = [
     },
     text: (c) =>
       c.t(
-        'They brought a notebook and a camera. You brought no measurements, only feelings.',
+        `${gkHe(c)} brought a notebook and a camera. You brought no measurements, only feelings.`,
         'Yanında bir defter ve kamera getirdi. Sende ölçü yok, sadece göz kararı var.',
       ),
     choices: [
@@ -522,9 +554,11 @@ export const elderEvents: EventDef[] = [
     minAge: 62,
     cooldown: 6,
     weight: 8,
-    when: (c) => gkIn(c, 23, 38),
+    // each grandchild gets married once
+    when: (c) => grandkids(c).some((g) => gkAlive(c, g) && gkAge(c, g) >= 23 && gkAge(c, g) <= 38 && !c.h.has(gkWedKey(g))),
     setup: (c) => {
-      pickGk(c, 23, 38);
+      pickGk(c, 23, 38, 'gk', (g) => !c.h.has(gkWedKey(g)));
+      c.h.flag(gkWedKey(gk(c)));
       c.vars.amt = wage(c, 1000);
     },
     title: (c) => c.t(`Your ${gkWord(gk(c))} ${gkn(c)} is getting married!`, `Torunun ${gkn(c)} evleniyor!`),
@@ -538,7 +572,7 @@ export const elderEvents: EventDef[] = [
           if (c.rng.chance(0.25)) {
             c.h.stat('health', -5);
             c.h.stat('happiness', 4);
-            return c.t('You danced until your knee filed a formal complaint. Worth it.', 'Dizin resmî şikâyet dilekçesi verene kadar halay çektin. Değdi.');
+            return c.t('You danced until your knee filed a formal complaint. Worth it.', `Dizin resmî şikâyet dilekçesi verene kadar ${inTr(c) ? 'halay çektin' : 'dans ettin'}. Değdi.`);
           }
           c.h.stat('happiness', 8);
           return c.t('You danced all night and were still going when the band packed up.', 'Bütün gece oynadın; orkestra toparlanırken sen hâlâ pistteydin.');
@@ -557,7 +591,7 @@ export const elderEvents: EventDef[] = [
           c.h.closeness(gk(c).p, 5);
           return c.t(
             `You gave the couple ${money(c)}. ${gkn(c)} will remember it at least until the honeymoon.`,
-            `Çifte ${money(c)} taktın. ${gkn(c)} bunu en azından balayına kadar unutmayacak.`,
+            `Çifte ${money(c)} ${inTr(c) ? 'taktın' : 'hediye ettin'}. ${gkn(c)} bunu en azından balayına kadar unutmayacak.`,
           );
         },
       },
@@ -672,13 +706,13 @@ export const elderEvents: EventDef[] = [
     id: 'base.elder_family_group',
     category: 'family',
     minAge: 60,
-    cooldown: 12,
+    once: true, // you are added to the group once
     weight: 7,
     when: (c) => children(c).length > 0,
     setup: (c) => {
       c.vars.pid = c.rng.pick(children(c)).person.id;
     },
-    title: (c) => c.t('Your kids added you to the family WhatsApp group.', 'Çocukların seni ailenin WhatsApp grubuna ekledi.'),
+    title: (c) => c.t('Your kids added you to the family group chat.', 'Çocukların seni aile grubuna ekledi.'),
     text: (c) =>
       c.t(
         'It has 14 members and one rule: no forwarded messages. Nobody told you the rule.',
@@ -1055,7 +1089,7 @@ export const elderEvents: EventDef[] = [
         c.vars.tn = gkn(c);
       } else c.vars.tn = c.rng.pick(children(c)).person.firstName;
     },
-    title: (c) => c.t(`The pension office owes you ${money(c)} in back payments.`, `Emekli sandığı sana ${money(c)} birikmiş ödeme borçlu.`),
+    title: (c) => c.t(`The pension office owes you ${money(c)} in back payments.`, `Emekli sandığında ${money(c)} birikmiş alacağın var.`),
     text: (c) =>
       c.t(
         'To get it, you need Form 7B, which is stamped only by the office that wants Form 7A.',
@@ -1171,6 +1205,7 @@ export const elderEvents: EventDef[] = [
     id: 'base.elder_volunteer',
     category: 'random',
     minAge: 60,
+    maxAge: 88,
     once: true,
     weight: 7,
     title: (c) => c.t('The neighborhood soup kitchen is short of hands.', 'Mahalledeki aşevinde el eksik.'),
@@ -1252,7 +1287,7 @@ export const elderEvents: EventDef[] = [
       },
       {
         id: 'tournament',
-        label: (c) => c.t('Challenge them at the park tournament', 'Park turnuvasında meydan oku'),
+        label: (c) => c.t(`Challenge ${him(who(c))} at the park tournament`, 'Park turnuvasında meydan oku'),
         badge: 'Risky',
         resolve: (c) => {
           c.h.addRelation(who(c), 'friend', 40);
@@ -1407,7 +1442,7 @@ export const elderEvents: EventDef[] = [
     text: (c) =>
       c.t(
         `Your savings are "part of an investigation." To keep them safe, put ${money(c)} in a bag and leave it by the door.`,
-        `Paranın "bir soruşturmaya karıştığını" söylüyor. Güvende kalması için ${money(c)} parayı bir poşete koyup kapının önüne bırakmanı istiyor.`,
+        `Paranın "bir soruşturmaya karıştığını" söylüyor. Paran güvende kalsın diye ${money(c)} nakdi bir poşete koyup kapının önüne bırakmanı istiyor.`,
       ),
     choices: [
       {
@@ -1457,9 +1492,17 @@ export const elderEvents: EventDef[] = [
     category: 'money',
     minAge: 66,
     once: true,
-    when: (c) => c.p.home.owned && c.p.home.value >= wage(c, 30000) && children(c).length > 0 && children(c).every((k) => c.h.ageOf(k.person) >= 18),
+    // only a real house is "too big": a flat or a studio has no four rooms to heat
+    when: (c) =>
+      c.p.home.owned &&
+      BIG_HOMES.includes(currentTier(c.p)) &&
+      c.p.home.value > flatValue(c) &&
+      children(c).length > 0 &&
+      children(c).every((k) => c.h.ageOf(k.person) >= 18),
     setup: (c) => {
-      c.vars.amt = Math.round(Math.min(c.p.home.value * 0.35, wage(c, 60000)));
+      // sell the house, buy a small flat: the flat is worth what a flat costs here, and you keep the difference minus fees
+      c.vars.flat = Math.min(flatValue(c), Math.round(c.p.home.value * 0.5));
+      c.vars.amt = Math.round((c.p.home.value - Number(c.vars.flat)) * 0.92);
       c.vars.rent = wage(c, 2500);
     },
     title: (c) => c.t('The house feels too big with the kids gone.', 'Çocuklar gidince ev fazla büyük geliyor.'),
@@ -1471,7 +1514,7 @@ export const elderEvents: EventDef[] = [
         badge: 'Big change',
         resolve: (c) => {
           const amt = Number(c.vars.amt);
-          c.p.home.value = Math.max(0, c.p.home.value - amt);
+          c.p.home.value = Number(c.vars.flat);
           c.p.home.name = c.t('Your small flat', 'Küçük dairen');
           houseState(c.p).tier = 'flat';
           c.h.money(amt);
@@ -1534,7 +1577,7 @@ export const elderEvents: EventDef[] = [
     choices: [
       {
         id: 'nurse',
-        label: (c) => c.t('Look after them yourself', 'Bakımını kendin üstlen'),
+        label: (c) => c.t(`Look after ${him(who(c))} yourself`, 'Bakımını kendin üstlen'),
         resolve: (c) => {
           setHealth(who(c), 8);
           c.h.stat('health', -3);
@@ -1564,7 +1607,7 @@ export const elderEvents: EventDef[] = [
       },
       {
         id: 'specialist',
-        label: (c) => c.t('Drag them to a specialist', 'Zorla uzmana götür'),
+        label: (c) => c.t(`Drag ${him(who(c))} to a specialist`, 'Zorla uzmana götür'),
         badge: 'Risky',
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 4);
@@ -1612,7 +1655,7 @@ export const elderEvents: EventDef[] = [
     choices: [
       {
         id: 'talk',
-        label: (c) => c.t('Keep talking to them anyway', 'Onunla konuşmaya devam et'),
+        label: (c) => c.t(`Keep talking to ${him(who(c))} anyway`, 'Onunla konuşmaya devam et'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
           return c.t(
@@ -1662,6 +1705,7 @@ export const elderEvents: EventDef[] = [
     id: 'base.elder_late_love',
     category: 'love',
     minAge: 70,
+    maxAge: 90,
     once: true,
     weight: 6,
     when: (c) => single(c),
@@ -1907,7 +1951,11 @@ export const elderEvents: EventDef[] = [
         c.vars.name = f.person.firstName;
       } else {
         c.vars.pid = '';
-        c.vars.name = c.rng.pick(firstNames(c.p.countryId, c.rng.chance(0.5) ? 'female' : 'male'));
+        // an old classmate, not a namesake of someone in the family (same rng calls either way)
+        const pool = firstNames(c.p.countryId, c.rng.chance(0.5) ? 'female' : 'male');
+        const fam = familyFirstNames(c.s);
+        const free = pool.filter((n) => !fam.has(n));
+        c.vars.name = c.rng.pick(free.length ? free : pool);
       }
     },
     title: (c) =>
@@ -2064,7 +2112,7 @@ export const elderEvents: EventDef[] = [
       },
       {
         id: 'wait',
-        label: (c) => c.t('Wait for them to call', 'Onun aramasını bekle'),
+        label: (c) => c.t(`Wait for ${him(who(c))} to call`, 'Onun aramasını bekle'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), -3);
           c.h.stat('happiness', -2);
@@ -2191,7 +2239,12 @@ function addGrandbaby(c: Ctx, name: string) {
   const parent = c.h.person(String(c.vars.pid));
   if (!parent) return;
   const st = elderState(c);
-  ensureGrandkids(c);
+  ensureGrandkids(c); // name the grandchildren counted so far first, so the list lines up with parent.kids
+  const g = c.vars.g === 'female' ? 'female' : 'male';
+  // a real person, like the ones game.ts adds, so the heir list and other packs see the same grandchild
+  const baby = c.h.newPerson({ age: 0, gender: g, lastName: parent.lastName });
+  baby.firstName = name;
   parent.kids = (parent.kids ?? 0) + 1;
-  st.gk.push({ n: name, g: c.vars.g === 'female' ? 'female' : 'male', by: c.s.year, p: parent.id });
+  parent.childIds = [...(parent.childIds ?? []), baby.id];
+  st.gk.push({ n: name, g, by: c.s.year, p: parent.id, id: baby.id });
 }

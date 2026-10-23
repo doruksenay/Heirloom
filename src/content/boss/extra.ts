@@ -1,9 +1,11 @@
 import type { ActivityDef, Ctx, EventDef } from '../types';
 import { acc, cap, dat, gen, kin, kinWord, nm, wage, wth } from '../base/util';
 import { getCountry } from '../../engine/world';
+import { cityName } from '../../engine/places';
 import { fameLevel, peekFame } from '../fame/state';
 import {
   INDUSTRIES,
+  SALE_RANGE,
   addMark,
   bossState,
   companyAge,
@@ -11,6 +13,8 @@ import {
   genOf,
   hasMark,
   moraleOf,
+  qmi,
+  saleShare,
   type Company,
   type Industry,
 } from './state';
@@ -40,12 +44,21 @@ const morale = (comp: Company, d: number) => {
 /** A cost that scales with the company: at least `usd` (local), or a share of yearly revenue. */
 const spend = (c: Ctx, usd: number, share: number) => Math.max(wage(c, usd), Math.round(co(c)!.revenue * share));
 const alive = (c: Ctx, id: string | undefined) => !!id && !!c.s.people[id] && c.s.people[id].deathYear === undefined;
+const pp = (c: Ctx) => c.h.person(String(c.vars.pid));
+/** him / her for the person in c.vars.pid (English only). */
+const him = (c: Ctx) => (pp(c)?.gender === 'female' ? 'her' : 'him');
+const his = (c: Ctx) => c.h.his(pp(c));
+/** "a"/"an" before a city name, including İstanbul and İzmir. */
+const article = (w: string) => (/^[AEIOUİ]/.test(w) ? 'an' : 'a');
+const inTR = (c: Ctx) => c.p.countryId === 'tr';
+/** Adult siblings who have not had their fight over the family company yet. */
+const feudSibs = (c: Ctx) => c.h.relatives('sibling').filter((k) => c.h.ageOf(k.person) >= 18 && !c.h.has(`boss_feud:${k.person.id}`));
 
 /** Selling the company outright (same bookkeeping as boss.sell). */
 function sellOut(c: Ctx, price: number): number {
   const b = bossState(c.p);
   const comp = b.company!;
-  const payout = Math.round(price * comp.ownership);
+  const payout = saleShare(price, comp.ownership);
   c.h.money(payout);
   b.company = null;
   b.exits++;
@@ -537,13 +550,13 @@ export const moreEvents: EventDef[] = [
     title: (c) => c.t('Time to open a second branch?', 'Yeni bir şube açmanın vakti geldi mi?'),
     text: (c) =>
       c.t(
-        `A ${c.vars.city} branch would cost about ${c.h.fmt(Number(c.vars.cost))}. Going abroad would cost double.`,
-        `${c.vars.city} şubesi aşağı yukarı ${c.h.fmt(Number(c.vars.cost))} tutar. Yurt dışı bunun iki katı.`,
+        `${cap(article(String(c.vars.city)))} ${c.vars.city} branch would cost about ${c.h.fmt(Number(c.vars.cost))}. Going abroad would cost double.`,
+        `${cityName(String(c.vars.city), 'tr')} şubesi aşağı yukarı ${c.h.fmt(Number(c.vars.cost))} tutar. Yurt dışı bunun iki katı.`,
       ),
     choices: [
       {
         id: 'city',
-        label: (c) => c.t(`Open in ${c.vars.city}`, `${c.vars.city} şubesini aç`),
+        label: (c) => c.t(`Open in ${c.vars.city}`, `${cityName(String(c.vars.city), 'tr')} şubesini aç`),
         resolve: (c) => {
           const comp = co(c)!;
           comp.cash -= Number(c.vars.cost);
@@ -551,9 +564,9 @@ export const moreEvents: EventDef[] = [
           if (c.rng.chance(0.7)) {
             grow(c, comp, 1.2);
             hype(comp, 5);
-            return c.t(`The ${c.vars.city} branch took off. Locals act like they discovered you.`, `${c.vars.city} şubesi tuttu. Oranın ahalisi sanki seni kendileri keşfetmiş gibi davranıyor.`);
+            return c.t(`The ${c.vars.city} branch took off. Locals act like they discovered you.`, `${cityName(String(c.vars.city), 'tr')} şubesi tuttu. Oranın ahalisi sanki seni kendileri keşfetmiş gibi davranıyor.`);
           }
-          return c.t(`The ${c.vars.city} branch is slow. Locals say they "already have one of those."`, `${c.vars.city} şubesi yavaş gidiyor. Oranın ahalisi "Bizde zaten var" diyor.`);
+          return c.t(`The ${c.vars.city} branch is slow. Locals say they "already have one of those."`, `${cityName(String(c.vars.city), 'tr')} şubesi yavaş gidiyor. Oranın ahalisi "Bizde zaten var" diyor.`);
         },
       },
       {
@@ -589,7 +602,7 @@ export const moreEvents: EventDef[] = [
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: Math.max(25, c.age - c.rng.int(-5, 15)) }).id;
     },
-    title: (c) => c.t(`${nm(c)} wants to open a ${co(c)!.name} franchise.`, `${nm(c)}, ${co(c)!.name} bayiliği almak istiyor.`),
+    title: (c) => c.t(`${nm(c)} wants to open ${article(co(c)!.name)} ${co(c)!.name} franchise.`, `${nm(c)}, ${co(c)!.name} bayiliği almak istiyor.`),
     text: (c) => c.t('A fee up front, a cut of every sale. You just have to trust a stranger with your name.', 'Peşin bir giriş ücreti, üstüne her satıştan pay. Tek şart: adını bir yabancıya emanet edeceksin.'),
     choices: [
       {
@@ -601,7 +614,7 @@ export const moreEvents: EventDef[] = [
           if (c.rng.chance(0.8)) {
             comp.franchises = (comp.franchises ?? 0) + 1;
             hype(comp, 5);
-            return c.t(`${nm(c)} opened a ${comp.name} franchise. It is cleaner than yours.`, `${nm(c)} bir ${comp.name} bayisi açtı. Seninkinden daha temiz.`);
+            return c.t(`${nm(c)} opened ${article(comp.name)} ${comp.name} franchise. It is cleaner than yours.`, `${nm(c)} bir ${comp.name} bayisi açtı. Seninkinden daha temiz.`);
           }
           hype(comp, -10);
           return c.t(
@@ -659,7 +672,8 @@ export const moreEvents: EventDef[] = [
     category: 'business',
     minAge: 18,
     weight: 10,
-    cooldown: 3,
+    // one pitch per life: after "Go it alone" the same friend does not come back with the same offer
+    once: true,
     when: (c) => !!co(c) && !co(c)!.cofounderId && genOf(co(c)!) === 1 && yrs(c) <= 3 && co(c)!.ownership > 0.9,
     setup: (c) => {
       const friend = c.h.relatives('friend').find((f) => Math.abs(c.h.ageOf(f.person) - c.age) <= 10);
@@ -738,7 +752,7 @@ export const moreEvents: EventDef[] = [
       },
       {
         id: 'letthem',
-        label: (c) => c.t('Let them try it', 'Bırak denesin'),
+        label: (c) => c.t(`Let ${him(c)} try it`, 'Bırak denesin'),
         badge: 'Risky',
         resolve: (c) => {
           const comp = co(c)!;
@@ -784,7 +798,7 @@ export const moreEvents: EventDef[] = [
     choices: [
       {
         id: 'promote',
-        label: (c) => c.t('Make them a manager', 'Müdür yap'),
+        label: (c) => c.t(`Make ${him(c)} a manager`, 'Müdür yap'),
         resolve: (c) => {
           const comp = co(c)!;
           comp.cash -= Math.round(wage(c, INDUSTRIES[comp.industry].staffCost) * 0.3);
@@ -797,7 +811,7 @@ export const moreEvents: EventDef[] = [
       },
       {
         id: 'plaque',
-        label: (c) => c.t('Give them a seventh plaque', 'Yedinci plaketi ver'),
+        label: (c) => c.t(`Give ${him(c)} a seventh plaque`, 'Yedinci plaketi ver'),
         resolve: (c) => {
           const comp = co(c)!;
           morale(comp, -3);
@@ -806,7 +820,7 @@ export const moreEvents: EventDef[] = [
             shrink(comp, 0.97);
             return c.t(`${nm(c)} took the seventh plaque and a job at your rival.`, `${nm(c)} yedinci plaketi aldı, ardından da rakibinin teklifini.`);
           }
-          return c.t(`${nm(c)} smiled politely. The plaques are piling up on their desk.`, `${nm(c)} kibarca gülümsedi. Plaketler masasında birikiyor.`);
+          return c.t(`${nm(c)} smiled politely. The plaques are piling up on ${his(c)} desk.`, `${nm(c)} kibarca gülümsedi. Plaketler masasında birikiyor.`);
         },
       },
     ],
@@ -880,7 +894,9 @@ export const moreEvents: EventDef[] = [
           c.h.stat('happiness', 6);
           return c.t(
             'There was a band, a cake shaped like the logo and a conga line led by the night guard.',
-            'Canlı müzik vardı, logoya benzeyen bir pasta vardı ve gece bekçisinin başını çektiği bir halay vardı.',
+            inTR(c)
+              ? 'Canlı müzik vardı, logoya benzeyen bir pasta vardı ve gece bekçisinin başını çektiği bir halay vardı.'
+              : 'Canlı müzik vardı, logoya benzeyen bir pasta vardı ve gece bekçisinin başını çektiği bir konga dansı vardı.',
           );
         },
         tone: 'good',
@@ -956,7 +972,10 @@ export const moreEvents: EventDef[] = [
     weight: 12,
     cooldown: 8,
     when: (c) => isInd(c, 'tea'),
-    title: (c) => c.t('A late frost wiped out the harvest in Rize.', 'Geç gelen don Rize\'de hasadı vurdu.'),
+    title: (c) =>
+      inTR(c)
+        ? c.t('A late frost wiped out the harvest in Rize.', 'Geç gelen don Rize\'de hasadı vurdu.')
+        : c.t('A late frost wiped out the harvest on the tea estates you buy from.', 'Geç gelen don, çay aldığın bahçelerde hasadı vurdu.'),
     text: (c) => c.t('Fresh leaf prices tripled overnight. The growers are as upset as you are.', 'Yaş çay yaprağının fiyatı bir gecede üçe katlandı. Üreticiler de en az senin kadar dertli.'),
     choices: [
       {
@@ -1258,7 +1277,7 @@ export const moreEvents: EventDef[] = [
     choices: [
       {
         id: 'back',
-        label: (c) => c.t('Back them publicly', 'Herkesin önünde arkasında dur'),
+        label: (c) => c.t(`Back ${him(c)} publicly`, 'Herkesin önünde arkasında dur'),
         resolve: (c) => {
           const comp = co(c)!;
           if (c.rng.chance(0.55)) {
@@ -1288,9 +1307,10 @@ export const moreEvents: EventDef[] = [
     minAge: 18,
     weight: 14,
     cooldown: 8,
-    when: (c) => !!co(c) && genOf(co(c)!) >= 2 && c.h.relatives('sibling').some((k) => c.h.ageOf(k.person) >= 18),
+    // a sibling fights over the shares once; after that it is settled, one way or another
+    when: (c) => !!co(c) && genOf(co(c)!) >= 2 && feudSibs(c).length > 0,
     setup: (c) => {
-      const sibs = c.h.relatives('sibling').filter((k) => c.h.ageOf(k.person) >= 18);
+      const sibs = feudSibs(c);
       c.vars.pid = sibs[c.rng.int(0, sibs.length - 1)].person.id;
       const comp = co(c)!;
       c.vars.price = Math.max(wage(c, 5000), Math.round(comp.valuation * comp.ownership * 0.1));
@@ -1302,14 +1322,26 @@ export const moreEvents: EventDef[] = [
         `${cap(kin(c, k, 'sibling'))} ${nm(c)}, ${co(c)!.name} şirketinden daha büyük pay istiyor.`,
       );
     },
-    text: (c) => c.t(`"It is what they would have wanted," ${nm(c)} says, about everything.`, `${nm(c)} her konuda aynı cümleyi kuruyor: "Rahmetli de böyle isterdi."`),
+    text: (c) => {
+      // the parent who ran the company before you may still be alive (and very much not "the late")
+      const parent = c.h.relatives(['mother', 'father'])[0];
+      if (parent) {
+        const mom = parent.rel.kind === 'mother';
+        return c.t(
+          `"${mom ? 'Mom' : 'Dad'} always said it was half mine," ${nm(c)} says, about everything. ${mom ? 'Mom' : 'Dad'} remembers saying no such thing.`,
+          `${nm(c)} her konuda aynı cümleyi kuruyor: "${mom ? 'Annem' : 'Babam'} hep yarısı senin derdi." ${mom ? 'Annen' : 'Baban'} böyle bir şey dediğini hatırlamıyor.`,
+        );
+      }
+      return c.t(`"It is what Mom and Dad would have wanted," ${nm(c)} says, about everything.`, `${nm(c)} her konuda aynı cümleyi kuruyor: "Rahmetli de böyle isterdi."`);
+    },
     choices: [
       {
         id: 'buy',
-        label: (c) => c.t('Buy out their claim', 'Hakkını satın al'),
+        label: (c) => c.t(`Buy out ${his(c)} claim`, 'Hakkını satın al'),
         requires: (c) => c.p.money >= Number(c.vars.price),
         requiresLabel: 'Not enough savings',
         resolve: (c) => {
+          c.h.flag(`boss_feud:${c.vars.pid}`);
           const price = Number(c.vars.price);
           c.h.money(-price);
           c.h.closeness(String(c.vars.pid), 5);
@@ -1321,12 +1353,13 @@ export const moreEvents: EventDef[] = [
       },
       {
         id: 'seat',
-        label: (c) => c.t('Give them a board seat', 'Yönetim kurulunda koltuk ver'),
+        label: (c) => c.t(`Give ${him(c)} a board seat`, 'Yönetim kurulunda koltuk ver'),
         resolve: (c) => {
+          c.h.flag(`boss_feud:${c.vars.pid}`);
           co(c)!.ownership *= 0.9;
           c.h.closeness(String(c.vars.pid), 10);
           return c.t(
-            `You gave ${nm(c)} a seat and a tenth of your shares. Their emails now start with "As per my last email."`,
+            `You gave ${nm(c)} a seat and a tenth of your shares. ${cap(his(c))} emails now start with "As per my last email."`,
             `${dat(nm(c))} koltuk verdin, hisselerinin onda birini de. Artık sana "Bir önceki mailimde de belirttiğim gibi" diye yazıyor.`,
           );
         },
@@ -1335,6 +1368,7 @@ export const moreEvents: EventDef[] = [
         id: 'refuse',
         label: (c) => c.t('Refuse', 'Reddet'),
         resolve: (c) => {
+          c.h.flag(`boss_feud:${c.vars.pid}`);
           c.h.closeness(String(c.vars.pid), -20);
           if (c.rng.chance(0.4)) {
             co(c)!.cash -= spend(c, 10000, 0.03);
@@ -1354,15 +1388,15 @@ export const moreEvents: EventDef[] = [
     cooldown: 8,
     when: (c) => !!co(c) && genOf(co(c)!) >= 2 && co(c)!.stage !== 'public' && co(c)!.valuation >= wage(c, 200_000),
     setup: (c) => {
-      c.vars.price = Math.round((co(c)!.valuation * c.rng.int(110, 160)) / 100);
+      c.vars.price = Math.round((co(c)!.valuation * c.rng.int(SALE_RANGE.family[0], SALE_RANGE.family[1])) / 100);
     },
     title: (c) => c.t(`A buyer offers ${c.h.fmt(Number(c.vars.price))} for the family company.`, `Bir alıcı aile şirketi için ${c.h.fmt(Number(c.vars.price))} teklif ediyor.`),
     text: (c) => {
       const comp = co(c)!;
-      const share = c.h.fmt(Number(c.vars.price) * comp.ownership);
+      const share = c.h.fmt(saleShare(Number(c.vars.price), comp.ownership));
       return c.t(
-        `${comp.founderName} founded ${comp.name} in ${comp.founded}. Your share would be ${share}.`,
-        `${comp.name}, ${comp.founded} yılında ${comp.founderName} tarafından kuruldu. Senin payın ${share} eder.`,
+        `${comp.founderName} founded ${comp.name} in ${comp.founded}. After taxes, your share would be ${share}.`,
+        `${comp.name}, ${comp.founded} yılında ${comp.founderName} tarafından kuruldu. Vergiden sonra payına ${share} kalır.`,
       );
     },
     choices: [
@@ -1473,7 +1507,7 @@ export const moreEvents: EventDef[] = [
     },
     title: (c) => {
       const k = c.h.person(String(c.vars.pid));
-      return c.t(`Will your ${kinWord(k, 'child')} ${nm(c)} run ${co(c)!.name} one day?`, `${co(c)!.name} şirketinin başına bir gün ${kin(c, k, 'child')} ${nm(c)} mi geçecek?`);
+      return c.t(`Will your ${kinWord(k, 'child')} ${nm(c)} run ${co(c)!.name} one day?`, `${co(c)!.name} şirketinin başına bir gün ${kin(c, k, 'child')} ${nm(c)} ${qmi(nm(c))} geçecek?`);
     },
     text: (c) => c.t('The board wants a name in the succession plan. Your lawyer has a pen ready.', 'Yönetim kurulu veraset planına bir isim yazılmasını istiyor. Avukatın kalemini hazırlamış.'),
     choices: [

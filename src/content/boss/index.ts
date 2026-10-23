@@ -2,7 +2,7 @@ import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../type
 import { cap, dat, kin, kinWord, nm, wage } from '../base/util';
 import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
-import { INDUSTRIES, STAGE_NAMES, bossState, stageName, companyOf, genOf, peekBoss, valuate, type Company, type Industry } from './state';
+import { INDUSTRIES, SALE_RANGE, STAGE_NAMES, bossState, stageName, companyOf, genOf, peekBoss, saleShare, valuate, type Company, type Industry } from './state';
 import { afterYear, moraleGrowth, moreActivities, moreEvents } from './extra';
 
 // "Boss" expansion: start a company, grow it, raise money, sell it, take it public, or lose everything.
@@ -98,7 +98,7 @@ const events: EventDef[] = [
     text: (c) =>
       c.t(
         'They wear sneakers that cost more than your first car. They say "disrupt" a lot.',
-        'Ayaklarındaki spor ayakkabılar ilk arabandan pahalı. Durmadan "disruptif" deyip duruyorlar.',
+        'Ayaklarındaki spor ayakkabılar ilk arabandan pahalı. Ağızlarından "disruptif" lafı düşmüyor.',
       ),
     choices: [
       {
@@ -150,7 +150,7 @@ const events: EventDef[] = [
     scheduled: true,
     setup: (c) => {
       const comp = co(c)!;
-      c.vars.price = Math.round(comp.valuation * c.rng.int(70, 115) / 100);
+      c.vars.price = Math.round((comp.valuation * c.rng.int(SALE_RANGE.sell[0], SALE_RANGE.sell[1])) / 100);
       const bi = c.rng.int(0, BUYERS.length - 1); // one RNG call, same as rng.pick(BUYERS)
       c.vars.buyer = BUYERS[bi];
       c.vars.bi = bi;
@@ -161,8 +161,8 @@ const events: EventDef[] = [
         : `${String(c.vars.buyer)[0].toUpperCase()}${String(c.vars.buyer).slice(1)} offers ${c.h.fmt(Number(c.vars.price))} for ${co(c)!.name}.`,
     text: (c) =>
       c.t(
-        `Your ${Math.round(co(c)!.ownership * 100)}% share would be ${c.h.fmt(Number(c.vars.price) * co(c)!.ownership)}.`,
-        `%${Math.round(co(c)!.ownership * 100)} payın ${c.h.fmt(Number(c.vars.price) * co(c)!.ownership)} eder.`,
+        `After taxes and fees, your ${Math.round(co(c)!.ownership * 100)}% share would come to ${c.h.fmt(saleShare(Number(c.vars.price), co(c)!.ownership))}.`,
+        `Vergiler ve masraflar düşülünce %${Math.round(co(c)!.ownership * 100)} payına ${c.h.fmt(saleShare(Number(c.vars.price), co(c)!.ownership))} kalır.`,
       ),
     choices: [
       {
@@ -171,7 +171,7 @@ const events: EventDef[] = [
         resolve: (c) => {
           const b = bossState(c.p);
           const comp = b.company!;
-          const payout = Math.round(Number(c.vars.price) * comp.ownership);
+          const payout = saleShare(Number(c.vars.price), comp.ownership);
           c.h.money(payout);
           b.company = null;
           b.exits++;
@@ -179,8 +179,8 @@ const events: EventDef[] = [
           c.h.stat('happiness', 10);
           if (!c.p.jobId) c.p.jobTitle = c.t(`Founder of ${comp.name}`, `${comp.name} Kurucusu`);
           return c.t(
-            `You sold ${comp.name} and walked away with ${c.h.fmt(payout)}. You slept for 14 hours.`,
-            `${comp.name} şirketini sattın ve cebine ${c.h.fmt(payout)} koyup çıktın. 14 saat uyudun.`,
+            `You sold ${comp.name} and walked away with ${c.h.fmt(payout)} after taxes. You slept for 14 hours.`,
+            `${comp.name} şirketini sattın; vergiden sonra cebine ${c.h.fmt(payout)} kaldı. 14 saat uyudun.`,
           );
         },
         tone: 'big',
@@ -199,7 +199,7 @@ const events: EventDef[] = [
     weight: 6,
     when: (c) => !!co(c) && co(c)!.valuation >= wage(c, 1_000_000) && co(c)!.stage !== 'public',
     setup: (c) => {
-      c.vars.price = Math.round(co(c)!.valuation * c.rng.int(120, 200) / 100);
+      c.vars.price = Math.round((co(c)!.valuation * c.rng.int(SALE_RANGE.acquisition[0], SALE_RANGE.acquisition[1])) / 100);
     },
     title: (c) =>
       c.t(
@@ -214,7 +214,7 @@ const events: EventDef[] = [
         resolve: (c) => {
           const b = bossState(c.p);
           const comp = b.company!;
-          const payout = Math.round(Number(c.vars.price) * comp.ownership);
+          const payout = saleShare(Number(c.vars.price), comp.ownership);
           c.h.money(payout);
           b.company = null;
           b.exits++;
@@ -222,8 +222,8 @@ const events: EventDef[] = [
           c.h.stat('happiness', 12);
           if (!c.p.jobId) c.p.jobTitle = c.t(`Founder of ${comp.name}`, `${comp.name} Kurucusu`);
           return c.t(
-            `You sold ${comp.name} for ${c.h.fmt(Number(c.vars.price))}. Your share: ${c.h.fmt(payout)}.`,
-            `${comp.name} şirketini ${c.h.fmt(Number(c.vars.price))} karşılığında sattın. Senin payın: ${c.h.fmt(payout)}.`,
+            `You sold ${comp.name} for ${c.h.fmt(Number(c.vars.price))}. Your share after taxes: ${c.h.fmt(payout)}.`,
+            `${comp.name} şirketini ${c.h.fmt(Number(c.vars.price))} karşılığında sattın. Vergiden sonra sana kalan: ${c.h.fmt(payout)}.`,
           );
         },
         tone: 'big',
@@ -358,10 +358,16 @@ const events: EventDef[] = [
     cooldown: 4,
     when: (c) => !!co(c) && co(c)!.employees >= 3,
     setup: (c) => {
-      c.vars.pid = c.h.newPerson({ age: c.age - c.rng.int(2, 12) }).id;
+      c.vars.pid = c.h.newPerson({ age: Math.max(20, c.age - c.rng.int(2, 12)) }).id;
     },
     title: (c) => c.t(`Your best employee, ${nm(c)}, got an offer from a rival.`, `En iyi çalışanın ${nm(c)}, rakip bir şirketten teklif aldı.`),
-    text: (c) => c.t('They are good. Really good. They also know where everything is.', 'İşinde iyi. Hem de çok iyi. Üstelik neyin nerede olduğunu bir tek o biliyor.'),
+    text: (c) => {
+      const p = c.h.person(String(c.vars.pid));
+      return c.t(
+        `${cap(c.h.he(p))} is good. Really good. ${cap(c.h.he(p))} also knows where everything is.`,
+        'İşinde iyi. Hem de çok iyi. Üstelik neyin nerede olduğunu bir tek o biliyor.',
+      );
+    },
     choices: [
       {
         id: 'raise',
@@ -373,18 +379,18 @@ const events: EventDef[] = [
       },
       {
         id: 'equity',
-        label: (c) => c.t('Offer them shares', 'Hisse teklif et'),
+        label: (c) => c.t(`Offer ${c.h.person(String(c.vars.pid)).gender === 'female' ? 'her' : 'him'} shares`, 'Hisse teklif et'),
         resolve: (c) => {
           co(c)!.ownership *= 0.97;
           return c.t(
-            `You gave ${nm(c)} 3% of the company. They now work like they own it. Because they do.`,
-            `${dat(nm(c))} şirketin %3'ünü verdin. Artık şirket kendisininmiş gibi çalışıyor. Çünkü biraz öyle.`,
+            `You gave ${nm(c)} 3% of the company. ${cap(c.h.he(c.h.person(String(c.vars.pid))))} now works like ${c.h.he(c.h.person(String(c.vars.pid)))} owns it. Because ${c.h.he(c.h.person(String(c.vars.pid)))} does.`,
+            `${dat(nm(c))} şirketten yüzde üçlük pay verdin. Artık şirket kendisininmiş gibi çalışıyor. Çünkü biraz öyle.`,
           );
         },
       },
       {
         id: 'go',
-        label: (c) => c.t('Let them go', 'Gitmesine izin ver'),
+        label: (c) => c.t(`Let ${c.h.person(String(c.vars.pid)).gender === 'female' ? 'her' : 'him'} go`, 'Gitmesine izin ver'),
         resolve: (c) => {
           const comp = co(c)!;
           comp.revenue = Math.round(comp.revenue * 0.93);
@@ -432,37 +438,41 @@ const events: EventDef[] = [
     id: 'boss.child_joins',
     category: 'business',
     once: true,
-    when: (c) => !!co(c) && c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 20),
+    maxAge: 78,
+    when: (c) => !!co(c) && c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 20 && c.h.ageOf(k.person) <= 45),
     setup: (c) => {
-      c.vars.pid = c.h.relatives('child').find((k) => c.h.ageOf(k.person) >= 20)!.person.id;
+      c.vars.pid = c.h.relatives('child').find((k) => c.h.ageOf(k.person) >= 20 && c.h.ageOf(k.person) <= 45)!.person.id;
     },
     title: (c) =>
       c.t(
         `Your ${kinWord(c.h.person(String(c.vars.pid)), 'child')} ${nm(c)} wants to join ${co(c)!.name}.`,
         `${cap(kin(c, c.h.person(String(c.vars.pid)), 'child'))} ${nm(c)}, ${co(c)!.name} şirketinde çalışmak istiyor.`,
       ),
-    text: (c) => c.t('They say they have "ideas." They have printed a slide deck.', '"Fikirlerim var" diyor. Sunum bile bastırmış.'),
+    text: (c) => {
+      const k = c.h.person(String(c.vars.pid));
+      return c.t(`${cap(c.h.he(k))} says ${c.h.he(k)} has "ideas." ${cap(c.h.he(k))} has printed a slide deck.`, '"Fikirlerim var" diyor. Sunum bile bastırmış.');
+    },
     choices: [
       {
         id: 'yes',
-        label: (c) => c.t('Welcome them aboard', 'Aramıza hoş geldin de'),
+        label: (c) => c.t(`Welcome ${c.h.person(String(c.vars.pid)).gender === 'female' ? 'her' : 'him'} aboard`, 'Aramıza hoş geldin de'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 12);
           c.h.flag(`heir:${c.vars.pid}`);
           co(c)!.employees += 1;
           return c.t(
-            `${nm(c)} joined the family business. The employees immediately started calling them "the heir."`,
+            `${nm(c)} joined the family business. The employees immediately started calling ${c.h.person(String(c.vars.pid)).gender === 'female' ? 'her' : 'him'} "the heir."`,
             `${nm(c)} aile şirketine katıldı. Çalışanlar hemen arkasından "veliaht" demeye başladı.`,
           );
         },
       },
       {
         id: 'no',
-        label: (c) => c.t('Tell them to make their own way', 'Önce kendi yolunu çizmesini söyle'),
+        label: (c) => c.t(`Tell ${c.h.person(String(c.vars.pid)).gender === 'female' ? 'her' : 'him'} to make ${c.h.his(c.h.person(String(c.vars.pid)))} own way`, 'Önce kendi yolunu çizmesini söyle'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), -6);
           return c.t(
-            `You told ${nm(c)} to make their own way first. They slammed the door. Then sent a thank-you text a year later.`,
+            `You told ${nm(c)} to make ${c.h.his(c.h.person(String(c.vars.pid)))} own way first. ${cap(c.h.he(c.h.person(String(c.vars.pid))))} slammed the door, then sent a thank-you text a year later.`,
             `${dat(nm(c))} önce kendi yolunu çizmesini söyledin. Kapıyı çarpıp çıktı. Bir yıl sonra da teşekkür mesajı attı.`,
           );
         },
@@ -479,6 +489,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('Café, tea, fashion, delivery, tech or games. No savings? The bank will help.', 'Kafe, çay, moda, yemek siparişi, teknoloji ya da oyun. Birikimin yok mu? Banka yardım eder.'),
     group: 'Business',
     minAge: 18,
+    maxAge: 75,
     available: (c) => !co(c) && free(c),
     run: () => ({ event: 'boss.found' }),
   },
@@ -488,6 +499,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Revenue, −Health', '+Ciro, −Sağlık'),
     group: 'Business',
     minAge: 18,
+    maxAge: 80,
     perYear: 2,
     available: (c) => !!co(c) && free(c),
     run: (c) => {
@@ -496,7 +508,7 @@ const activities: ActivityDef[] = [
       comp.revenue = Math.round(comp.revenue * (1 + (0.04 + c.p.stats.smarts / 2000) * room));
       comp.hype = Math.min(100, comp.hype + 3);
       c.h.stat('health', -3);
-      return c.t(`You worked until 3 a.m. on ${comp.name} all month. Revenue is up.`, `Bütün ay ${comp.name} için gece 3'e kadar çalıştın. Ciro yükseldi.`);
+      return c.t(`You worked until 3 a.m. on ${comp.name} all month. Revenue is up.`, `Bütün ay ${comp.name} için gece üçe kadar çalıştın. Ciro yükseldi.`);
     },
   },
   {
@@ -579,7 +591,7 @@ const activities: ActivityDef[] = [
       const amt = Math.round(c.p.money * 0.5);
       c.h.money(-amt);
       comp.cash += amt;
-      return c.t(`You moved ${c.h.fmt(amt)} of your savings into ${comp.name}.`, `Birikiminden ${c.h.fmt(amt)} tutarı ${comp.name} kasasına aktardın.`);
+      return c.t(`You moved ${c.h.fmt(amt)} of your savings into ${comp.name}.`, `Kendi birikiminden ${comp.name} şirketinin kasasına ${c.h.fmt(amt)} aktardın.`);
     },
   },
   {
@@ -588,6 +600,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('Trade shares for cash and growth', 'Hisse ver, nakit ve büyüme al'),
     group: 'Business',
     minAge: 18,
+    maxAge: 80,
     available: (c) => !!co(c) && co(c)!.stage !== 'public' && co(c)!.revenue >= wage(c, 40_000) && free(c),
     run: (c) => {
       if (c.rng.chance(0.35 + c.p.stats.smarts / 300 + co(c)!.hype / 300)) return { event: 'boss.investors' };

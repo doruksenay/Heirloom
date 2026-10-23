@@ -111,6 +111,8 @@ export const streetEvents: EventDef[] = [
     id: 'crime.gang_job',
     category: 'crime',
     minAge: 18,
+    // the crew stops calling a getaway driver in their seventies
+    maxAge: 70,
     cooldown: 2,
     when: (c) => c.h.has('gang') && free(c),
     title: (c) => c.t('The crew needs a driver tonight.', 'Çetenin bu gece bir şoföre ihtiyacı var.'),
@@ -354,7 +356,7 @@ export const streetEvents: EventDef[] = [
           gotAway(c, 'embezzlement', take, 8);
           return c.t(
             `You moved ${c.h.fmt(take)} into "miscellaneous office supplies". The office has never had so many staplers on paper.`,
-            `${c.h.fmt(take)} tutarı "çeşitli kırtasiye giderleri" kalemine kaydırdın. Kâğıt üzerinde şirketin hiç bu kadar zımbası olmamıştı.`,
+            `"Çeşitli kırtasiye giderleri" kalemine ${c.h.fmt(take)} kaydırdın. Kâğıt üzerinde şirketin hiç bu kadar zımbası olmamıştı.`,
           );
         },
       },
@@ -371,7 +373,7 @@ export const streetEvents: EventDef[] = [
           c.h.stat('happiness', -3);
           return c.t(
             `You moved ${c.h.fmt(take)} through a "consulting firm" that is really just your cousin's email address.`,
-            `${c.h.fmt(take)} tutarı, aslında kuzeninin e-posta adresinden ibaret olan bir "danışmanlık firması" üzerinden çektin.`,
+            `Aslında kuzeninin e-posta adresinden ibaret olan bir "danışmanlık firması" üzerinden ${c.h.fmt(take)} çektin.`,
           );
         },
         tone: 'bad',

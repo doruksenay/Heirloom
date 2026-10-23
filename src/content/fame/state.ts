@@ -1,5 +1,6 @@
 import type { Ctx } from '../types';
 import type { GameState, Lang, Player } from '../../engine/types';
+import { cityName } from '../../engine/places';
 
 export type FamePath = 'music' | 'social' | 'acting';
 
@@ -94,9 +95,22 @@ export function fameTitle(f: FameState, lang: Lang = 'en'): string {
 }
 
 const compactEn = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
-const compactTr = new Intl.NumberFormat('tr-TR', { notation: 'compact', maximumFractionDigits: 1 });
-/** 12.3K / 1.2M in English, "12,3 B" / "1,2 Mn" in Turkish. */
-export const compact = (n: number, lang: Lang = 'en') => (lang === 'tr' ? compactTr : compactEn).format(n);
+const fullTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 });
+const oneDecimalTr = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 });
+/**
+ * Fan counts for sentences. English: 12.3K / 1.2M. Turkish spells out the size word, because the
+ * compact "2,9 B" reads like "billion": 2.900, 45.000, 250 bin, 1,2 milyon, 1,5 milyar.
+ */
+export function compact(n: number, lang: Lang = 'en'): string {
+  if (lang !== 'tr') return compactEn.format(n);
+  // round first, then pick the size word, so 999.999 reads "1 milyon", not "1.000 bin"
+  if (Math.abs(Math.round(n)) < 100_000) return fullTr.format(Math.round(n));
+  const k = Math.round(n / 1000);
+  if (Math.abs(k) < 1000) return `${fullTr.format(k)} bin`;
+  const m = Math.round(n / 100_000) / 10;
+  if (Math.abs(m) < 1000) return `${oneDecimalTr.format(m)} milyon`;
+  return `${oneDecimalTr.format(Math.round(n / 100_000_000) / 10)} milyar`;
+}
 
 /**
  * Soft ceiling for fans. Growth slows as fans approach it and never passes it, so fame-heavy lives
@@ -158,7 +172,7 @@ export function bandNames(c: Ctx): string[] {
       out.set(`a${a}:${n}`, c.lang === 'tr' ? `${ADJ_TR[a]} ${NOUN_TR[n]}` : `The ${ADJ[a]} ${NOUN[n]}`);
     } else {
       const n = pickIdx(c, NOUN.length);
-      out.set(`c${n}`, c.lang === 'tr' ? `${c.p.city} ${NOUN_TR_CITY[n]}` : `${NOUN[n]} of ${c.p.city}`);
+      out.set(`c${n}`, c.lang === 'tr' ? `${cityName(c.p.city, 'tr')} ${NOUN_TR_CITY[n]}` : `${NOUN[n]} of ${c.p.city}`);
     }
   }
   return [...out.values()];

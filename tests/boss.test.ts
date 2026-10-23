@@ -205,3 +205,37 @@ describe('boss expansion v0.7', () => {
     expect([...leaks].slice(0, 20)).toEqual([]);
   });
 });
+
+describe('boss v0.7 playtest fixes', () => {
+  it('harmonizes the Turkish question particle by how the name sounds', async () => {
+    const { qmi } = await import('../src/content/boss/state');
+    expect(['Can', 'Ada', 'Owen', 'Hannah', 'Kemal', 'Ruby', 'Oğuz', 'Ümit'].map((n) => `${n} ${qmi(n)}`)).toEqual([
+      'Can mı', 'Ada mı', 'Owen mı', 'Hannah mı', 'Kemal mi', 'Ruby mi', 'Oğuz mu', 'Ümit mi',
+    ]);
+  });
+
+  it('never pays more than the valuation (plus a modest premium) minus taxes for a company', async () => {
+    const { SALE_RANGE, SALE_KEEP, saleShare } = await import('../src/content/boss/state');
+    for (const [lo, hi] of Object.values(SALE_RANGE)) {
+      expect(lo).toBeLessThanOrEqual(hi);
+      expect(hi).toBeLessThanOrEqual(130);
+    }
+    expect(saleShare(1_000_000, 0.5)).toBe(Math.round(500_000 * SALE_KEEP));
+    // a played sale pays exactly the after-tax share shown in the offer
+    const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'İzmir', seed: 4 }, { entitlements: ['pack.boss'], settings: { themeId: 'evening', adultContent: false, sound: true, language: 'tr' } });
+    s.year += 30;
+    doActivity(s, 'boss_found');
+    choose(s, 'app');
+    const comp = companyOf(s.player)!;
+    Object.assign(comp, { revenue: 2_000_000, cash: 0, lastProfit: 100_000, ownership: 0.8, stage: 'startup' });
+    comp.valuation = 20_000_000;
+    const before = s.player.money;
+    doActivity(s, 'boss_sell');
+    expect(s.pending?.body).toContain('kalır');
+    expect(s.pending?.title).not.toMatch(/\d'[a-zçğıöşü]/);
+    choose(s, 'sell');
+    const got = s.player.money - before;
+    expect(got).toBeGreaterThanOrEqual(Math.round(20_000_000 * 0.6 * 0.8 * SALE_KEEP) - 1);
+    expect(got).toBeLessThanOrEqual(Math.round(20_000_000 * 1.0 * 0.8 * SALE_KEEP) + 1);
+  });
+});

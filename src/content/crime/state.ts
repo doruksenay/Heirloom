@@ -1,6 +1,7 @@
 import type { Ctx } from '../types';
 import type { Player } from '../../engine/types';
 import { getCountry } from '../../engine/world';
+import { aOrAn } from '../base/util';
 
 // Shared state and justice helpers for the Crime World pack.
 
@@ -59,7 +60,8 @@ export interface CrimeState {
   /** Prison workshop sessions; 2+ means you learned a trade. */
   trade: number;
   /** A parent's story, passed down to the heir. */
-  legacy?: { name: string; record: number; stash: number; found?: boolean };
+  /** `id` (added in v0.7) is the parent's person id: with "pass the torch" that parent may still be alive. */
+  legacy?: { name: string; record: number; stash: number; found?: boolean; id?: string };
 }
 
 const KEY = 'crime';
@@ -181,7 +183,7 @@ export function convict(c: Ctx, years: number, crime: string, crimeTr: string): 
     extra = c.t(` ${partner.person.firstName} left you.`, ` ${partner.person.firstName} seni terk etti.`);
   }
   return c.t(
-    `You were convicted of ${crime} and sentenced to ${years} year${years > 1 ? 's' : ''} in prison.${folded}${title ? ` You lost your job as ${title}.` : ''}${extra}`,
+    `You were convicted of ${crime} and sentenced to ${years} year${years > 1 ? 's' : ''} in prison.${folded}${title ? ` You lost your job as ${aOrAn(title)}.` : ''}${extra}`,
     `${crimeTr} suçundan mahkûm oldun ve ${years} yıl hapis cezası aldın.${folded}${title ? ` ${title} olarak çalıştığın işten kovuldun.` : ''}${extra}`,
   );
 }

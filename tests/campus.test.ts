@@ -82,3 +82,26 @@ describe('Campus expansion', () => {
     }
   }, 60_000);
 });
+
+describe('Campus v0.7 playtest fixes', () => {
+  it('graduates an undeclared student with a real major and natural Turkish', () => {
+    let graduated = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const { s } = play(seed, profile(['pack.campus'], 'tr'));
+      const st = peekCampus(s.player);
+      if (!st?.gradYear) continue;
+      graduated++;
+      expect(st.major).not.toBeNull();
+      const text = s.player.log.map((l) => l.text).join('\n');
+      expect(text).not.toMatch(/Genel Programlar|onur öğrencisi|WhatsApp/);
+    }
+    expect(graduated).toBeGreaterThan(5);
+  }, 60_000);
+
+  it('uses "an" before a vowel in English job lines', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const { s } = play(seed, profile(['pack.campus'], 'en'));
+      for (const l of s.player.log) expect(l.text).not.toMatch(/\ba [AEIOU][a-z]/);
+    }
+  }, 60_000);
+});

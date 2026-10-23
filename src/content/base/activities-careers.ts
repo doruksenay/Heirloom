@@ -1,5 +1,8 @@
 import type { ActivityDef, Ctx } from '../types';
-import { wage } from './util';
+import { wage, wth } from './util';
+import { say } from './lines';
+import { promoteAnyway } from '../../engine/context';
+import { isCoastal, seaName } from '../../engine/places';
 
 // v0.7 careers: activities for getting and growing a career, plus the yearly logic for the
 // jobs that need more than the engine's salary-and-promotion tick (athletes, the military,
@@ -145,19 +148,15 @@ export const careerActivities: ActivityDef[] = [
           `Sertifikanı çerçeveletip astın. Patronun da fark etti; artık ${c.h.jobTitle()} oldun.`,
         );
       }
-      return line(c, [
-        [
-          'Twelve weeks of night classes. You passed the exam and fell asleep on the bus home.',
-          'On iki hafta akşam dersi. Sınavı geçtin, eve dönerken otobüste uyuyakaldın.',
-        ],
-        [
-          'You got the certificate. The vending machine at the college got most of your money.',
-          'Sertifikayı aldın. Paranın çoğunu okulun otomatı yedi.',
-        ],
-        [
-          'The course was useful. The teacher was mostly stories about his boat, but useful.',
-          'Kurs faydalıydı. Hoca çoğunlukla teknesini anlattı ama yine de faydalıydı.',
-        ],
+      return say(c, 'career_course', [
+        ['Twelve weeks of night classes. You passed the exam and fell asleep on the bus home.', 'On iki hafta akşam dersi. Sınavı geçtin, eve dönerken otobüste uyuyakaldın.'],
+        ['You got the certificate. The vending machine at the college got most of your money.', 'Sertifikayı aldın. Paranın çoğunu okulun otomatı yedi.'],
+        ['The course was useful. The teacher mostly talked about his boat, but it was useful.', 'Kurs faydalıydı. Hoca çoğunlukla teknesini anlattı ama yine de faydalıydı.'],
+        ['You learned a new piece of software and spent the weekend explaining it to people who did not ask.', 'Yeni bir program öğrendin ve hafta sonunu sormayan insanlara anlatarak geçirdin.'],
+        ['The course had a group project. You did the project. The group did the presentation.', 'Kursta bir grup ödevi vardı. Ödevi sen yaptın, sunumu grup yaptı.'],
+        ['You were the only one who did the reading every week. The teacher started teaching just to you.', 'Her hafta okumaları yapan tek kişi sendin. Hoca sonunda dersi sadece sana anlatmaya başladı.'],
+        ['You passed with distinction and celebrated with a whole cake, alone, in the kitchen. Earned.', 'Kursu dereceyle bitirdin ve mutfakta tek başına koca bir pasta yiyerek kutladın. Hak edilmiş.'],
+        ['You studied on your lunch breaks for weeks. You now know the syllabus and every sandwich shop nearby.', 'Haftalarca öğle aralarında ders çalıştın. Hem müfredatı hem de yakındaki bütün büfeleri ezberledin.'],
       ]);
     },
   },
@@ -185,23 +184,17 @@ export const careerActivities: ActivityDef[] = [
         c.h.stat('happiness', 3);
         return c.t(
           `You and ${friend.firstName} hid by the buffet and mocked the keynote. A friendship was born.`,
-          `${friend.firstName} ile büfenin yanına saklanıp açılış konuşmasıyla dalga geçtiniz. Bir dostluk doğdu.`,
+          `${wth(friend.firstName)} büfenin yanına saklanıp açılış konuşmasıyla dalga geçtiniz. Bir dostluk doğdu.`,
         );
       }
       c.h.stat('happiness', -1);
-      return line(c, [
-        [
-          'You handed out 40 business cards and got back one, for a plumber.',
-          'Kırk kartvizit dağıttın, bir tane geri aldın: bir tesisatçınınki.',
-        ],
-        [
-          'You said "we should grab coffee" nine times. Nobody will grab coffee.',
-          'Dokuz kere "Bir kahve içelim" dedin. Kimse kahve içmeyecek.',
-        ],
-        [
-          'You wore your name tag on the wrong side all night. Everyone called you by the wrong name.',
-          'Bütün gece yaka kartını ters taktın. Herkes sana başka bir isimle hitap etti.',
-        ],
+      return say(c, 'career_network', [
+        ['You handed out 40 business cards and got back one, for a plumber.', 'Kırk kartvizit dağıttın, bir tane geri aldın: bir tesisatçınınki.'],
+        ['You said "we should grab coffee" nine times. Nobody will grab coffee.', 'Dokuz kere "Bir kahve içelim" dedin. Kimse kahve içmeyecek.'],
+        ['You wore your name tag on the wrong side all night. Everyone called you by the wrong name.', 'Bütün gece yaka kartını ters taktın. Herkes sana başka bir isimle hitap etti.'],
+        ['You stood by the coffee for two hours waiting for someone to approach you. Only the coffee did. Many times.', 'İki saat kahvenin yanında birinin sana yaklaşmasını bekledin. Yaklaşan sadece kahve oldu. Defalarca.'],
+        ['A man explained your own job to you for twenty minutes. You took his card, out of respect for his stamina.', 'Bir adam yirmi dakika boyunca sana kendi işini anlattı. Bu dayanıklılığa saygıdan kartını aldın.'],
+        ['The free lunch was excellent. The networking was not. You are calling it a draw.', 'Bedava öğle yemeği harikaydı. Tanışma kısmı değildi. Berabere sayıyorsun.'],
       ]);
     },
   },
@@ -311,8 +304,8 @@ function militaryYear(c: Ctx, ladder: number[]): void {
     );
   }
   // a general's star: only for long-serving colonels, and rarely
-  if (p.jobId === 'officer' && p.jobLevel === 3 && p.jobYears >= 20 && c.rng.chance(0.06 + p.stats.smarts / 1000)) {
-    c.h.promote();
+  // a structural jump: not limited by the one-promotion-a-year rule
+  if (p.jobId === 'officer' && p.jobLevel === 3 && p.jobYears >= 20 && c.rng.chance(0.06 + p.stats.smarts / 1000) && promoteAnyway(c)) {
     c.h.achieve('general');
     c.h.stat('happiness', 10);
     c.h.log(
@@ -337,8 +330,9 @@ function artistYear(c: Ctx): void {
     const i = c.rng.int(0, PAINTINGS.length - 1);
     c.h.flag('breakthrough');
     c.h.money(sale);
-    while (p.jobLevel < 2 && c.h.promote());
-    c.h.promote();
+    // a structural jump past the one-promotion-a-year rule
+    while (p.jobLevel < 2 && promoteAnyway(c));
+    promoteAnyway(c);
     c.h.achieve('masterpiece');
     c.h.stat('happiness', 12);
     c.h.log(
@@ -417,28 +411,52 @@ function seasonYear(
   }
 }
 
-const FARM_GOOD: Lines = [
+/** Good farm years; hazelnuts only in Turkey. */
+const farmGood = (c: Ctx): Lines => [
   ['Bumper harvest! The tomatoes alone could feed a town.', 'Bereketli bir hasat! Sadece domatesler bir kasabayı doyurur.'],
   ['Perfect rain, perfect sun. Even the scarecrow looks pleased.', 'Yağmur da güneş de tam kıvamında. Korkuluk bile memnun görünüyor.'],
-  ['Hazelnut prices shot up just as you finished picking.', 'Tam toplamayı bitirdiğinde fındık fiyatları uçtu.'],
+  c.p.countryId === 'tr'
+    ? ['Hazelnut prices shot up just as you finished picking.', 'Tam toplamayı bitirdiğinde fındık fiyatları uçtu.']
+    : ['Grain prices shot up just as you finished the harvest.', 'Tam hasadı bitirdiğinde tahıl fiyatları uçtu.'],
 ];
 const FARM_BAD: Lines = [
   ['Drought. The field cracked like an old plate.', 'Kuraklık. Tarla eski bir tabak gibi çatladı.'],
   ['A late frost took the blossoms in one night.', 'Geç gelen bir don, çiçekleri tek gecede aldı götürdü.'],
   ['The tractor broke down in the middle of the harvest.', 'Traktör hasadın tam ortasında bozuldu.'],
 ];
-const FISH_GOOD: Lines = [
-  ['The anchovies came early and stayed late. Nets full all season.', 'Hamsi erken geldi, geç gitti. Bütün sezon ağlar doldu taştı.'],
-  ['A shoal of bluefish found your nets three nights in a row.', 'Bir lüfer sürüsü üç gece üst üste senin ağlarını buldu.'],
-  ['Calm seas all season. You barely missed a day.', 'Bütün sezon deniz çarşaf gibiydi. Neredeyse bir gün bile kaçırmadın.'],
-];
+/** Good fishing years by place: hamsi and lüfer on Turkish seas, the local sea elsewhere, a lake inland. */
+function fishGood(c: Ctx): Lines {
+  const sea = seaName(c.p.city, 'en');
+  const seaTr = seaName(c.p.city, 'tr');
+  if (!isCoastal(c.p.city) || !sea || !seaTr)
+    return [
+      ['The trout in the lake were biting all season. Nets and lines full.', 'Göldeki alabalıklar bütün sezon oltaya geldi. Ağlar da oltalar da doldu.'],
+      ['A record carp came up in your net. The photo is in the local paper.', 'Ağına rekor büyüklükte bir sazan takıldı. Fotoğrafı yerel gazetede.'],
+      ['Calm water all season. You barely missed a day.', 'Bütün sezon su çarşaf gibiydi. Neredeyse bir gün bile kaçırmadın.'],
+    ];
+  const tr = c.p.countryId === 'tr';
+  const black = sea === 'the Black Sea' || sea === 'the Bosphorus';
+  return [
+    tr && black
+      ? ['The anchovies came early and stayed late. Nets full all season.', 'Hamsi erken geldi, geç gitti. Bütün sezon ağlar doldu taştı.']
+      : c.p.countryId === 'br'
+        ? [`The sardines came early to ${sea} and stayed late. Nets full all season.`, `Sardalyalar ${seaTr} kıyılarına erken geldi, geç gitti. Bütün sezon ağlar doldu taştı.`]
+        : [`The mackerel came early to ${sea} and stayed late. Nets full all season.`, `Uskumrular ${seaTr} kıyılarına erken geldi, geç gitti. Bütün sezon ağlar doldu taştı.`],
+    tr
+      ? ['A shoal of bluefish found your nets three nights in a row.', 'Bir lüfer sürüsü üç gece üst üste senin ağlarını buldu.']
+      : ['A shoal of sea bass found your nets three nights in a row.', 'Bir levrek sürüsü üç gece üst üste senin ağlarını buldu.'],
+    ['Calm seas all season. You barely missed a day.', 'Bütün sezon deniz çarşaf gibiydi. Neredeyse bir gün bile kaçırmadın.'],
+  ];
+}
 const FISH_BAD: Lines = [
   ['An empty season. The fish moved somewhere with better weather.', 'Boş bir sezon. Balıklar havası daha güzel bir yere taşınmış.'],
   ['A storm tore your best net. The new one cost a fortune.', 'Fırtına en iyi ağını parçaladı. Yenisi bir servete patladı.'],
   ['The engine died far from shore. The tow was not cheap.', 'Motor açıkta stop etti. Römorkör hiç ucuz değildi.'],
 ];
-const REALTOR_GOOD: Lines = [
-  ['You sold a seaside villa to a man who paid in one transfer.', 'Deniz kenarındaki bir villayı tek havaleyle ödeyen bir adama sattın.'],
+const realtorGood = (c: Ctx): Lines => [
+  isCoastal(c.p.city)
+    ? ['You sold a seaside villa to a man who paid in one transfer.', 'Deniz kenarındaki bir villayı tek havaleyle ödeyen bir adama sattın.']
+    : ['You sold a hillside villa to a man who paid in one transfer.', 'Tepedeki bir villayı tek havaleyle ödeyen bir adama sattın.'],
   ['A whole new apartment block sold out through you.', 'Yeni bir apartmanın bütün daireleri senin üzerinden satıldı.'],
   ['A famous chef bought a restaurant building from you.', 'Ünlü bir şef senden bir restoran binası aldı.'],
 ];
@@ -462,11 +480,11 @@ export function careerOnYear(c: Ctx): void {
     case 'artist':
       return artistYear(c);
     case 'farmer':
-      return seasonYear(c, FARM_GOOD, FARM_BAD, [30, 90], [20, 60], 0.12, 0.1);
+      return seasonYear(c, farmGood(c), FARM_BAD, [30, 90], [20, 60], 0.12, 0.1);
     case 'fisher':
-      return seasonYear(c, FISH_GOOD, FISH_BAD, [30, 90], [20, 50], 0.12, 0.1);
+      return seasonYear(c, fishGood(c), FISH_BAD, [30, 90], [20, 50], 0.12, 0.1);
     case 'realtor':
-      return seasonYear(c, REALTOR_GOOD, REALTOR_BAD, [40, 150], [10, 30], 0.2, 0.08);
+      return seasonYear(c, realtorGood(c), REALTOR_BAD, [40, 150], [10, 30], 0.2, 0.08);
     case 'pilot':
       if (p.stats.health < 40) {
         const title = c.h.jobTitle();

@@ -1,6 +1,7 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import { acc, cap, dat, gen, kin, nm, single, wage, who, wth, officeJob } from './util';
 import { catName, syncFlagCat } from '../../engine/pets';
+import { byCountry, cityOf, didFor, He, him, his, markFor } from './events-flavour';
 
 // v0.2 content: friends, pets, work, home, kids, old age, and events that create new heirlooms.
 
@@ -16,12 +17,16 @@ const cityTr = (en: string, form: 0 | 1 | 2) => CITY_TR[en]?.[form] ?? en;
 
 const HABITS_EN = ['plays the drums at 2 a.m.', 'labels every item in the fridge', 'has a pet snake named Dave', 'is never, ever there'];
 const HABITS_TR = [
-  "gece 2'de davul çalıyor.",
+  'gece ikide davul çalıyor.',
   'buzdolabındaki her şeyi tek tek etiketliyor.',
   'Dave adında bir yılan besliyor.',
   'hiç ama hiç ortalıkta yok.',
 ];
 const habitTr = (en: string) => HABITS_TR[HABITS_EN.indexOf(en)] ?? en;
+
+/** Friends at a marrying age who have not had their wedding in this life yet. */
+const weddable = (c: Ctx) =>
+  c.h.relatives('friend').filter((f) => c.h.ageOf(f.person) >= 22 && c.h.ageOf(f.person) <= 50 && !didFor(c, 'fwed', f.person.id));
 
 const heirChoice = (i: number): ChoiceDef => ({
   id: `heir${i}`,
@@ -56,7 +61,7 @@ export const moreEvents: EventDef[] = [
     title: (c) =>
       c.t(`${nm(c)} from your class asks if you want to be best friends.`, `Sınıftan ${nm(c)} sana "Kanka olalım mı?" diye soruyor.`),
     text: (c) =>
-      c.t('They offer you half a chocolate bar as a signing bonus.', 'İmza bonusu olarak yarım çikolata teklif ediyor.'),
+      c.t(`${He(who(c))} offers you half a chocolate bar as a signing bonus.`, 'İmza bonusu olarak yarım çikolata teklif ediyor.'),
     choices: [
       {
         id: 'yes',
@@ -83,11 +88,13 @@ export const moreEvents: EventDef[] = [
     id: 'base.friend_moves',
     category: 'random',
     minAge: 10,
+    maxAge: 60,
     once: true,
-    when: (c) => c.h.relatives('friend').length > 0,
+    when: (c) => c.h.relatives('friend').some((f) => c.h.ageOf(f.person) <= 65),
     setup: (c) => {
-      c.vars.pid = c.h.relatives('friend')[0].person.id;
-      c.vars.city = c.rng.pick(['Berlin', 'Toronto', 'Melbourne', 'Dubai', 'Lisbon']);
+      c.vars.pid = c.h.relatives('friend').find((f) => c.h.ageOf(f.person) <= 65)!.person.id;
+      // never "moving to Berlin" when you already live in Berlin
+      c.vars.city = c.rng.pick(['Berlin', 'Toronto', 'Melbourne', 'Dubai', 'Lisbon'].filter((x) => x !== c.p.city));
     },
     title: (c) =>
       c.t(`${nm(c)} is moving to ${c.vars.city}.`, `${nm(c)} ${cityTr(String(c.vars.city), 1)} taşınıyor.`),
@@ -326,8 +333,9 @@ export const moreEvents: EventDef[] = [
   {
     id: 'base.coworker_birthday',
     category: 'work',
+    maxAge: 70,
     cooldown: 5,
-    when: (c) => !!c.p.jobId,
+    when: officeJob,
     text: '',
     apply: (c) => {
       c.h.money(-wage(c, 20));
@@ -387,6 +395,7 @@ export const moreEvents: EventDef[] = [
     id: 'base.stock_tip',
     category: 'money',
     minAge: 21,
+    maxAge: 80,
     cooldown: 8,
     when: (c) => c.p.money > wage(c, 3000),
     setup: (c) => {
@@ -395,7 +404,7 @@ export const moreEvents: EventDef[] = [
     title: (c) =>
       c.t('Your cousin swears a small company is about to "explode."', 'Kuzenin, küçük bir şirketin "uçmak üzere" olduğuna yemin ediyor.'),
     text: (c) =>
-      c.t(`He wants you to put ${c.h.fmt(Number(c.vars.amt))} into it.`, `İçine ${c.h.fmt(Number(c.vars.amt))} yatırmanı istiyor.`),
+      c.t(`He wants you to put ${c.h.fmt(Number(c.vars.amt))} into it.`, `Bu şirkete ${c.h.fmt(Number(c.vars.amt))} yatırmanı istiyor.`),
     choices: [
       {
         id: 'invest',
@@ -437,7 +446,7 @@ export const moreEvents: EventDef[] = [
     minAge: 20,
     cooldown: 8,
     title: (c) =>
-      c.t('Your neighbor drills into the wall every Sunday at 8 a.m.', 'Komşun her pazar sabah 8\'de duvarı matkapla deliyor.'),
+      c.t('Your neighbor drills into the wall every Sunday at 8 a.m.', 'Komşun her pazar sabah sekizde duvarı matkapla deliyor.'),
     text: (c) => c.t('You are starting to hear drills in your dreams.', 'Rüyalarında bile matkap sesi duymaya başladın.'),
     choices: [
       {
@@ -446,8 +455,8 @@ export const moreEvents: EventDef[] = [
         resolve: (c) => {
           if (c.rng.chance(0.6))
             return c.t(
-              'You talked. He apologized and brought you baklava. Peace achieved.',
-              'Konuştunuz. Özür diledi ve sana baklava getirdi. Barış sağlandı.',
+              `You talked. He apologized and brought you ${byCountry(c, { tr: 'baklava', other: 'a tin of cookies' })}. Peace achieved.`,
+              `Konuştunuz. Özür diledi ve sana ${byCountry(c, { tr: 'baklava', other: 'bir kutu kurabiye' })} getirdi. Barış sağlandı.`,
             );
           c.h.stat('happiness', -3);
           return c.t('You talked. He started drilling on Saturdays too.', 'Konuştunuz. Artık cumartesileri de deliyor.');
@@ -512,9 +521,11 @@ export const moreEvents: EventDef[] = [
     minAge: 24,
     maxAge: 45,
     cooldown: 5,
-    when: (c) => c.h.relatives('friend').length > 0,
+    // each friend marries once, and only at a marrying age
+    when: (c) => weddable(c).length > 0,
     setup: (c) => {
-      c.vars.pid = c.rng.pick(c.h.relatives('friend')).person.id;
+      c.vars.pid = c.rng.pick(weddable(c)).person.id;
+      markFor(c, 'fwed', String(c.vars.pid));
     },
     title: (c) =>
       c.t(
@@ -535,7 +546,7 @@ export const moreEvents: EventDef[] = [
       },
       {
         id: 'roast',
-        label: (c) => c.t('Roast them', 'Tiye al'),
+        label: (c) => c.t(`Roast ${him(who(c))}`, 'Tiye al'),
         badge: 'Risky',
         resolve: (c) => {
           if (c.rng.chance(0.5)) {
@@ -543,9 +554,11 @@ export const moreEvents: EventDef[] = [
             return c.t('The roast killed. Even the grandmother laughed.', 'Salonu yıktın. Babaanne bile güldü.');
           }
           c.h.closeness(String(c.vars.pid), -15);
+          // the other family goes quiet: the groom's side when your friend is the bride, and the other way round
+          const bride = who(c).gender === 'female';
           return c.t(
-            `You told the story about ${nm(c)}'s ex. The groom's side went very quiet.`,
-            `${gen(nm(c))} eski sevgilisinin hikâyesini anlattın. Damat tarafı buz kesti.`,
+            `You told the story about ${nm(c)}'s ex. The ${bride ? "groom's" : "bride's"} side went very quiet.`,
+            `${gen(nm(c))} eski sevgilisinin hikâyesini anlattın. ${bride ? 'Damat' : 'Gelin'} tarafı buz kesti.`,
           );
         },
       },
@@ -566,15 +579,15 @@ export const moreEvents: EventDef[] = [
       const k = kin(c, who(c), 'child');
       return c.t(
         `You caught your ${k} ${nm(c)} sneaking back in at 3 a.m.`,
-        `${cap(k)} ${acc(nm(c))} gece 3'te eve gizlice girerken yakaladın.`,
+        `${cap(k)} ${acc(nm(c))} gece üçte eve gizlice girerken yakaladın.`,
       );
     },
     text: (c) =>
-      c.t('They are holding their shoes and a very guilty face.', 'Elinde ayakkabıları, yüzünde koca bir suçluluk ifadesi var.'),
+      c.t(`${He(who(c))} is holding ${his(who(c))} shoes and a very guilty face.`, 'Elinde ayakkabıları, yüzünde koca bir suçluluk ifadesi var.'),
     choices: [
       {
         id: 'ground',
-        label: (c) => c.t('Ground them for a month', 'Bir ay ev hapsi ver'),
+        label: (c) => c.t(`Ground ${him(who(c))} for a month`, 'Bir ay ev hapsi ver'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), -8);
           return c.t(
@@ -631,18 +644,19 @@ export const moreEvents: EventDef[] = [
     id: 'base.retirement_trip',
     category: 'random',
     minAge: 62,
+    maxAge: 90,
     once: true,
     when: (c) => c.p.retired && c.p.money > wage(c, 5000),
     title: (c) => c.t('You finally have time to travel.', 'Nihayet gezmeye vaktin var.'),
-    text: (c) => c.t('The travel agent is very excited about cruises.', 'Seyahat acentesi cruise turları konusunda fazlasıyla heyecanlı.'),
+    text: (c) => c.t('The travel agent is very excited about cruises.', 'Seyahat acentesi gemi turları konusunda fazlasıyla heyecanlı.'),
     choices: [
       {
         id: 'cruise',
-        label: (c) => c.t('Take a cruise', 'Cruise turuna çık'),
+        label: (c) => c.t('Take a cruise', 'Gemi turuna çık'),
         resolve: (c) => {
           c.h.money(-wage(c, 4000));
           c.h.stat('happiness', 10);
-          return c.t("You took a cruise and won the ship's karaoke contest.", 'Cruise turuna çıktın ve gemideki karaoke yarışmasını kazandın.');
+          return c.t("You took a cruise and won the ship's karaoke contest.", 'Gemi turuna çıktın ve gemideki karaoke yarışmasını kazandın.');
         },
       },
       {
@@ -749,7 +763,7 @@ export const moreEvents: EventDef[] = [
           if (c.rng.chance(0.4 + c.p.stats.smarts / 400)) {
             c.h.addHeirloom(
               'painting',
-              c.t(`${c.p.firstName}'s view of ${c.p.city}`, `${gen(c.p.firstName)} ${c.p.city} manzarası`),
+              c.t(`${c.p.firstName}'s view of ${c.p.city}`, `${gen(c.p.firstName)} ${cityOf(c)} manzarası`),
               c.t(
                 `${c.p.firstName} painted it in ${c.s.year}. It hung in the hallway ever since.`,
                 `${c.p.firstName} bunu ${c.s.year} yılında yaptı. O günden beri koridorda asılı.`,
@@ -757,7 +771,7 @@ export const moreEvents: EventDef[] = [
             );
             return c.t(
               `Your painting of ${c.p.city} turned out beautiful. It will hang in the family hallway for generations.`,
-              `${c.p.city} tablon harika oldu. Nesiller boyu ailenin koridorunda asılı kalacak.`,
+              `${cityOf(c)} tablon harika oldu. Nesiller boyu ailenin koridorunda asılı kalacak.`,
             );
           }
           return c.t(

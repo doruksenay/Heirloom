@@ -1,5 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { abl, acc, cap, dat, gen, loc, wage, who, wth } from './util';
+import { byCountry, cityOf, he, He, him, his, inTr, type ByCountry } from './events-flavour';
 
 // Childhood, ages 1–12: toddler chaos, kindergarten, primary school and the last years before the teens.
 // Most events are `once`: a childhood is ~12 events long and should not repeat itself.
@@ -125,14 +126,33 @@ function line(c: Ctx, lines: readonly (readonly [string, string])[]): string {
   return c.t(lines[i][0], lines[i][1]);
 }
 
-const TOYS = [
-  { en: 'stuffed bunny', name: 'Mr. Floppy', tr: 'peluş tavşanın', nameTr: 'Pofuduk' },
-  { en: 'teddy bear', name: 'Captain Honey', tr: 'oyuncak ayın', nameTr: 'Bal Kaptan' },
-  { en: 'knitted elephant', name: 'Pepper', tr: 'örgü filin', nameTr: 'Biber' },
-  { en: 'one-eared dog', name: 'Biscuit', tr: 'tek kulaklı köpeğin', nameTr: 'Kurabiye' },
-] as const;
+/** Toys and the names a child in each country would give them (the same name in both languages: Pofuduk only in Türkiye). */
+const TOYS: { en: string; tr: string; trAcc: string; names: ByCountry<string> }[] = [
+  { en: 'stuffed bunny', tr: 'peluş tavşanın', trAcc: 'peluş tavşanını', names: { tr: 'Pofuduk', de: 'Hoppel', br: 'Fofinho', other: 'Mr. Floppy' } },
+  { en: 'teddy bear', tr: 'oyuncak ayın', trAcc: 'oyuncak ayını', names: { tr: 'Bal Kaptan', de: 'Kapitän Honig', br: 'Capitão Mel', other: 'Captain Honey' } },
+  { en: 'knitted elephant', tr: 'örgü filin', trAcc: 'örgü filini', names: { tr: 'Biber', de: 'Pfeffer', br: 'Pimenta', other: 'Pepper' } },
+  { en: 'one-eared dog', tr: 'tek kulaklı köpeğin', trAcc: 'tek kulaklı köpeğini', names: { tr: 'Kurabiye', de: 'Keks', br: 'Biscoito', other: 'Biscuit' } },
+];
 const toy = (c: Ctx) => TOYS[Number(c.vars.toy) || 0];
-const toyName = (c: Ctx, form: Form = 'nom') => c.t(toy(c).name, SFX[form](toy(c).nameTr));
+const toyNm = (c: Ctx) => byCountry(c, toy(c).names);
+const toyName = (c: Ctx, form: Form = 'nom') => c.t(toyNm(c), SFX[form](toyNm(c)));
+
+/** Imaginary friends: [English full, Turkish full, English short, Turkish short, female]. Kemal only in Türkiye. */
+function imaginary(c: Ctx): [string, string, string, string, boolean] {
+  const i = Number(c.vars.imf);
+  if (i === 3) return inTr(c) ? ['Invisible Kemal', 'Görünmez Kemal', 'Kemal', 'Görünmez Kemal', false] : ['Invisible Kevin', 'Görünmez Kevin', 'Kevin', 'Görünmez Kevin', false];
+  return (
+    [
+      ['Mr. Whiskers', 'Bay Bıyık', 'Mr. Whiskers', 'Bay Bıyık', false],
+      ['Captain Zog', 'Kaptan Zog', 'Captain Zog', 'Kaptan Zog', false],
+      ['Lulu the dragon', 'Ejderha Lulu', 'Lulu', 'Lulu', true],
+    ] as [string, string, string, string, boolean][]
+  )[i];
+}
+/** English pronouns for the grandparent in vars.gg. */
+const gpHe = (c: Ctx) => (c.vars.gg === 'm' ? 'he' : 'she');
+const gpHim = (c: Ctx) => (c.vars.gg === 'm' ? 'him' : 'her');
+const gpHis = (c: Ctx) => (c.vars.gg === 'm' ? 'his' : 'her');
 
 // ------------------------------------------------------------------ events
 
@@ -153,7 +173,7 @@ export const childEvents: EventDef[] = [
     choices: [
       {
         id: 'toward',
-        label: (c) => c.t('Wobble toward them', 'Ona doğru paytak paytak yürü'),
+        label: (c) => c.t(`Wobble toward ${him(who(c))}`, 'Ona doğru paytak paytak yürü'),
         tone: 'good',
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 6);
@@ -290,7 +310,7 @@ export const childEvents: EventDef[] = [
       pickParent(c);
       c.vars.toy = c.rng.int(0, TOYS.length - 1);
     },
-    title: (c) => c.t(`${toy(c).name} is missing!`, `${toy(c).nameTr} kayıp!`),
+    title: (c) => c.t(`${toyNm(c)} is missing!`, `${toyNm(c)} kayıp!`),
     text: (c) =>
       c.t(
         `You can't sleep without your ${toy(c).en}. You've been crying for two hours.`,
@@ -379,7 +399,7 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'lap',
-        label: (c) => c.t('Fall asleep in their lap', 'Kucağında uyuyakal'),
+        label: (c) => c.t(`Fall asleep in ${gpHis(c)} lap`, 'Kucağında uyuyakal'),
         tone: 'good',
         resolve: (c) => {
           c.h.stat('happiness', 4);
@@ -539,7 +559,7 @@ export const childEvents: EventDef[] = [
     when: hasParent,
     setup: (c) => pickParent(c),
     title: (c) => c.t(`${Rk(c)} is singing you a lullaby.`, `${Rk(c)} sana ninni söylüyor.`),
-    text: (c) => c.t('The same one they heard as a baby.', 'Kendisi bebekken dinlediği ninninin ta kendisi.'),
+    text: (c) => c.t(`The same one ${he(who(c))} heard as a baby.`, 'Kendisi bebekken dinlediği ninninin ta kendisi.'),
     choices: [
       {
         id: 'sleep',
@@ -549,7 +569,7 @@ export const childEvents: EventDef[] = [
           c.h.stat('happiness', 3);
           c.h.closeness(String(c.vars.pid), 3);
           return c.t(
-            'You fell asleep halfway through the second verse. They kept singing anyway.',
+            `You fell asleep halfway through the second verse. ${He(who(c))} kept singing anyway.`,
             'İkinci kıtanın ortasında uyuyakaldın. O yine de söylemeye devam etti.',
           );
         },
@@ -617,7 +637,7 @@ export const childEvents: EventDef[] = [
             c.h.closeness(String(c.vars.sid), -2);
             const s = who(c, 'sid').firstName;
             return c.t(
-              `You climbed into ${rk(c, 'sid', 'gen')} bed and kicked all night. ${s} calls it the worst night of their life.`,
+              `You climbed into ${rk(c, 'sid', 'gen')} bed and kicked all night. ${s} calls it the worst night of ${his(who(c, 'sid'))} life.`,
               `${cap(rk(c, 'sid', 'gen'))} yatağına girip bütün gece tekme attın. ${s} buna hayatının en kötü gecesi diyor.`,
             );
           }
@@ -681,7 +701,7 @@ export const childEvents: EventDef[] = [
     choices: [
       {
         id: 'cling',
-        label: (c) => c.t('Cling to their leg', 'Bacağına yapış'),
+        label: (c) => c.t(`Cling to ${his(who(c))} leg`, 'Bacağına yapış'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 3);
           c.h.stat('happiness', -1);
@@ -728,34 +748,32 @@ export const childEvents: EventDef[] = [
       c.vars.imf = c.rng.int(0, 3);
     },
     title: (c) => {
-      const i = Number(c.vars.imf);
-      const en = ['Mr. Whiskers', 'Captain Zog', 'Lulu the dragon', 'Invisible Kevin'][i];
-      const tr = ['Bay Bıyık', 'Kaptan Zog', 'Ejderha Lulu', 'Görünmez Kemal'][i];
-      return c.t(`You have a new friend: ${en}. Nobody else can see them.`, `Yeni bir arkadaşın var: ${tr}. Senden başka kimse onu göremiyor.`);
+      const [en, tr, , , f] = imaginary(c);
+      return c.t(`You have a new friend: ${en}. Nobody else can see ${f ? 'her' : 'him'}.`, `Yeni bir arkadaşın var: ${tr}. Senden başka kimse onu göremiyor.`);
     },
-    text: (c) => c.t('They have strong opinions about bedtime.', 'Yatma saati konusunda kesin fikirleri var.'),
+    text: (c) => c.t(`${imaginary(c)[4] ? 'She has' : 'He has'} strong opinions about bedtime.`, 'Yatma saati konusunda kesin fikirleri var.'),
     choices: [
       {
         id: 'plate',
-        label: (c) => c.t('Set a plate for them at dinner', 'Sofrada ona da tabak koy'),
+        label: (c) => c.t(`Set a plate for ${imaginary(c)[4] ? 'her' : 'him'} at dinner`, 'Sofrada ona da tabak koy'),
         tone: 'good',
         resolve: (c) => {
-          const i = Number(c.vars.imf);
-          const n = c.t(['Mr. Whiskers', 'Captain Zog', 'Lulu', 'Kevin'][i], ['Bay Bıyık', 'Kaptan Zog', 'Lulu', 'Görünmez Kemal'][i]);
+          const [, , en, tr, f] = imaginary(c);
+          const n = c.t(en, tr);
           c.h.stat('happiness', 4);
           allParents(c, 2);
           return c.t(
-            `Your family set an extra plate for ${n} for a whole month. ${n} never finished their soup.`,
+            `Your family set an extra plate for ${n} for a whole month. ${n} never finished ${f ? 'her' : 'his'} soup.`,
             `Ailen bir ay boyunca sofraya ${gen(n)} tabağını da koydu. ${n} çorbasını hiç bitirmedi.`,
           );
         },
       },
       {
         id: 'blame',
-        label: (c) => c.t('Blame them for everything', 'Her şeyin suçunu ona at'),
+        label: (c) => c.t(`Blame ${imaginary(c)[4] ? 'her' : 'him'} for everything`, 'Her şeyin suçunu ona at'),
         resolve: (c) => {
-          const i = Number(c.vars.imf);
-          const n = c.t(['Mr. Whiskers', 'Captain Zog', 'Lulu', 'Kevin'][i], ['Bay Bıyık', 'Kaptan Zog', 'Lulu', 'Görünmez Kemal'][i]);
+          const [, , en, tr] = imaginary(c);
+          const n = c.t(en, tr);
           c.h.stat('happiness', 2);
           allParents(c, -2);
           return c.t(
@@ -766,10 +784,10 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'goodbye',
-        label: (c) => c.t("Tell them you've made real friends", 'Artık gerçek arkadaşların olduğunu söyle'),
+        label: (c) => c.t(`Tell ${imaginary(c)[4] ? 'her' : 'him'} you've made real friends`, 'Artık gerçek arkadaşların olduğunu söyle'),
         resolve: (c) => {
-          const i = Number(c.vars.imf);
-          const n = c.t(['Mr. Whiskers', 'Captain Zog', 'Lulu', 'Kevin'][i], ['Bay Bıyık', 'Kaptan Zog', 'Lulu', 'Görünmez Kemal'][i]);
+          const [, , en, tr] = imaginary(c);
+          const n = c.t(en, tr);
           c.h.stat('smarts', 2);
           c.h.stat('happiness', -1);
           return c.t(
@@ -936,12 +954,12 @@ export const childEvents: EventDef[] = [
           const s = who(c, 'sid').firstName;
           c.h.closeness(String(c.vars.sid), 6);
           c.h.stat('happiness', 1);
-          return c.t(`You offered to share. ${s} was so surprised they agreed. A historic peace.`, `Paylaşmayı önerdin. ${s} öyle şaşırdı ki kabul etti. Tarihî bir barış.`);
+          return c.t(`You offered to share. ${s} was so surprised ${he(who(c, 'sid'))} agreed. A historic peace.`, `Paylaşmayı önerdin. ${s} öyle şaşırdı ki kabul etti. Tarihî bir barış.`);
         },
       },
       {
         id: 'tell',
-        label: (c) => c.t('Tell on them', 'Gidip şikâyet et'),
+        label: (c) => c.t(`Tell on ${him(who(c, 'sid'))}`, 'Gidip şikâyet et'),
         resolve: (c) => {
           const s = who(c, 'sid').firstName;
           c.h.closeness(String(c.vars.sid), -3);
@@ -953,7 +971,7 @@ export const childEvents: EventDef[] = [
             );
           }
           c.h.stat('happiness', -2);
-          return c.t('You told on them. You were both sent to your rooms.', 'Şikâyet ettin. İkiniz de odanıza gönderildiniz.');
+          return c.t(`You told on ${him(who(c, 'sid'))}. You were both sent to your rooms.`, 'Şikâyet ettin. İkiniz de odanıza gönderildiniz.');
         },
       },
     ],
@@ -969,7 +987,7 @@ export const childEvents: EventDef[] = [
     setup: (c) => pickParent(c),
     title: (c) => c.t('The training wheels are coming off.', 'Bisikletinin yan tekerlekleri sökülüyor.'),
     text: (c) =>
-      c.t(`${Rk(c)} is holding the back of the seat. "I won't let go," they promise.`, `${Rk(c)} selenin arkasından tutuyor. "Bırakmayacağım," diyor.`),
+      c.t(`${Rk(c)} is holding the back of the seat. "I won't let go," ${he(who(c))} promises.`, `${Rk(c)} selenin arkasından tutuyor. "Bırakmayacağım," diyor.`),
     choices: [
       {
         id: 'pedal',
@@ -994,7 +1012,7 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'promise',
-        label: (c) => c.t('Make them swear not to let go', 'Bırakmayacağına yemin ettir'),
+        label: (c) => c.t(`Make ${him(who(c))} swear not to let go`, 'Bırakmayacağına yemin ettir'),
         resolve: (c) => {
           c.h.flag('can_ride_bike');
           c.h.stat('happiness', 4);
@@ -1065,7 +1083,7 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'wave',
-        label: (c) => c.t('Wave at them from the stage', 'Sahneden el salla'),
+        label: (c) => c.t(`Wave at ${him(who(c))} from the stage`, 'Sahneden el salla'),
         resolve: (c) => {
           c.h.stat('happiness', 2);
           c.h.closeness(String(c.vars.pid), 5);
@@ -1112,7 +1130,7 @@ export const childEvents: EventDef[] = [
           c.h.stat('happiness', 1);
           c.h.closeness(String(c.vars.pid), 4);
           return c.t(
-            `You confessed. ${Rk(c)} laughed so hard they forgot to be angry, then wiped your face.`,
+            `You confessed. ${Rk(c)} laughed so hard ${he(who(c))} forgot to be angry, then wiped your face.`,
             `İtiraf ettin. ${Rk(c)} öyle güldü ki kızmayı unuttu, sonra da yüzünü sildi.`,
           );
         },
@@ -1871,7 +1889,8 @@ export const childEvents: EventDef[] = [
       const n = who(c).firstName;
       return c.t(`${n} offers you a holographic card for your lunch.`, `${n} beslenmene karşılık sana hologramlı bir kart teklif ediyor.`);
     },
-    text: (c) => c.t('It shimmers. Your lunch is a homemade cheese pastry.', 'Kart ışıl ışıl parlıyor. Senin beslenmende ise evde yapılmış peynirli poğaça var.'),
+    text: (c) =>
+      c.t('It shimmers. Your lunch is a homemade cheese pastry.', `Kart ışıl ışıl parlıyor. Senin beslenmende ise evde yapılmış peynirli ${inTr(c) ? 'poğaça' : 'çörek'} var.`),
     choices: [
       {
         id: 'trade',
@@ -1901,7 +1920,7 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'share',
-        label: (c) => c.t('Share the pastry instead', 'Poğaçayı paylaş'),
+        label: (c) => c.t('Share the pastry instead', inTr(c) ? 'Poğaçayı paylaş' : 'Çöreği paylaş'),
         tone: 'good',
         resolve: (c) => {
           const p = who(c);
@@ -1909,7 +1928,7 @@ export const childEvents: EventDef[] = [
           c.h.stat('happiness', 3);
           return c.t(
             `You split the pastry with ${p.firstName}. ${p.firstName} gave you the card anyway. Best deal of the year.`,
-            `Poğaçayı ${wth(p.firstName)} paylaştın. ${p.firstName} kartı yine de sana verdi. Yılın en iyi anlaşması.`,
+            `${inTr(c) ? 'Poğaçayı' : 'Çöreği'} ${wth(p.firstName)} paylaştın. ${p.firstName} kartı yine de sana verdi. Yılın en iyi anlaşması.`,
           );
         },
       },
@@ -1970,7 +1989,7 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'flower',
-        label: (c) => c.t('Bring them a flower', 'Bir çiçek götür'),
+        label: (c) => c.t(`Bring ${him(who(c, 'tid'))} a flower`, 'Bir çiçek götür'),
         resolve: (c) => {
           const t = who(c, 'tid');
           const en = `${t.gender === 'female' ? 'Mrs.' : 'Mr.'} ${t.lastName}`;
@@ -2170,7 +2189,7 @@ export const childEvents: EventDef[] = [
             ),
           );
           return c.t(
-            `You confessed to ${rk(c)}. Instead of shouting, they told you every scratch on it has a story, and now so does this one.`,
+            `You confessed to ${rk(c)}. Instead of shouting, ${he(who(c))} told you every scratch on it has a story, and now so does this one.`,
             `${Rk(c, 'pid', 'dat')} itiraf ettin. Bağırmak yerine, üstündeki her çiziğin bir hikâyesi olduğunu, artık bunun da olduğunu söyledi.`,
           );
         },
@@ -2322,7 +2341,7 @@ export const childEvents: EventDef[] = [
       const i = Number(c.vars.game);
       return c.t(`${GP(c)} wants to teach you ${['backgammon', 'chess', 'dominoes'][i]}.`, `${GP(c)} sana ${['tavla', 'satranç', 'domino'][i]} öğretmek istiyor.`);
     },
-    text: (c) => c.t('Nobody in the family has won against them in forty years.', 'Kırk yıldır ailede kimse onu yenemedi.'),
+    text: (c) => c.t(`Nobody in the family has beaten ${gpHim(c)} in forty years.`, 'Kırk yıldır ailede kimse onu yenemedi.'),
     choices: [
       {
         id: 'learn',
@@ -2344,17 +2363,17 @@ export const childEvents: EventDef[] = [
           if (c.rng.chance(0.2 + c.p.stats.smarts / 300)) {
             c.h.stat('happiness', 6);
             return c.t(
-              `You beat ${gp(c)}! They demanded a rematch and won the next nine.`,
+              `You beat ${gp(c)}! ${cap(gpHe(c))} demanded a rematch and won the next nine.`,
               `${cap(gp(c, 'acc'))} yendin! Hemen rövanş istedi ve sonraki dokuz oyunu kazandı.`,
             );
           }
           c.h.stat('happiness', -1);
-          return c.t(`You lost, then flipped the board. ${GP(c)} laughed until they cried.`, `Kaybettin, sonra tahtayı devirdin. ${GP(c)} gözünden yaş gelene kadar güldü.`);
+          return c.t(`You lost, then flipped the board. ${GP(c)} laughed until ${gpHe(c)} cried.`, `Kaybettin, sonra tahtayı devirdin. ${GP(c)} gözünden yaş gelene kadar güldü.`);
         },
       },
       {
         id: 'stories',
-        label: (c) => c.t('Just listen to their stories', 'Sadece anlattıklarını dinle'),
+        label: (c) => c.t(`Just listen to ${gpHis(c)} stories`, 'Sadece anlattıklarını dinle'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
           c.h.stat('smarts', 1);
@@ -2650,7 +2669,7 @@ export const childEvents: EventDef[] = [
     title: (c) =>
       c.t(
         `You took the wrong bus home and now you're lost in ${c.p.city}.`,
-        `Eve dönerken yanlış otobüse bindin ve ${loc(c.p.city)} kayboldun.`,
+        `Eve dönerken yanlış otobüse bindin ve ${loc(cityOf(c))} kayboldun.`,
       ),
     text: (c) => c.t('Nothing looks familiar. It is getting dark.', 'Hiçbir yer tanıdık gelmiyor. Hava kararıyor.'),
     choices: [
@@ -2877,7 +2896,7 @@ export const childEvents: EventDef[] = [
             }
             c.h.closeness(String(c.vars.sid), -5);
             return c.t(
-              `You accused ${rk(c, 'sid')}. It wasn't them. ${s} has not let it go.`,
+              `You accused ${rk(c, 'sid')}. It wasn't ${him(who(c, 'sid'))}. ${s} has not let it go.`,
               `${cap(rk(c, 'sid', 'acc'))} suçladın. ${s} yapmamıştı. Hâlâ yüzüne vuruyor.`,
             );
           }
@@ -2947,7 +2966,7 @@ export const childEvents: EventDef[] = [
           c.h.closeness(String(c.vars.pid), 8);
           c.h.stat('happiness', 3);
           return c.t(
-            `You saved for a month and bought ${rk(c)} a keyring that says "World's Best ${mom ? 'Mom' : 'Dad'}". It's still on their keys.`,
+            `You saved for a month and bought ${rk(c)} a keyring that says "World's Best ${mom ? 'Mom' : 'Dad'}". It's still on ${his(who(c))} keys.`,
             `Bir ay biriktirip ${rk(c, 'pid', 'dat')} üstünde "Dünyanın En İyi ${mom ? 'Annesi' : 'Babası'}" yazan bir anahtarlık aldın. Hâlâ anahtarlarında asılı.`,
           );
         },
@@ -2971,8 +2990,8 @@ export const childEvents: EventDef[] = [
       c.h.unflag(`lost_toy_${c.vars.toy}`);
       c.h.stat('happiness', 6);
       return c.t(
-        `Clearing out the back of a wardrobe, you found your ${toy(c).en} ${toy(c).name}, lost all those years ago. You hugged it a bit longer than someone your age should.`,
-        `Gardırobun dibini toplarken yıllar önce kaybolan ${toy(c).tr} ${toyName(c, 'acc')} buldun. Senin yaşında birine göre biraz fazla uzun sarıldın.`,
+        `Clearing out the back of a wardrobe, you found your ${toy(c).en} ${toyNm(c)}, lost all those years ago. You hugged it a bit longer than someone your age should.`,
+        `Gardırobun dibini toplarken yıllar önce kaybolan ${toy(c).trAcc}, ${toyName(c, 'acc')} buldun. Senin yaşında birine göre biraz fazla uzun sarıldın.`,
       );
     },
   },
@@ -3066,7 +3085,7 @@ export const childEvents: EventDef[] = [
     choices: [
       {
         id: 'interview',
-        label: (c) => c.t('Interview them properly', 'Doğru dürüst röportaj yap'),
+        label: (c) => c.t(`Interview ${him(who(c))} properly`, 'Doğru dürüst röportaj yap'),
         tone: 'good',
         resolve: (c) => {
           c.h.stat('smarts', 3);

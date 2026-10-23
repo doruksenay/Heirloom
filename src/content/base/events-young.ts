@@ -1,5 +1,6 @@
 import type { EventDef } from '../types';
-import { cap, dat, gen, kin, nm, who, wth } from './util';
+import { cap, dat, gen, kin, nm, wage, who, wth } from './util';
+import { coastal, He, he, him } from './events-flavour';
 import { catName, syncFlagCat } from '../../engine/pets';
 
 // Childhood, school and teen years.
@@ -75,10 +76,11 @@ export const youngEvents: EventDef[] = [
     once: true,
     text: '',
     apply: (c) => {
-      c.h.money(5);
+      const amt = wage(c, 5);
+      c.h.money(amt);
       return c.t(
-        `You lost your first tooth. The tooth fairy left you ${c.h.fmt(5)} and a suspicious amount of glitter.`,
-        `İlk dişin düştü. Diş perisi yastığının altına ${c.h.fmt(5)} ve şüpheli miktarda sim bıraktı.`,
+        `You lost your first tooth. The tooth fairy left you ${c.h.fmt(amt)} and a suspicious amount of glitter.`,
+        `İlk dişin düştü. Diş perisi yastığının altına ${c.h.fmt(amt)} ve şüpheli miktarda sim bıraktı.`,
       );
     },
   },
@@ -292,14 +294,14 @@ export const youngEvents: EventDef[] = [
     when: (c) => c.p.school === 'highschool' || c.p.school === 'university',
     title: (c) => c.t('Big exam tomorrow and you have not studied.', 'Yarın büyük sınav var ve kitabın kapağını bile açmadın.'),
     text: (c) =>
-      c.t('A classmate is selling the answers for $20.', `Sınıftan biri cevap anahtarını ${c.h.fmt(20)} karşılığında satıyor.`),
+      c.t(`A classmate is selling the answers for ${c.h.fmt(wage(c, 20))}.`, `Sınıftan biri cevap anahtarını ${c.h.fmt(wage(c, 20))} karşılığında satıyor.`),
     choices: [
       {
         id: 'cheat',
         label: (c) => c.t('Buy the answers', 'Cevapları satın al'),
         badge: 'Risky',
         resolve: (c) => {
-          c.h.money(-20);
+          c.h.money(-wage(c, 20));
           if (c.rng.chance(0.3)) {
             c.h.stat('happiness', -8);
             c.h.flag('caught_cheating');
@@ -347,12 +349,12 @@ export const youngEvents: EventDef[] = [
     choices: [
       {
         id: 'confess',
-        label: (c) => c.t('Tell them how you feel', 'Duygularını itiraf et'),
+        label: (c) => c.t(`Tell ${him(who(c))} how you feel`, 'Duygularını itiraf et'),
         resolve: (c) => {
           if (c.rng.chance(0.25 + c.p.stats.looks / 250)) {
             c.h.stat('happiness', 10);
             return c.t(
-              `${nm(c)} said they like you too. You held hands at the bus stop.`,
+              `${nm(c)} said ${he(who(c))} likes you too. You held hands at the bus stop.`,
               `${nm(c)} da senden hoşlandığını söyledi. Otobüs durağında el ele tutuştunuz.`,
             );
           }
@@ -369,7 +371,7 @@ export const youngEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 2);
           return c.t(
-            `You left a note in ${nm(c)}'s locker. They showed it to everyone, trying to guess who wrote it.`,
+            `You left a note in ${nm(c)}'s locker. ${He(who(c))} showed it to everyone, trying to guess who wrote it.`,
             `${gen(nm(c))} dolabına bir not bıraktın. Kimin yazdığını bulmak için notu herkese gösterdi.`,
           );
         },
@@ -404,7 +406,7 @@ export const youngEvents: EventDef[] = [
               'Hayatının gecesiydi, ta ki giyinik hâlde havuza düşene kadar.',
             );
           }
-          return c.t('Best night ever. You danced until 3 a.m.', "Hayatının gecesiydi. Sabahın 3'üne kadar dans ettin.");
+          return c.t('Best night ever. You danced until 3 a.m.', 'Hayatının gecesiydi. Sabahın üçüne kadar dans ettin.');
         },
       },
       {
@@ -449,7 +451,7 @@ export const youngEvents: EventDef[] = [
         id: 'take',
         label: (c) => c.t('Take the job', 'İşi kabul et'),
         resolve: (c) => {
-          const pay = c.rng.int(600, 1400);
+          const pay = wage(c, c.rng.int(600, 1400));
           c.h.money(pay);
           c.h.stat('health', -1);
           return c.t(
@@ -463,10 +465,9 @@ export const youngEvents: EventDef[] = [
         label: (c) => c.t('Enjoy the summer', 'Yazın tadını çıkar'),
         resolve: (c) => {
           c.h.stat('happiness', 5);
-          return c.t(
-            'You spent the summer at the beach doing absolutely nothing.',
-            'Yazı sahilde, kesinlikle hiçbir şey yapmadan geçirdin.',
-          );
+          return coastal(c)
+            ? c.t('You spent the summer at the beach doing absolutely nothing.', 'Yazı sahilde, kesinlikle hiçbir şey yapmadan geçirdin.')
+            : c.t('You spent the summer at the public pool doing absolutely nothing.', 'Yazı semt havuzunda, kesinlikle hiçbir şey yapmadan geçirdin.');
         },
       },
     ],

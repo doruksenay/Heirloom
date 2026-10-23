@@ -110,6 +110,11 @@ export interface ActivityDef {
   available?: (c: Ctx) => boolean;
   /** Hide the activity (instead of greying it out) while `available` is false, e.g. prison-only activities. */
   hideWhenUnavailable?: boolean;
+  /**
+   * Whether the activity can be done in prison. When set, it decides; when unset, the old
+   * group rule applies (only 'Mind & Body' activities run inside).
+   */
+  jailOk?: boolean;
   /** Returns a log line, or { event } to open an event with choices. */
   run: (c: Ctx) => string | { event: string };
 }

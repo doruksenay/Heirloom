@@ -2,6 +2,7 @@ import type { ActivityDef, Ctx } from '../types';
 import type { GameState, Player, StatKey } from '../../engine/types';
 import { getCountry } from '../../engine/world';
 import { salaryFor } from '../../engine/careers';
+import { yearlyIncome } from '../../engine/economy';
 import { FURNITURE, STYLE_SETS, currentTier, setProgress, homeTier, houseState, type HomeTier, type HomeTierDef } from '../../engine/home';
 import {
   MAX_PETS,
@@ -18,6 +19,8 @@ import {
   type PetKind,
 } from '../../engine/pets';
 import { acc, dat, gen, loc, wage, wth } from './util';
+import { cityName, isCoastal } from '../../engine/places';
+import { pickIndex, say } from './lines';
 
 // ---------------------------------------------------------------- helpers shared with the pet and home events
 
@@ -75,7 +78,7 @@ const HOME_NAME: Record<HomeTier, [string, string]> = {
 export const homeTitle = (tier: HomeTier, city: string, lang: 'en' | 'tr' | undefined) => {
   const [en, tr] = HOME_NAME[tier];
   if (tier === 'parents') return lang === 'tr' ? tr : en;
-  return lang === 'tr' ? `${loc(city)}ki ${tr.toLocaleLowerCase('tr')}` : `${en} in ${city}`;
+  return lang === 'tr' ? `${loc(cityName(city, 'tr'))}ki ${tr.toLocaleLowerCase('tr')}` : `${en} in ${city}`;
 };
 
 /** Short tier word for sentences: "the studio" / "stüdyo daire". */
@@ -138,7 +141,7 @@ export function moveTo(c: Ctx, tier: HomeTier, mode: 'rent' | 'buy'): string {
 }
 
 const RENT_LINES: [string, string][] = [
-  ["You signed the lease on the {w}. Two months' deposit and a landlord called Mr. Kemal.", '{W} için kira sözleşmesini imzaladın. İki kira depozito ve Kemal Bey adında bir ev sahibi.'],
+  ["You signed the lease on the {w}. Two months' deposit and a landlord called {L}.", '{W} için kira sözleşmesini imzaladın. İki kiralık depozito ve {L} adında bir ev sahibi.'],
   ['You rented the {w}. The previous tenant left a fern and a note: "water it or else".', '{W} kiraladın. Önceki kiracı bir eğrelti otu ve bir not bırakmış: "Sula, yoksa..."'],
   ['You got the keys to the {w}. Three keys, two doors, nobody knows what the third one opens.', '{W} anahtarlarını aldın. Üç anahtar, iki kapı; üçüncüsünün neyi açtığını kimse bilmiyor.'],
   ['You moved into the {w}. The landlord lives next door and already knows your schedule.', '{W} taşındın. Ev sahibi hemen yan tarafta oturuyor ve programını şimdiden ezberledi.'],
@@ -152,12 +155,21 @@ const RENT_TR: Record<string, [string, string, string]> = {
   'bahçeli ev': ['bahçeli ev', 'bahçeli evin', 'bahçeli eve'],
   villa: ['villa', 'villanın', 'villaya'],
 };
+/** The landlord in the lease line, by country: [English, Turkish]. */
+const LANDLORD: Record<string, [string, string]> = {
+  tr: ['Mr. Kemal', 'Kemal Bey'],
+  us: ['Mr. Novak', 'Bay Novak'],
+  uk: ['Mr. Pemberton', 'Bay Pemberton'],
+  de: ['Herr Becker', 'Herr Becker'],
+  br: ['Seu Jorge', 'Seu Jorge'],
+};
 function rentLine(c: Ctx, where: string): string {
   const i = c.rng.int(0, RENT_LINES.length - 1);
   const forms = RENT_TR[where] ?? [where, where, where];
   // Turkish needs a different case per line: için (nom.), kiraladın (acc. ≈ nom. here), anahtarları (gen.), taşındın (dat.)
   const trWord = [forms[0], forms[0], forms[1], forms[2]][i];
-  return c.t(RENT_LINES[i][0].split('{w}').join(where), RENT_LINES[i][1].split('{W}').join(cap1(trWord)));
+  const [lEn, lTr] = LANDLORD[c.p.countryId] ?? ['Mr. Novak', 'Bay Novak'];
+  return c.t(RENT_LINES[i][0].split('{w}').join(where).split('{L}').join(lEn), RENT_LINES[i][1].split('{W}').join(cap1(trWord)).split('{L}').join(lTr));
 }
 
 const cap1 = (s: string) => (s ? (s[0] === 'i' ? 'İ' : s[0].toLocaleUpperCase('tr')) + s.slice(1) : s);
@@ -312,36 +324,82 @@ const TRICKS: Partial<Record<PetKind, [string, string][]>> = {
   ],
 };
 
+/** Play lines per kind; the dog's first walk follows the shore only in a coastal city. */
 const PLAY_LINES: Record<PetKind, [string, string][]> = {
   dog: [
     ['You walked {n} along the shore. Every other dog was greeted personally.', '{acc} sahil boyunca yürüttün. Yoldaki her köpekle tek tek selamlaştı.'],
     ['You threw a ball for {n} for an hour. Your arm gave up before {n} did.', '{dat} bir saat top attın. Senin kolun ondan önce pes etti.'],
+    ['{n} found a stick twice their size and carried it home with enormous pride. You carried the shopping.', '{n} kendinden iki kat büyük bir dal buldu ve eve büyük bir gururla taşıdı. Alışverişi de sen taşıdın.'],
+    ['You and {n} lay on the floor and had a long, serious talk. {n} agreed with everything.', '{wth} yere uzanıp uzun ve ciddi bir sohbet ettiniz. {n} her söylediğine katıldı.'],
+    ['You played tug-of-war with {n}. {n} won and did a victory lap of the living room.', '{wth} halat çekme oynadınız. {n} kazandı ve salonda bir zafer turu attı.'],
+    ['{n} rolled in something unspeakable at the park. Bath time was a team effort.', '{n} parkta adı konmayacak bir şeyin içinde yuvarlandı. Banyo saati takım işiydi.'],
+    ['You hid treats around the house for {n}. {n} found every one, plus one you had forgotten about last year.', '{dat} evin dört bir yanına ödül maması sakladın. {n} hepsini buldu; geçen yıldan unuttuğun birini de.'],
+    ['You took {n} on a long walk. {n} sniffed every lamppost as if reading the news.', '{acc} uzun bir yürüyüşe çıkardın. {n} her direği gazete okur gibi kokladı.'],
+    ['{n} waited by the door with the lead in their mouth until you gave in. You always give in.', '{n} tasmasını ağzına alıp sen pes edene kadar kapıda bekledi. Hep pes ediyorsun.'],
+    ['You and {n} napped on the sofa together. Nobody snored. Officially.', '{wth} kanepede birlikte şekerleme yaptınız. Kimse horlamadı. Resmî olarak.'],
   ],
   cat: [
     ['You dangled a string for {n}. {n} watched it with total contempt, then attacked your ankle.', '{dat} ip salladın. {n} ipe küçümseyerek baktı, sonra bileğine saldırdı.'],
     ['{n} sat on your newspaper all morning. You call that quality time.', '{n} bütün sabah gazetenin üstüne oturdu. Buna kaliteli zaman diyorsun.'],
+    ['{n} brought you a "gift" from the balcony. You said thank you through gritted teeth.', '{n} balkondan sana bir "hediye" getirdi. Dişlerini sıkarak teşekkür ettin.'],
+    ['You built {n} a cardboard castle. {n} sat in the box it came in.', '{dat} kartondan bir şato yaptın. {n} şatonun geldiği kutuya oturdu.'],
+    ['{n} slept on your lap for two hours. You did not move. Your leg is gone.', '{n} iki saat kucağında uyudu. Kıpırdamadın. Bacağın uyuştu.'],
+    ['You brushed {n}. {n} purred, bit you, then purred again. A complicated relationship.', '{acc} taradın. {n} mırladı, seni ısırdı, sonra yine mırladı. Karmaşık bir ilişki.'],
+    ['You played with a laser pointer. {n} has caught the red dot zero times and remains hopeful.', 'Lazerle oynadınız. {n} kırmızı noktayı bir kez bile yakalayamadı ama umudunu kaybetmedi.'],
+    ['{n} knocked a glass off the table while looking you in the eye. You laughed. You should not have.', '{n} gözlerinin içine bakarak masadan bir bardak düşürdü. Güldün. Gülmemeliydin.'],
+    ['{n} took the sunny spot and allowed you to sit nearby. An honor.', '{n} güneşli köşeye kuruldu ve yanına oturmana izin verdi. Büyük onur.'],
+    ['You bought {n} an expensive toy. {n} played with the ribbon it came with.', '{dat} pahalı bir oyuncak aldın. {n} paketin kurdelesiyle oynadı.'],
   ],
   bird: [
     ['You whistled with {n} by the window. You are now a duet.', '{wth} pencere önünde ıslık çaldınız. Artık bir düetsiniz.'],
     ['You let {n} fly around the living room. The curtain rod is now a throne.', '{acc} salonda uçurdun. Korniş artık onun tahtı.'],
+    ['{n} learned to imitate your phone ringing. You have answered it four times.', '{n} telefonunun zil sesini taklit etmeyi öğrendi. Dört kez açmaya kalktın.'],
+    ['You gave {n} a slice of apple. {n} held it like a sandwich and ate it with great dignity.', '{dat} bir dilim elma verdin. {n} onu sandviç gibi tuttu ve büyük bir vakarla yedi.'],
+    ['{n} sat on your shoulder all evening and commented on the news.', '{n} bütün akşam omzunda oturdu ve haberlere yorum yaptı.'],
+    ['{n} took a bath in a saucer and splashed the whole kitchen. Pure joy.', '{n} bir çay tabağında banyo yaptı ve bütün mutfağı ıslattı. Saf neşe.'],
+    ['You played music for {n}. {n} has strong opinions about jazz.', '{dat} müzik açtın. {n} caz hakkında çok net fikirlere sahip.'],
+    ['{n} fell asleep on one leg while you read aloud. You took that as a review.', 'Sen yüksek sesle okurken {n} tek ayağının üstünde uyuyakaldı. Bunu bir eleştiri olarak kabul ettin.'],
   ],
   fish: [
     ['You cleaned the bowl and watched {n} swim laps. Strangely relaxing.', 'Fanusu temizledin ve {acc} tur atarken izledin. Tuhaf bir şekilde rahatlatıcı.'],
     ['You told {n} about your day. {n} opened and closed its mouth supportively.', '{dat} gününü anlattın. {n} destek verir gibi ağzını açıp kapadı.'],
+    ['You bought {n} a tiny castle. {n} swam past it as if it were beneath notice.', '{dat} minicik bir şato aldın. {n} sanki beğenmemiş gibi yanından geçip gitti.'],
+    ['You sat by the bowl and watched {n} for twenty minutes. Better than the news.', 'Fanusun yanına oturup yirmi dakika {acc} izledin. Haberlerden iyiydi.'],
+    ['You rearranged the plants in the bowl. {n} inspected every leaf like a landlord.', 'Fanustaki bitkilerin yerini değiştirdin. {n} her yaprağı bir ev sahibi titizliğiyle denetledi.'],
+    ['{n} swam to the glass every time you walked past. You walked past a lot.', 'Her yanından geçişinde {n} cama doğru yüzdü. Sen de çok geçtin.'],
+    ['You fed {n} exactly three flakes, as advised. {n} looked at you as if you were a monster.', '{dat} söylendiği gibi tam üç pul yem verdin. {n} sana bir canavarmışsın gibi baktı.'],
   ],
   rabbit: [
     ['You let {n} hop around the balcony. Two flower pots did not survive.', '{acc} balkonda zıplattın. İki saksı bu ziyareti atlatamadı.'],
     ['You fed {n} parsley one leaf at a time. Pure joy, mostly yours.', '{dat} maydanozu yaprak yaprak yedirdin. Saf mutluluk, çoğu senin.'],
+    ['{n} did a happy little jump in the air. You did not know rabbits could do that. Now you want to see it again.', '{n} havaya minik bir sevinç zıplaması yaptı. Tavşanların bunu yapabildiğini bilmiyordun. Şimdi bir daha görmek istiyorsun.'],
+    ['{n} chewed through a phone charger. You played with {n} anyway. Love is blind.', '{n} bir telefon şarjını kemirdi. Yine de onunla oynadın. Aşk kördür.'],
+    ['{n} flopped over on the carpet, completely relaxed. You did the same. Nobody moved for an hour.', '{n} halının üstüne yan yattı, tamamen gevşedi. Sen de aynısını yaptın. Bir saat kimse kıpırdamadı.'],
+    ['You built {n} a tunnel out of boxes. {n} ran through it a hundred times.', '{dat} kutulardan bir tünel yaptın. {n} içinden yüz kez geçti.'],
+    ['{n} thumped a foot at the vacuum cleaner. You agreed, and turned it off.', '{n} elektrikli süpürgeye ayağını vurarak kızdı. Sen de hak verip kapattın.'],
   ],
   turtle: [
     ['You gave {n} a strawberry. It took forty minutes and was worth every second.', '{dat} bir çilek verdin. Kırk dakika sürdü ve her saniyesine değdi.'],
     ['You and {n} sat in the sun together. Neither of you said anything. Perfect.', '{wth} güneşte yan yana oturdunuz. İkiniz de hiçbir şey demediniz. Mükemmel.'],
+    ['You took {n} for a walk on the grass. Three meters in an hour. A personal best.', '{acc} çimlerde yürüyüşe çıkardın. Bir saatte üç metre. Kişisel rekor.'],
+    ['{n} ate a lettuce leaf so slowly that you finished a whole newspaper.', '{n} bir marul yaprağını o kadar yavaş yedi ki sen bütün bir gazeteyi bitirdin.'],
+    ['You gave {n} a warm bath. {n} looked deeply satisfied, in a prehistoric way.', '{acc} ılık suda yıkadın. {n} tarih öncesinden kalma bir memnuniyetle baktı.'],
+    ['{n} escaped and was found two hours later, four meters away. A great adventure.', '{n} kaçtı ve iki saat sonra dört metre ötede bulundu. Büyük bir macera.'],
+    ['You and {n} watched the rain from the window. {n} approved of it.', '{wth} pencereden yağmuru izlediniz. {n} yağmuru onayladı.'],
+    ['{n} recognized your footsteps and came over. It took a while, but {n} came.', '{n} ayak seslerini tanıdı ve yanına geldi. Biraz sürdü ama geldi.'],
+    ['You measured {n} against last year: one centimeter bigger. You threw a small party.', '{acc} geçen yılla karşılaştırıp ölçtün: bir santim büyümüş. Küçük bir kutlama yaptın.'],
   ],
   horse: [
     ['You rode {n} across the fields at dawn. For an hour you were in a film.', 'Şafak vakti {acc} tarlalarda dörtnala sürdün. Bir saatliğine bir filmin içindeydin.'],
     ['You brushed {n} until the coat shone. {n} pretended not to enjoy it.', '{acc} tüyleri parlayana kadar fırçaladın. {n} hoşlanmıyormuş gibi yaptı.'],
+    ['You fed {n} apples and {n} nudged you for more. Every pocket was searched.', '{dat} elma yedirdin; {n} daha fazlası için seni dürttü. Bütün ceplerin arandı.'],
+    ['You and {n} took the long path through the woods. Neither of you hurried.', '{wth} ormandan uzun yoldan gittiniz. İkiniz de acele etmediniz.'],
+    ['You cleaned the hooves of {n} and told {n} all your news. {n} listened patiently.', '{gen} toynaklarını temizledin ve ona bütün haberleri anlattın. {n} sabırla dinledi.'],
+    ['{n} rested a head on your shoulder for a long moment. You did not move.', '{n} başını uzun bir süre omzuna yasladı. Kıpırdamadın.'],
+    ['You braided the mane of {n}. {n} looked magnificent and knew it.', '{gen} yelesini ördün. {n} muhteşem görünüyordu ve bunu biliyordu.'],
   ],
 };
+const DOG_INLAND: [string, string] = ['You walked {n} round the park. Every other dog was greeted personally.', '{acc} parkta gezdirdin. Yoldaki her köpekle tek tek selamlaştı.'];
 
 /** Fills {n} with the pet name; Turkish may use {acc} {dat} {wth} {gen} (in English they are the plain name). */
 function petLine(c: Ctx, pair: [string, string], pet: Pet): string {
@@ -353,13 +411,25 @@ function petLine(c: Ctx, pair: [string, string], pet: Pet): string {
 
 const TRICK_KINDS: PetKind[] = ['dog', 'cat', 'bird', 'rabbit', 'horse'];
 
+const TRICK_FAIL_CAT: [string, string][] = [
+  ['You tried to teach {n} a trick. {n} taught you to open the treat cupboard instead.', '{dat} numara öğretmeye çalıştın. O ise sana mama dolabını açmayı öğretti.'],
+  ['You held up a treat and said "sit". {n} looked at you, then at the treat, then left the room.', 'Ödülü havaya kaldırıp "Otur" dedin. {n} önce sana, sonra ödüle baktı ve odadan çıktı.'],
+  ['A week of training. {n} now ignores you on command. Technically a trick.', 'Bir hafta çalıştınız. {n} artık komutla seni görmezden geliyor. Teknik olarak bu da bir numara.'],
+];
+const TRICK_FAIL: [string, string][] = [
+  ['A week of practice. {n} learned that sitting near you produces treats. Close enough.', 'Bir hafta çalıştınız. {n}, yanında oturunca ödül geldiğini öğrendi. O da bir şeydir.'],
+  ['You practiced with {n} every evening. {n} got very good at eating the rewards.', '{wth} her akşam çalıştınız. {n} ödülleri yemekte çok ustalaştı.'],
+  ['{n} did the trick perfectly once, when nobody was watching. You will never be able to prove it.', '{n} numarayı bir kez kusursuz yaptı; kimse bakmıyorken. Bunu asla kanıtlayamayacaksın.'],
+  ['{n} learned the trick, then forgot it overnight. You start again tomorrow.', '{n} numarayı öğrendi, sonra bir gecede unuttu. Yarın baştan başlıyorsunuz.'],
+];
+
 /** The listings the agent can show you, best first; affordability decides the mode. */
 export function listingOptions(c: Ctx): { tier: HomeTier; mode: 'rent' | 'buy'; loan: boolean }[] {
   const p = c.p;
   const now = currentTier(p);
   const equity = p.home.owned ? Math.round(p.home.value * 0.95) : 0;
   const funds = p.money + equity;
-  const income = salary(c) * 0.75 + (p.retired ? col(c) * 1.1 : 0);
+  const income = yearlyIncome(p, salary(c));
   const out: { tier: HomeTier; mode: 'rent' | 'buy'; loan: boolean }[] = [];
   for (const t of ['room', 'studio', 'flat', 'farm', 'house', 'villa'] as HomeTier[]) {
     const def = homeTier(t)!;
@@ -402,8 +472,8 @@ export const homeActivities: ActivityDef[] = [
       }
       c.h.stat('happiness', 3);
       if (pets.some((x) => x.kind === 'dog' || x.kind === 'horse')) c.h.stat('health', 2);
-      const lines = PLAY_LINES[target.kind];
-      return petLine(c, lines[c.rng.int(0, lines.length - 1)], target);
+      const lines = target.kind === 'dog' && !isCoastal(c.p.city) ? [DOG_INLAND, ...PLAY_LINES.dog.slice(1)] : PLAY_LINES[target.kind];
+      return petLine(c, lines[pickIndex(c, `pet_play.${target.kind}`, lines.length)], target);
     },
   },
   {
@@ -430,10 +500,17 @@ export const homeActivities: ActivityDef[] = [
       if (extended)
         return petLine(c, ['The vet changed the diet of {n} and gave you a hopeful nod. Another good year, maybe two.', 'Veteriner {gen} mamasını değiştirdi ve umutla başını salladı. Bir iyi yıl daha, belki iki.'], extended);
       const pet = pets[c.rng.int(0, pets.length - 1)];
-      return line(c, [
-        [`The vet said ${displayName(pet, 'en')} is "a bit chunky". You both pretended not to hear.`, `Veteriner ${displayName(pet, 'tr')} için "biraz tombul" dedi. İkiniz de duymamış gibi yaptınız.`],
-        [`Clean bill of health for ${displayName(pet, 'en')}, and a sticker for being brave. The sticker was for you.`, `${gen(displayName(pet, 'tr'))} sağlığı turp gibi. Cesaret çıkartması da verdiler; o çıkartma sanaydı.`],
-        [`${displayName(pet, 'en')} hid under the waiting-room chair for an hour. All fine in the end.`, `${displayName(pet, 'tr')} bekleme salonunda bir saat sandalyenin altına saklandı. Sonunda her şey yolunda çıktı.`],
+      const en = displayName(pet, 'en');
+      const tr = displayName(pet, 'tr');
+      return say(c, 'pet_vet', [
+        [`The vet said ${en} is "a bit chunky". You both pretended not to hear.`, `Veteriner ${tr} için "biraz tombul" dedi. İkiniz de duymamış gibi yaptınız.`],
+        [`Clean bill of health for ${en}, and a sticker for being brave. The sticker was for you.`, `${gen(tr)} sağlığı turp gibi. Cesaret çıkartması da verdiler; o çıkartma sanaydı.`],
+        [`${en} hid under the waiting-room chair for an hour. All fine in the end.`, `${tr} bekleme salonunda bir saat sandalyenin altına saklandı. Sonunda her şey yolunda çıktı.`],
+        [`${en} was weighed, poked and praised, and only forgave the praise.`, `${tr} tartıldı, dürtüldü ve övüldü. Sadece övgüyü affetti.`],
+        [`The vet looked at ${en}'s teeth and said "impressive". You are taking that personally.`, `Veteriner ${gen(tr)} dişlerine bakıp "etkileyici" dedi. Bunu kendi başarın sayıyorsun.`],
+        [`${en} charmed the whole waiting room. All afternoon you were just "${en}'s person".`, `${tr} bütün bekleme salonunu büyüledi. Bütün öğleden sonra sadece "${gen(tr)} sahibi" olarak anıldın.`],
+        [`A routine check-up. ${en} is fine. You needed a lie-down after the bill.`, `Rutin bir kontrol. ${tr} gayet iyi. Faturayı görünce senin uzanman gerekti.`],
+        [`The vet said ${en} is in great shape for the age. You celebrated with a treat each.`, `Veteriner ${tr} için yaşına göre harika durumda dedi. İkiniz de birer ödülle kutladınız.`],
       ]);
     },
   },
@@ -449,7 +526,9 @@ export const homeActivities: ActivityDef[] = [
       const pet = [...pets].sort((a, b) => (a.tricks ?? 0) - (b.tricks ?? 0))[0];
       pet.caredYear = c.s.year;
       const tricks = TRICKS[pet.kind]!;
-      const trick = tricks[(pet.tricks ?? 0) % tricks.length];
+      const raw = tricks[(pet.tricks ?? 0) % tricks.length];
+      // simit only in Turkey; elsewhere the dog waits for a biscuit
+      const trick: [string, string] = raw[0].includes('simit') && c.p.countryId !== 'tr' ? ['sit and wait for a biscuit', 'bisküvi için oturup beklemeyi'] : raw;
       const odds = (0.3 + c.p.stats.smarts / 300 + pet.closeness / 300) * (pet.kind === 'cat' ? 0.6 : 1);
       if (c.rng.chance(odds)) {
         pet.tricks = (pet.tricks ?? 0) + 1;
@@ -458,13 +537,8 @@ export const homeActivities: ActivityDef[] = [
         return petLine(c, [`{n} learned to ${trick[0]}! You showed everyone you know.`, `{n} ${trick[1]} öğrendi! Tanıdığın herkese gösterdin.`], pet);
       }
       petCloser(pet, 2);
-      return petLine(
-        c,
-        pet.kind === 'cat'
-          ? ['You tried to teach {n} a trick. {n} taught you to open the treat cupboard instead.', '{dat} numara öğretmeye çalıştın. O ise sana mama dolabını açmayı öğretti.']
-          : ['A week of practice. {n} learned that sitting near you produces treats. Close enough.', 'Bir hafta çalıştınız. {n}, yanında oturunca ödül geldiğini öğrendi. O da bir şeydir.'],
-        pet,
-      );
+      const fails = pet.kind === 'cat' ? TRICK_FAIL_CAT : TRICK_FAIL;
+      return petLine(c, fails[pickIndex(c, pet.kind === 'cat' ? 'pet_trick.cat' : 'pet_trick', fails.length)], pet);
     },
   },
 

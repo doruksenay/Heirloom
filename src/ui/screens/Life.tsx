@@ -1,7 +1,8 @@
 import type { AppApi } from '../app-state';
-import { ageUp, canRewind, choose, lifeStage, playerAge, rewind, rewindsLeft, salaryOf } from '../../engine/game';
+import { TORCH_AGE, ageUp, canPassTorch, canRewind, choose, lifeStage, playerAge, rewind, rewindsLeft, salaryOf } from '../../engine/game';
 import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
+import { cityName } from '../../engine/places';
 import { packTiles } from '../../content/registry';
 import { Avatar } from '../Avatar';
 import { skinParts } from '../skins';
@@ -64,7 +65,7 @@ export function Life({ app }: { app: AppApi }) {
             {age} · {status}
           </div>
           <div class="muted">
-            {p.city}, {app.lang === 'tr' ? country.nameTr : country.name}
+            {cityName(p.city, app.lang)}, {app.lang === 'tr' ? country.nameTr : country.name}
           </div>
         </div>
       </div>
@@ -152,6 +153,14 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
   const s = app.game!;
   if (s.pending || s.dead) return null;
   const seen = (id: string) => tipSeen(app, id);
+  const last = s.dynasty.lives[s.dynasty.lives.length - 1];
+  if (s.dynasty.generation >= 2 && !seen('gen2') && last?.handedOver) {
+    return (
+      <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family tree'), run: () => app.go('family') }}>
+        {T('Generation {n}. {name} handed the family over to you and is still around: find them on the Family tab.', { n: s.dynasty.generation, name: last.name.split(' ')[0] })}
+      </Tip>
+    );
+  }
   if (s.dynasty.generation >= 2 && !seen('gen2')) {
     return (
       <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family tree'), run: () => app.go('family') }}>
@@ -163,6 +172,13 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
     return (
       <Tip app={app} id="age_up" icon="plus">
         {T('Each tap of Age up is one year. Things will happen, and some of them will ask you to choose.')}
+      </Tip>
+    );
+  }
+  if (age >= TORCH_AGE && canPassTorch(s) && !seen('torch')) {
+    return (
+      <Tip app={app} id="torch" icon="family" action={{ label: T('Open Family'), run: () => app.go('family') }}>
+        {T('You can now pass the torch: hand the family to an adult child or grandchild and play on as them. You will stay in their life.')}
       </Tip>
     );
   }

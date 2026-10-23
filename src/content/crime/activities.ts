@@ -1,7 +1,26 @@
 import type { ActivityDef } from '../types';
 import { wage } from '../base/util';
+import { say, sayWith } from '../base/lines';
 import { deskJob } from './events-street';
 import { convict, convictFor, crimeState, free, inside, peekCrime, petty } from './state';
+
+const SHOPLIFT_LINES: ((v: string) => [string, string])[] = [
+  (v) => [`You walked out with ${v} worth of stuff under your jacket.`, `Montunun altında ${v} değerinde eşyayla dışarı çıktın.`],
+  (v) => [`You left the shop with ${v} worth of things in a tote bag and your heart going like a drum.`, `Bez çantanda ${v} değerinde eşya, kalbin davul gibi çarparak mağazadan çıktın.`],
+  (v) => [`You walked out with ${v} worth of stuff and said "have a nice day" to the guard. You meant it.`, `${v} değerinde eşyayla çıkarken güvenlik görevlisine "İyi günler" dedin. İçtenlikle.`],
+  (v) => [`${v} worth of things went home in your sleeves. You now have very interesting sleeves.`, `${v} değerinde eşya kollarının içinde eve gitti. Artık çok ilginç kolların var.`],
+  (v) => [`You pocketed ${v} worth of goods while asking an assistant where the toilets were.`, `Görevliye tuvaletin yerini sorarken ${v} değerinde malı cebe indirdin.`],
+  (v) => [`You took ${v} worth of things and paid for one packet of chewing gum. It felt like good manners.`, `${v} değerinde eşyayı alıp sadece bir paket sakızın parasını ödedin. Görgü kuralı gibi geldi.`],
+];
+
+const PICKPOCKET_LINES: ((v: string) => [string, string])[] = [
+  (v) => [`You lifted a wallet on the tram with ${v} in it. You got off two stops early, just in case.`, `Tramvayda içinde ${v} olan bir cüzdan araklayıp her ihtimale karşı iki durak erken indin.`],
+  (v) => [`A tourist lost ${v} to you near the fountain. He is still taking selfies.`, `Çeşmenin yanında bir turistin ${v} parası senin cebine geçti. Adam hâlâ selfie çekiyor.`],
+  (v) => [`You came home with ${v} and a stranger's loyalty card. One more coffee and the next one is free.`, `Eve ${v} ve bir yabancının sadakat kartıyla döndün. Bir kahve daha alsan bedava.`],
+  (v) => [`You lifted ${v} from a man arguing on the phone. He is still arguing.`, `Telefonda tartışan bir adamın cebinden ${v} çekip uzaklaştın. Adam hâlâ tartışıyor.`],
+  (v) => [`A crowded market, a careless handbag, and you are ${v} richer. You bought a coffee for your nerves.`, `Kalabalık bir pazar, dalgın bir çanta ve ${v} daha zengin bir sen. Sinirlerin için bir kahve aldın.`],
+  (v) => [`You bumped into a tourist, apologized beautifully and walked off ${v} richer.`, `Bir turiste çarptın, çok güzel özür diledin ve ${v} daha zengin yürüyüp gittin.`],
+];
 
 export const crimeActivities: ActivityDef[] = [
   {
@@ -10,22 +29,32 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('Small risk, small reward', 'Küçük risk, küçük ödül'),
     group: 'After dark',
     minAge: 12,
+    maxAge: 75,
     available: free,
     run: (c) => {
       if (c.rng.chance(0.65)) {
         const v = wage(c, c.rng.int(20, 150));
         c.h.money(v);
         if (c.age >= 18) petty(c, 2);
-        return c.t(`You walked out with ${c.h.fmt(v)} worth of stuff under your jacket.`, `Montunun altında ${c.h.fmt(v)} değerinde eşyayla dışarı çıktın.`);
+        return sayWith(c, 'shoplift', SHOPLIFT_LINES, c.h.fmt(v));
       }
       if (c.age < 18) {
         c.h.stat('happiness', -6);
         c.p.criminalRecord++;
-        return c.t('You were caught shoplifting. Your parents had to pick you up from the police station.', 'Mağazada suçüstü yakalandın. Ailen seni karakoldan almak zorunda kaldı.');
+        return say(c, 'shoplift.kid', [
+          ['You were caught shoplifting. Your parents had to pick you up from the police station.', 'Mağazada suçüstü yakalandın. Ailen seni karakoldan almak zorunda kaldı.'],
+          ['A shop assistant caught you red-handed and called your parents. The drive home was very quiet.', 'Bir tezgâhtar seni suçüstü yakalayıp aileni aradı. Eve dönüş yolu çok sessiz geçti.'],
+          ['You were caught at the door. The manager made you apologize in front of everyone, then called home.', 'Kapıda yakalandın. Müdür herkesin önünde özür dilemeni istedi, sonra evi aradı.'],
+        ]);
       }
-      return c.rng.chance(0.4)
-        ? c.t('Store security tackled you at the door. ', 'Mağaza güvenliği seni kapıda yakaladı. ') + convict(c, 1, 'theft', 'Hırsızlık')
-        : (c.h.money(-wage(c, 400)), c.t('You were caught shoplifting and paid a heavy fine.', 'Mağazada suçüstü yakalandın ve tuzlu bir para cezası ödedin.'));
+      if (c.rng.chance(0.4)) return c.t('Store security tackled you at the door. ', 'Mağaza güvenliği seni kapıda yakaladı. ') + convict(c, 1, 'theft', 'Hırsızlık');
+      c.h.money(-wage(c, 400));
+      return say(c, 'shoplift.fine', [
+        ['You were caught shoplifting and paid a heavy fine.', 'Mağazada suçüstü yakalandın ve tuzlu bir para cezası ödedin.'],
+        ['Security had been watching you on camera before you even touched anything. A heavy fine.', 'Güvenlik görevlisi daha hiçbir şeye dokunmadan seni kamerada izliyormuş. Tuzlu bir ceza.'],
+        ['The alarm went off at the door. You tried to look surprised. The fine was not surprised.', 'Kapıda alarm öttü. Şaşırmış gibi yapmaya çalıştın. Ceza hiç şaşırmadı.'],
+        ['You were caught with a cheese up your sleeve. The fine was heavy, the shame heavier.', 'Kolunun içinde bir peynirle yakalandın. Ceza ağırdı, utanç daha da ağır.'],
+      ]);
     },
   },
   {
@@ -34,32 +63,22 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('Crowded trams, careless tourists', 'Kalabalık tramvay, dalgın turistler'),
     group: 'After dark',
     minAge: 16,
+    maxAge: 75,
     available: free,
     run: (c) => {
       const roll = c.rng.next();
       if (roll < 0.55) {
         const v = wage(c, c.rng.int(40, 250));
-        const i = c.rng.int(0, 2);
         c.h.money(v);
         petty(c, 4);
-        return c.t(
-          [
-            `You lifted a wallet on the tram with ${c.h.fmt(v)} in it. You got off two stops early, just in case.`,
-            `A tourist lost ${c.h.fmt(v)} to you near the fountain. He is still taking selfies.`,
-            `You came home with ${c.h.fmt(v)} and a stranger's loyalty card. One more coffee and it is a free one.`,
-          ][i],
-          [
-            `Tramvayda içinde ${c.h.fmt(v)} olan bir cüzdan araklayıp her ihtimale karşı iki durak erken indin.`,
-            `Çeşmenin yanında bir turistin ${c.h.fmt(v)} parası senin cebine geçti. Adam hâlâ selfie çekiyor.`,
-            `Eve ${c.h.fmt(v)} ve bir yabancının sadakat kartıyla döndün. Bir kahve daha alsan bedava.`,
-          ][i],
-        );
+        return sayWith(c, 'crime_pickpocket', PICKPOCKET_LINES, c.h.fmt(v));
       }
       if (roll < 0.75) {
-        return c.t(
-          "The wallet held a library card and a photo of someone's cat. You mailed it back with a note.",
-          'Cüzdandan bir kütüphane kartıyla birinin kedisinin fotoğrafı çıktı. Bir notla birlikte postayla geri yolladın.',
-        );
+        return say(c, 'crime_pickpocket.empty', [
+          ["The wallet held a library card and a photo of someone's cat. You mailed it back with a note.", 'Cüzdandan bir kütüphane kartıyla birinin kedisinin fotoğrafı çıktı. Bir notla birlikte postayla geri yolladın.'],
+          ['The wallet was empty except for a lottery ticket. It lost. Of course it lost.', 'Arakladığın cüzdan boştu; içinden sadece bir piyango bileti çıktı. Kaybetti. Tabii ki kaybetti.'],
+          ["You lifted a wallet full of receipts and a child's drawing. You somehow slipped it back into the same pocket.", 'İçi fişlerle ve bir çocuk çizimiyle dolu bir cüzdan arakladın. Bir şekilde aynı cebe geri koydun.'],
+        ]);
       }
       if (c.age < 18) {
         c.h.stat('happiness', -6);
@@ -79,6 +98,7 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('High risk, high reward', 'Yüksek risk, yüksek ödül'),
     group: 'After dark',
     minAge: 18,
+    maxAge: 75,
     available: free,
     run: () => ({ event: 'crime.burglary' }),
   },
@@ -88,6 +108,7 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('A market stall and a clear conscience, sort of', 'Bir pazar tezgâhı ve bir parça vicdan'),
     group: 'After dark',
     minAge: 18,
+    maxAge: 75,
     available: free,
     run: () => ({ event: 'crime.knockoffs' }),
   },
@@ -97,6 +118,7 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('Fast money, faster police', 'Hızlı para, daha hızlı polis'),
     group: 'After dark',
     minAge: 18,
+    maxAge: 75,
     available: free,
     run: () => ({ event: 'crime.car_theft' }),
   },
@@ -106,6 +128,7 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('A crew, a target, a lot of trust', 'Bir ekip, bir hedef, bolca güven'),
     group: 'After dark',
     minAge: 21,
+    maxAge: 70,
     available: (c) => {
       const st = peekCrime(c.p);
       return free(c) && !st?.heist && !st?.charge && c.s.year - (st?.lastHeistYear ?? 0) >= 4;
@@ -118,6 +141,7 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => c.t('Your desk job, your rules', 'Masa başı işin, senin kuralların'),
     group: 'After dark',
     minAge: 18,
+    maxAge: 75,
     available: (c) => free(c) && deskJob(c),
     run: () => ({ event: 'crime.embezzle' }),
   },
@@ -127,6 +151,7 @@ export const crimeActivities: ActivityDef[] = [
     description: (c) => (inside(c) ? c.t('Learn a trade, earn pocket money', 'Bir meslek öğren, harçlık çıkar') : c.t('Only behind bars', 'Sadece cezaevinde')),
     group: 'Mind & Body',
     minAge: 16,
+    jailOk: true,
     available: inside,
     hideWhenUnavailable: true,
     run: (c) => {

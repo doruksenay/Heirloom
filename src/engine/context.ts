@@ -1,5 +1,5 @@
 import type { Ctx, Helpers } from '../content/types';
-import type { GameState, Lang, Person, RelationKind, Tone } from './types';
+import type { Gender, GameState, Lang, Person, RelationKind, Tone } from './types';
 import { createRng } from './rng';
 import { firstNames, getCountry } from './world';
 import { allJobs } from '../content/registry';
@@ -48,6 +48,56 @@ export function fmtMoneyShort(n: number, countryId = 'us', lang: Lang = 'en'): s
 export function ageOf(s: GameState, person: Person): number {
   return (person.deathYear ?? s.year) - person.birthYear;
 }
+
+/** Relations whose names must never repeat in the family: parents, grandparents, siblings, children and partners. */
+const FAMILY_KINDS: RelationKind[] = ['mother', 'father', 'grandparent', 'sibling', 'child', 'spouse', 'partner'];
+
+/**
+ * First names already used in the player's family and lineage: the player, every relation of the given kinds
+ * (living or dead) and their children (grandchildren, nieces, nephews), grandchildren the elder events have
+ * named, every past life of the dynasty and that life's partner.
+ */
+export function familyFirstNames(s: GameState, kinds?: RelationKind[]): Set<string> {
+  const p = s.player;
+  const taken = new Set<string>([p.firstName]);
+  for (const r of p.relations) {
+    const q = s.people[r.personId];
+    if (!q || (kinds && !kinds.includes(r.kind))) continue;
+    taken.add(q.firstName);
+    for (const id of q.childIds ?? []) if (s.people[id]) taken.add(s.people[id].firstName);
+  }
+  // grandchildren the elder events named before they had a person record (events-elder.ts, ext key 'base_elder')
+  const elder = p.ext?.base_elder as { gk?: { n?: unknown }[] } | undefined;
+  for (const g of elder?.gk ?? []) if (typeof g.n === 'string') taken.add(g.n);
+  for (const life of s.dynasty.lives) {
+    taken.add(s.people[life.personId]?.firstName ?? life.name.split(' ')[0]);
+    if (life.partnerName) taken.add(life.partnerName);
+  }
+  return taken;
+}
+
+/**
+ * First names a new person of this gender may get without echoing anyone in the family.
+ * Avoids every relation (friends and exes too) and the lineage; if that leaves nothing, only the close family and
+ * the lineage; if that is still empty (a very long dynasty), the whole list. Language-independent, no RNG.
+ * Baby-name choices should use this too.
+ */
+export function freshFirstNames(s: GameState, gender: Gender): string[] {
+  const pool = firstNames(s.player.countryId, gender);
+  for (const kinds of [undefined, FAMILY_KINDS]) {
+    const taken = familyFirstNames(s, kinds);
+    const free = pool.filter((n) => !taken.has(n));
+    if (free.length) return free;
+  }
+  return pool;
+}
+
+/** Extension state this module keeps on the player (p.ext is JSON-serializable and optional in old saves). */
+interface PeopleExt {
+  /** Calendar year of the last promotion: at most one per year. */
+  promotedYear?: number;
+}
+const extOf = (p: GameState['player']) => (p.ext ??= {}) as PeopleExt;
 
 export function makeCtx(s: GameState, vars: Record<string, string | number> = {}): Ctx {
   const p = s.player;
@@ -101,7 +151,11 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       const country = getCountry(p.countryId);
       const person: Person = {
         id: 'p' + s.nextId++,
-        firstName: rng.pick(firstNames(p.countryId, g)),
+        // never reuse a name from the family or lineage; one RNG call whatever the pool size or language
+        firstName: (() => {
+          const names = freshFirstNames(s, g);
+          return names[rng.int(0, names.length - 1)];
+        })(),
         lastName: lastName ?? rng.pick(country.names.last),
         gender: g,
         birthYear: s.year - personAge,
@@ -132,10 +186,16 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       p.jobLevel = 0;
       p.jobYears = 0;
       p.jobTitle = jobId ? h.jobTitle() : undefined;
+      // a new employer may hire you a step up (setJob + promote); that is not a second promotion this year
+      if (p.ext) delete (p.ext as PeopleExt).promotedYear;
     },
     promote() {
       const j = h.job();
       if (!j || p.jobLevel >= j.titles.length - 1) return false;
+      // at most one promotion per calendar year, however many events, activities and yearly rolls ask
+      const ext = extOf(p);
+      if (ext.promotedYear === s.year) return false;
+      ext.promotedYear = s.year;
       p.jobLevel++;
       p.jobTitle = h.jobTitle();
       if (p.jobLevel === j.titles.length - 1) h.achieve('top_job');
@@ -166,4 +226,14 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
 
   const lang = s.lang ?? 'en';
   return { s, p, age, rng, vars, h, lang, t: (en, tr) => (lang === 'tr' ? tr : en) };
+}
+
+/**
+ * Promotes even if the player was already promoted this year. Only for structural jumps that are not a
+ * "promotion" in the ladder sense (opening your own clinic, a general's star, a masterpiece that makes you
+ * a famous artist). Ordinary promotions use c.h.promote(), which allows one per calendar year.
+ */
+export function promoteAnyway(c: Ctx): boolean {
+  if (c.p.ext) delete (c.p.ext as PeopleExt).promotedYear;
+  return c.h.promote();
 }

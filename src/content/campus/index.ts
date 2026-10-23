@@ -2,7 +2,8 @@ import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../type
 import type { JobDef } from '../../engine/careers';
 import { titleFor } from '../../engine/careers';
 import { allJobs } from '../registry';
-import { acc, loc, nm, single, wage } from '../base/util';
+import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
+import { isCoastal } from '../../engine/places';
 import {
   CLUBS,
   COMPANIES,
@@ -41,6 +42,11 @@ const pickLine = (c: Ctx, lines: [string, string][]) => {
   const [en, tr] = c.rng.pick(lines);
   return c.t(en, tr);
 };
+
+/** him / her and he / she for the person in c.vars.pid (English only). */
+const himOf = (c: Ctx) => (c.h.person(String(c.vars.pid))?.gender === 'female' ? 'her' : 'him');
+const heOf = (c: Ctx) => (c.h.person(String(c.vars.pid))?.gender === 'female' ? 'she' : 'he');
+const inTR = (c: Ctx) => c.p.countryId === 'tr';
 
 /** A classmate of roughly the player's age. */
 const classmate = (c: Ctx, gender?: 'female' | 'male') => c.h.newPerson({ gender, age: Math.max(17, c.age + c.rng.int(-2, 2)) });
@@ -121,7 +127,7 @@ const fairChoice = (i: number): ChoiceDef => ({
       c.h.setJob(String(c.vars[`job${i}`]));
       c.h.stat('happiness', 6);
       return c.t(
-        `The recruiter loved that you studied ${majorName('en', cs(c).major)}. You are now a ${c.h.jobTitle()}!`,
+        `The recruiter loved that you studied ${majorName('en', cs(c).major)}. You are now ${aOrAn(c.h.jobTitle() ?? '')}!`,
         `İK'cı ${majorName('tr', cs(c).major)} okumuş olmana bayıldı. Artık ${c.h.jobTitle()} oldun!`,
       );
     }
@@ -178,6 +184,9 @@ const CITIES: [string, string][] = [
   ['Amsterdam', 'Amsterdam'],
 ];
 
+/** Exchange cities that are not abroad for players from that country. */
+const CITY_COUNTRY: Record<string, string> = { de: 'Berlin' };
+
 const cityChoice = (i: number): ChoiceDef => ({
   id: `city${i}`,
   label: (c) => {
@@ -217,10 +226,15 @@ const events: EventDef[] = [
     when: (c) => enrolled(c) && !peekCampus(c.p)?.major,
     title: (c) => c.t('Time to declare your major.', 'Bölümünü seçme vakti.'),
     text: (c) =>
-      c.t(
-        'Your mother says doctor. Your father says engineer. Your aunt says "civil servant, it is safe". The registrar wants an answer by Friday.',
-        'Annen "doktor ol" diyor, baban "mühendis". Teyzen "memur ol, garantisi var" diyor. Öğrenci işleri ise cumaya kadar cevap bekliyor.',
-      ),
+      c.h.relatives('mother').length && c.h.relatives('father').length
+        ? c.t(
+            'Your mother says doctor. Your father says engineer. Your aunt says "civil servant, it is safe". The registrar wants an answer by Friday.',
+            'Annen "doktor ol" diyor, baban "mühendis". Teyzen "memur ol, garantisi var" diyor. Öğrenci işleri ise cumaya kadar cevap bekliyor.',
+          )
+        : c.t(
+            'Your aunt says doctor. Your uncle says engineer. A neighbor says "civil servant, it is safe". The registrar wants an answer by Friday.',
+            'Teyzen "doktor ol" diyor, amcan "mühendis". Komşunuz "memur ol, garantisi var" diyor. Öğrenci işleri ise cumaya kadar cevap bekliyor.',
+          ),
     choices: (['engineering', 'medicine', 'law', 'business', 'arts', 'education'] as Major[]).map(majorChoice),
   },
   {
@@ -246,7 +260,7 @@ const events: EventDef[] = [
         resolve: (c) => {
           c.h.addRelation(c.h.person(String(c.vars.pid)), 'friend', c.rng.int(60, 82));
           c.h.stat('happiness', 3);
-          return c.t(`You decided to like ${nm(c)}. Years later, they are still your closest friend from university.`, `${acc(nm(c))} sevmeye karar verdin. Yıllar sonra bile üniversiteden kalan en yakın dostun o.`);
+          return c.t(`You decided to like ${nm(c)}. Years later, ${heOf(c)} is still your closest friend from university.`, `${acc(nm(c))} sevmeye karar verdin. Yıllar sonra bile üniversiteden kalan en yakın dostun o.`);
         },
         tone: 'good',
       },
@@ -283,7 +297,7 @@ const events: EventDef[] = [
       const prof = c.h.person(String(c.vars.pid));
       return c.t(`Professor ${prof.lastName} fails half of every class.`, `${prof.firstName} Hoca her dönem sınıfın yarısını bırakıyor.`);
     },
-    text: (c) => c.t('Rumor says the last A was given in 1998, and that student is now a minister.', "Rivayete göre son AA 1998'de verilmiş; o öğrenci de şimdi bakan."),
+    text: (c) => c.t('Rumor says the last A was given in 1998, and that student is now a minister.', 'Rivayete göre son AA 1998 yılında verilmiş; o öğrenci de şimdi bakan.'),
     choices: [
       {
         id: 'office',
@@ -386,7 +400,7 @@ const events: EventDef[] = [
       c.vars.pid = classmate(c).id;
     },
     title: (c) => c.t(`${nm(c)} has the answers to tomorrow's exam.`, `${nm(c)} yarınki vizenin cevaplarını bulmuş.`),
-    text: (c) => c.t('Photos of the answer key are going around a group chat called "Study Buddies".', 'Cevap anahtarının fotoğrafları "Ders Çalışma Grubu" adlı WhatsApp grubunda dolaşıyor.'),
+    text: (c) => c.t('Photos of the answer key are going around a group chat called "Study Buddies".', 'Cevap anahtarının fotoğrafları "Ders Çalışma Grubu" adlı mesaj grubunda dolaşıyor.'),
     choices: [
       {
         id: 'use',
@@ -443,11 +457,11 @@ const events: EventDef[] = [
       const [en, tr] = ROMANCE_PLACES[Number(c.vars.w)];
       return c.t(`You keep running into ${nm(c)} ${en}.`, `${nm(c)} ile ${tr} sürekli karşılaşıyorsunuz.`);
     },
-    text: (c) => c.t('Today they saved you a seat.', 'Bugün sana yer tutmuş.'),
+    text: (c) => c.t(`Today ${heOf(c)} saved you a seat.`, 'Bugün sana yer tutmuş.'),
     choices: [
       {
         id: 'ask',
-        label: (c) => c.t('Ask them out for tea', 'Çay içmeye davet et'),
+        label: (c) => c.t(`Ask ${himOf(c)} out for tea`, 'Çay içmeye davet et'),
         resolve: (c) => {
           if (c.rng.chance(0.35 + c.p.stats.looks / 250 + c.p.stats.happiness / 500)) {
             c.h.addRelation(c.h.person(String(c.vars.pid)), 'partner', c.rng.int(60, 82));
@@ -455,7 +469,7 @@ const events: EventDef[] = [
             return c.t(`${nm(c)} said yes. Two teas became two hundred. You are officially together.`, `${nm(c)} kabul etti. İki çay iki yüz çay oldu. Artık resmen sevgilisiniz.`);
           }
           c.h.stat('happiness', -4);
-          return c.t(`${nm(c)} said they "want to focus on their studies". By Friday they were dating someone from Law.`, `${nm(c)} "Şu an derslerime odaklanmak istiyorum" dedi. Cuma günü hukuktan biriyle el ele gördün.`);
+          return c.t(`${nm(c)} said ${heOf(c)} "wants to focus on studying". By Friday ${heOf(c)} was dating someone from Law.`, `${nm(c)} "Şu an derslerime odaklanmak istiyorum" dedi. Cuma günü hukuktan biriyle el ele gördün.`);
         },
         tone: 'good',
       },
@@ -523,7 +537,9 @@ const events: EventDef[] = [
           c.h.stat('happiness', 5);
           if (c.rng.chance(0.2)) {
             c.h.stat('happiness', -6);
-            return c.t('You spent a night in custody and were released in the morning with a stern warning and a simit.', 'Bir gece gözaltında kaldın. Sabah sıkı bir uyarı ve bir simitle serbest bırakıldın.');
+            return inTR(c)
+              ? c.t('You spent a night in custody and were released in the morning with a stern warning and a simit.', 'Bir gece gözaltında kaldın. Sabah sıkı bir uyarı ve bir simitle serbest bırakıldın.')
+              : c.t('You spent a night in custody and were released in the morning with a stern warning and a cold coffee.', 'Bir gece gözaltında kaldın. Sabah sıkı bir uyarı ve soğumuş bir kahveyle serbest bırakıldın.');
           }
           return c.t('You chanted until your voice gave out. Prices went down. Slightly. Victory!', 'Sesin kısılana kadar slogan attın. Fiyatlar biraz indi. Zafer!');
         },
@@ -568,7 +584,7 @@ const events: EventDef[] = [
       const k = c.vars.club as Club;
       return c.t(`Drama in the ${CLUBS[k].en}: the president election is next week.`, `${CLUBS[k].tr} karıştı: haftaya başkanlık seçimi var.`);
     },
-    text: (c) => c.t('Two factions, one group chat, four hundred unread messages.', 'İki hizip, bir WhatsApp grubu, dört yüz okunmamış mesaj.'),
+    text: (c) => c.t('Two factions, one group chat, four hundred unread messages.', 'İki hizip, bir mesaj grubu, dört yüz okunmamış mesaj.'),
     choices: [
       {
         id: 'run',
@@ -600,7 +616,7 @@ const events: EventDef[] = [
           const st = cs(c);
           st.clubs = st.clubs.filter((k) => k !== c.vars.club);
           c.h.stat('happiness', 3);
-          return c.t('You left the group chat. Peace at last.', 'WhatsApp grubundan çıktın. Nihayet huzur.');
+          return c.t('You left the group chat. Peace at last.', 'Kulübün mesaj grubundan çıktın. Nihayet huzur.');
         },
       },
     ],
@@ -720,14 +736,18 @@ const events: EventDef[] = [
     category: 'school',
     scheduled: true,
     setup: (c) => {
-      const idx = CITIES.map((_, i) => i).sort(() => c.rng.next() - 0.5);
+      // an exchange semester is abroad: a German student does not get Berlin
+      const home = CITY_COUNTRY[c.p.countryId];
+      const idx = CITIES.map((_, i) => i)
+        .filter((i) => CITIES[i][0] !== home)
+        .sort(() => c.rng.next() - 0.5);
       for (let i = 0; i < 3; i++) c.vars[`city${i}`] = idx[i];
     },
     title: (c) => c.t('You were accepted for an exchange semester. Where to?', "Erasmus'a kabul edildin! Nereye gidiyorsun?"),
     text: (c) =>
       c.t(
-        `The grant covers some of it. About ${c.h.fmt(wage(c, 1500))} will come out of your pocket. Your mother will cover you in prayers.`,
-        `Hibe masrafın bir kısmını karşılıyor, ${c.h.fmt(wage(c, 1500))} kadarı senden. Annen de dualarla destek olacak.`,
+        `The grant covers some of it. About ${c.h.fmt(wage(c, 1500))} will come out of your pocket.${c.h.relatives('mother').length ? ' Your mother will cover you in prayers.' : ''}`,
+        `Hibe masrafın bir kısmını karşılıyor, ${c.h.fmt(wage(c, 1500))} kadarı senden.${c.h.relatives('mother').length ? ' Annen de dualarla destek olacak.' : ''}`,
       ),
     choices: [
       cityChoice(0),
@@ -788,14 +808,14 @@ const events: EventDef[] = [
     choices: [
       {
         id: 'offer',
-        label: (c) => (c.vars.offerJob ? c.t(`Join ${c.vars.company} as ${c.vars.offerTitle}`, `${c.vars.company} bünyesinde ${c.vars.offerTitle} olarak başla`) : c.t('Internship job offer', 'Stajdan iş teklifi')),
+        label: (c) => (c.vars.offerJob ? c.t(`Join ${c.vars.company} as ${aOrAn(String(c.vars.offerTitle))}`, `${c.vars.company} bünyesinde ${c.vars.offerTitle} olarak başla`) : c.t('Internship job offer', 'Stajdan iş teklifi')),
         requires: (c) => !!c.vars.offerJob,
         requiresLabel: 'No opening',
         resolve: (c) => {
           cs(c).gradOffers = 2;
           c.h.setJob(String(c.vars.offerJob));
           c.h.stat('happiness', 8);
-          return c.t(`Your internship paid off. ${c.vars.company} hired you as ${c.h.jobTitle()} before the ink on your diploma was dry.`, `Staj meyvesini verdi. Diplomanın mürekkebi kurumadan ${c.vars.company} seni ${c.h.jobTitle()} olarak işe aldı.`);
+          return c.t(`Your internship paid off. ${c.vars.company} hired you as ${aOrAn(c.h.jobTitle() ?? '')} before the ink on your diploma was dry.`, `Staj meyvesini verdi. Diplomanın mürekkebi kurumadan ${c.vars.company} seni ${c.h.jobTitle()} olarak işe aldı.`);
         },
         tone: 'big',
       },
@@ -807,7 +827,7 @@ const events: EventDef[] = [
           if (c.vars.fieldJob && c.rng.chance(hireChance(c))) {
             c.h.setJob(String(c.vars.fieldJob));
             c.h.stat('happiness', 6);
-            return c.t(`Your degree did the talking. You are now a ${c.h.jobTitle()}.`, `Diploman senin yerine konuştu. Artık ${c.h.jobTitle()} oldun.`);
+            return c.t(`Your degree did the talking. You are now ${aOrAn(c.h.jobTitle() ?? '')}.`, `Diploman senin yerine konuştu. Artık ${c.h.jobTitle()} oldun.`);
           }
           c.h.stat('happiness', -2);
           return c.t('You sent out forty CVs. Every job wants five years of experience for an entry-level role.', 'Kırk yere CV gönderdin. Hepsi giriş seviyesi pozisyon için beş yıl tecrübe istiyor.');
@@ -861,7 +881,7 @@ const events: EventDef[] = [
       return free(c) && !!st && st.masters && !st.phd && !st.grad && st.gradOffers === 1;
     },
     title: (c) => c.t('Your thesis advisor wants you to stay for a PhD.', 'Tez danışmanın doktoraya devam etmeni istiyor.'),
-    text: (c) => c.t('"Three years, it flies by," says your advisor, who has been in this corridor since 1987.', '"Üç yıl, göz açıp kapayıncaya kadar geçer" diyor danışmanın. Kendisi 1987\'den beri bu koridorda.'),
+    text: (c) => c.t('"Three years, it flies by," says your advisor, who has been in this corridor since 1987.', '"Üç yıl, göz açıp kapayıncaya kadar geçer" diyor danışmanın. Kendisi 1987 yılından beri bu koridorda.'),
     choices: [
       {
         id: 'yes',
@@ -939,23 +959,23 @@ const events: EventDef[] = [
     choices: [
       {
         id: 'academia',
-        label: (c) => c.t(`Become a ${jobTitle0(c, 'academic')}`, `${jobTitle0(c, 'academic')} ol`),
+        label: (c) => c.t(`Become ${aOrAn(jobTitle0(c, 'academic'))}`, `${jobTitle0(c, 'academic')} ol`),
         resolve: (c) => {
           c.h.setJob('academic');
           c.h.promote();
           c.h.stat('happiness', 6);
-          return c.t(`You joined the faculty as a ${c.h.jobTitle()}. Students now call you "Hoca" with a mix of respect and fear.`, `Fakülteye ${c.h.jobTitle()} olarak katıldın. Öğrenciler artık sana saygı ve korku karışımı bir sesle "Hocam" diyor.`);
+          return c.t(`You joined the faculty as ${aOrAn(c.h.jobTitle() ?? '')}. Students now call you "Hoca" with a mix of respect and fear.`, `Fakülteye ${c.h.jobTitle()} olarak katıldın. Öğrenciler artık sana saygı ve korku karışımı bir sesle "Hocam" diyor.`);
         },
         tone: 'big',
       },
       {
         id: 'lab',
-        label: (c) => c.t(`Join the lab as a ${jobTitle0(c, 'research')}`, `Laboratuvara ${jobTitle0(c, 'research')} olarak katıl`),
+        label: (c) => c.t(`Join the lab as ${aOrAn(jobTitle0(c, 'research'))}`, `Laboratuvara ${jobTitle0(c, 'research')} olarak katıl`),
         resolve: (c) => {
           c.h.setJob('research');
           c.h.promote();
           c.h.stat('happiness', 5);
-          return c.t(`You took the industry job as a ${c.h.jobTitle()}. The coffee machine alone was worth it.`, `Özel sektöre ${c.h.jobTitle()} olarak geçtin. Sadece kahve makinesi bile buna değerdi.`);
+          return c.t(`You took the industry job as ${aOrAn(c.h.jobTitle() ?? '')}. The coffee machine alone was worth it.`, `Özel sektöre ${c.h.jobTitle()} olarak geçtin. Sadece kahve makinesi bile buna değerdi.`);
         },
         tone: 'good',
       },
@@ -1025,7 +1045,11 @@ const activities: ActivityDef[] = [
       return pickLine(c, [
         ['You skipped class and played cards in the cafeteria for three hours.', 'Dersi asıp kantinde üç saat okey oynadın.'],
         ['You skipped a lecture to sleep. Best lecture you ever missed.', 'Dersi asıp uyudun. Kaçırdığın en güzel dersti.'],
-        ['You skipped class and sat by the water with a simit. No regrets.', 'Dersi asıp sahilde simit yedin. Hiç pişman değilsin.'],
+        inTR(c)
+          ? isCoastal(c.p.city)
+            ? ['You skipped class and sat by the water with a simit. No regrets.', 'Dersi asıp sahilde simit yedin. Hiç pişman değilsin.']
+            : ['You skipped class and sat in the park with a simit. No regrets.', 'Dersi asıp parkta simit yedin. Hiç pişman değilsin.']
+          : ['You skipped class and sat in the park with a coffee. No regrets.', 'Dersi asıp parkta kahve içtin. Hiç pişman değilsin.'],
       ]);
     },
   },
@@ -1150,7 +1174,7 @@ const activities: ActivityDef[] = [
         return c.t('Your paper was accepted at a conference. Reviewer 2 was, for once, kind.', 'Makalen bir konferansta kabul edildi. Üç numaralı hakem bu sefer insafa gelmiş.');
       }
       return pickLine(c, [
-        ['You wrote 3,000 words and deleted 2,800 of them.', '3.000 kelime yazıp 2.800\'ünü sildin.'],
+        ['You wrote 3,000 words and deleted 2,800 of them.', '3.000 kelime yazdın, bunun 2.800 kelimesini sildin.'],
         ['You spent a week formatting citations. You dream in footnotes now.', 'Bir hafta kaynakça düzenledin. Artık rüyanda dipnot görüyorsun.'],
       ]);
     },
@@ -1189,9 +1213,13 @@ const activities: ActivityDef[] = [
 ];
 
 // ------------------------------------------------------------------ yearly tick
+/** A graduate always has a real major: an undeclared student is filed under Business, the catch-all degree. */
+export const DEFAULT_MAJOR: Major = 'business';
+
 function graduate(c: Ctx) {
   const st = cs(c);
   st.gradYear = c.s.year;
+  if (!st.major) st.major = DEFAULT_MAJOR;
   st.grad = null;
   const g = st.gpa;
   const honors: Honors | null = g >= HONORS.summa.min ? 'summa' : g >= HONORS.magna.min ? 'magna' : g >= HONORS.cum.min ? 'cum' : null;
@@ -1208,14 +1236,14 @@ function graduate(c: Ctx) {
     c.h.log(
       c.t(
         `You graduated summa cum laude in ${en} with a ${gs} GPA. You gave the valedictorian speech and only cried once.`,
-        `${tr} bölümünden ${gs} ortalamayla bölüm birincisi olarak mezun oldun. Mezuniyet konuşmasını sen yaptın ve sadece bir kez ağladın.`,
+        `${tr} bölümünden ${gs} ortalamayla, bölüm birincisi olarak mezun oldun. Mezuniyet konuşmasını sen yaptın ve sadece bir kez ağladın.`,
       ),
       'big',
     );
   } else if (honors === 'magna') {
-    c.h.log(c.t(`You graduated magna cum laude in ${en} (GPA ${gs}). Your cap flew the highest.`, `${tr} bölümünden ${gs} ortalamayla yüksek onur öğrencisi olarak mezun oldun. Kepin en yükseğe uçtu.`), 'good');
+    c.h.log(c.t(`You graduated magna cum laude in ${en} (GPA ${gs}). Your cap flew the highest.`, `${tr} bölümünden ${gs} ortalamayla, yüksek onur belgesiyle mezun oldun. Kepin en yükseğe uçtu.`), 'good');
   } else if (honors === 'cum') {
-    c.h.log(c.t(`You graduated cum laude in ${en} (GPA ${gs}). Your grandmother told the whole neighborhood.`, `${tr} bölümünden ${gs} ortalamayla onur öğrencisi olarak mezun oldun. Anneannen bütün mahalleye haber verdi.`), 'good');
+    c.h.log(c.t(`You graduated cum laude in ${en} (GPA ${gs}). Your grandmother told the whole neighborhood.`, `${tr} bölümünden ${gs} ortalamayla, onur belgesiyle mezun oldun. Anneannen bütün mahalleye haber verdi.`), 'good');
   } else if (g < 2) {
     c.h.log(c.t(`You graduated in ${en} with a ${gs} GPA. "C's get degrees" was proven right once again.`, `${tr} bölümünden ${gs} ortalamayla, kıl payı mezun oldun. "Diploma diplomadır" felsefesi bir kez daha kazandı.`));
   } else {
@@ -1249,6 +1277,7 @@ function onYear(c: Ctx) {
 
   // --- graduation (the engine sets education when the 4 years are done)
   if (p.education === 'university' && st.startYear && !st.gradYear) graduate(c);
+  if (st.gradYear && !st.major) st.major = DEFAULT_MAJOR; // saves from before graduation picked a major
 
   // --- grad school
   if (st.grad && p.jailYears === 0) {
@@ -1265,7 +1294,12 @@ function onYear(c: Ctx) {
         st.masters = true;
         h.achieve('masters');
         h.stat('happiness', 6);
-        h.log(c.t("You finished your master's degree. Your thesis was read by three people, one of them your mother.", 'Yüksek lisansını bitirdin. Tezin üç kişi tarafından okundu; biri annendi.'), 'good');
+        h.log(
+          h.relatives('mother').length
+            ? c.t("You finished your master's degree. Your thesis was read by three people, one of them your mother.", 'Yüksek lisansını bitirdin. Tezin üç kişi tarafından okundu; biri annendi.')
+            : c.t("You finished your master's degree. Your thesis was read by three people, one of them your advisor. Probably.", 'Yüksek lisansını bitirdin. Tezin üç kişi tarafından okundu; biri danışmanındı. Galiba.'),
+          'good',
+        );
       } else {
         st.phd = true;
         h.achieve('phd');

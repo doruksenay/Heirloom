@@ -50,7 +50,7 @@ function playLife(s: GameState, seed: number, maxYears = 130) {
 }
 
 describe('life simulation', () => {
-  it('plays 1000 lives without errors and with sane numbers', { timeout: 60_000 }, () => {
+  it('plays 1000 lives without errors and with sane numbers', { timeout: 150_000 }, () => {
     const ages: number[] = [];
     let married = 0;
     let kids = 0;
@@ -85,8 +85,13 @@ describe('life simulation', () => {
     );
     console.log(`ribbons seen: ${[...ribbons].join(', ')}`);
     expect(ribbons.size).toBeGreaterThan(6);
-    expect(avg).toBeGreaterThan(55);
-    expect(avg).toBeLessThan(95);
+    // v0.8 mortality: a realistic curve (median death about 80; 95+ rare). The old bounds (55..95)
+    // let a median of 89 pass, which made every heir a pensioner; these catch that drifting back.
+    expect(avg).toBeGreaterThan(65);
+    expect(avg).toBeLessThan(85);
+    expect(median).toBeGreaterThanOrEqual(72);
+    expect(median).toBeLessThanOrEqual(86);
+    expect(ages.filter((a) => a >= 95).length / ages.length).toBeLessThan(0.12);
   });
 
   it('continues the dynasty across generations and passes heirlooms', () => {

@@ -1,4 +1,5 @@
 import type { Player } from '../../engine/types';
+import { acc } from '../../i18n/tr-grammar';
 
 export type Industry = 'cafe' | 'app' | 'fashion' | 'food' | 'tea' | 'games';
 
@@ -103,4 +104,31 @@ export function valuate(c: Company): number {
   const profitable = c.lastProfit > 0 ? 1 : 0.6;
   // cash counts only up to one year of revenue; beyond that investors assume it gets spent
   return Math.max(0, Math.round(c.revenue * ind.multiple * profitable * STAGE_FACTOR[c.stage] + Math.max(0, Math.min(c.cash, c.revenue))));
+}
+
+/**
+ * What a sale actually puts in your pocket: your share of the price minus capital-gains tax,
+ * lawyers and bankers (about a fifth). Every sale path uses this so the numbers agree.
+ */
+export const SALE_KEEP = 0.8;
+export const saleShare = (price: number, ownership: number) => Math.round(price * ownership * SALE_KEEP);
+
+/**
+ * Price ranges (percent of the current valuation) for each way a company can be sold.
+ * Valuation already prices in growth, so nobody pays wildly above it: an offer you went
+ * looking for comes in below it, a buyer who came to you pays a modest premium.
+ */
+export const SALE_RANGE = {
+  /** You put the company up for sale (boss_sell). */
+  sell: [60, 100],
+  /** A giant came knocking (boss.acquisition). */
+  acquisition: [100, 130],
+  /** A buyer for the family company (boss.family_offer). */
+  family: [90, 120],
+} as const;
+
+/** Turkish question particle after a name, with vowel harmony and pronunciation: Can mı, Ada mı, Owen mı, Hannah mı. */
+export function qmi(name: string): string {
+  // acc() already knows how the name sounds (Ada'yı, Owen'ı, Hannah'yı): its last letter is the 4-way vowel
+  return `m${acc(name).slice(-1)}`;
 }

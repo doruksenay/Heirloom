@@ -104,7 +104,8 @@ export const HONORS: Record<Honors, { en: string; tr: string; min: number }> = {
 
 export const majorName = (lang: string | undefined, m: Major | null): string => {
   const tr = lang === 'tr';
-  if (!m) return tr ? 'Genel Programlar' : 'General Studies';
+  // only an undeclared student has no major (graduation files them under Business): "ortak dersler"
+  if (!m) return tr ? 'Ortak Dersler' : 'General Studies';
   return tr ? MAJORS[m].tr : MAJORS[m].en;
 };
 

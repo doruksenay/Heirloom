@@ -1,11 +1,55 @@
-import type { EventDef } from '../types';
+import type { Ctx, EventDef } from '../types';
 import { titleFor } from '../../engine/careers';
-import { acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, officeJob } from './util';
+import { abl, acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, officeJob } from './util';
+import { byCountry, him, he, type ByCountry } from './events-flavour';
+import { promoteAnyway } from '../../engine/context';
 import { catName, syncFlagCat } from '../../engine/pets';
 
 const TOPICS_EN = ['the dishes', 'your phone screen time', 'whose family to visit for the holidays', 'money', 'the thermostat'];
 const TOPICS_TR = ['bulaşıklar', 'telefona gömülmen', 'bayramda kimin ailesine gidileceği', 'para', 'kombinin derecesi'];
 const topicTr = (en: string) => TOPICS_TR[TOPICS_EN.indexOf(en)] ?? en;
+
+/** Headhunters place office and professional jobs, not farmers, fishers or footballers. */
+const NOT_HEADHUNTED = new Set(['athlete', 'coach', 'soldier', 'officer', 'artist', 'farmer', 'fisher', 'taxi']);
+const headhunted = (c: Ctx) => eligibleJobs(c).filter((j) => !NOT_HEADHUNTED.has(j.id));
+
+/** base.flu lines by life stage; every bucket has three, so the rng call is the same at every age. */
+const FLU: { upTo: number; lines: [string, string][] }[] = [
+  {
+    upTo: 12,
+    lines: [
+      ['A stomach bug went round your class. It found you. Three days on the sofa with cartoons.', 'Sınıfta mide virüsü dolaştı ve seni de buldu. Üç gün kanepede çizgi film izledin.'],
+      ['You ran a fever for three days. Everyone tiptoed around you and brought soup.', 'Üç gün ateşler içinde yattın. Herkes parmak uçlarında yürüdü, sana çorba taşıdı.'],
+      ['You fell off the swings and sprained your wrist. The cast got forty signatures.', 'Salıncaktan düşüp bileğini burktun. Alçına kırk kişi imza attı.'],
+    ],
+  },
+  {
+    upTo: 64,
+    lines: [
+      ['You caught a nasty flu and spent a week in bed.', 'Fena bir gribe yakalandın ve bir hafta yatakta kaldın.'],
+      ['You got food poisoning from a gas station sandwich.', 'Benzinlikten aldığın tostla zehirlendin.'],
+      ['You sprained your ankle on the stairs.', 'Merdivende ayağını burktun.'],
+    ],
+  },
+  {
+    upTo: 999,
+    lines: [
+      ['A nasty flu kept you in bed for two weeks. The neighbors took turns bringing soup.', 'Fena bir grip seni iki hafta yatağa düşürdü. Komşular sırayla çorba getirdi.'],
+      ['You pulled a muscle reaching for the top shelf. The jar of jam was not worth it.', 'Üst raftaki reçel kavanozuna uzanırken belin tutuldu. O reçel buna değmezdi.'],
+      ['You caught a cold at a wedding and coughed through every photo.', 'Bir düğünde üşüttün ve bütün fotoğraflara öksürürken girdin.'],
+    ],
+  },
+];
+
+/** A street snack a pigeon can steal: [English, Turkish nominative]. */
+const SNACK: ByCountry<[string, string]> = {
+  tr: ['simit', 'simit'],
+  us: ['hot dog', 'sosisli sandviç'],
+  uk: ['sausage roll', 'sosisli börek'],
+  de: ['pretzel', 'pretzel'],
+  br: ['cheese bread', 'peynirli ekmek'],
+  other: ['sandwich', 'sandviç'],
+};
 
 // Love, family, work, health, money and old age.
 export const adultEvents: EventDef[] = [
@@ -28,7 +72,7 @@ export const adultEvents: EventDef[] = [
         label: (c) => c.t('Apologize', 'Özür dile'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 6);
-          return c.t(`You apologized to ${nm(c)}. Peace returns to the household.`, `${dat(nm(c))} özür diledin. Eve yeniden huzur geldi.`);
+          return c.t(`You apologized to ${nm(c)}. Peace returns to the household.`, `${abl(nm(c))} özür diledin. Eve yeniden huzur geldi.`);
         },
       },
       {
@@ -39,7 +83,7 @@ export const adultEvents: EventDef[] = [
           c.h.stat('happiness', -3);
           return c.t(
             `You argued with ${nm(c)} until 2 a.m. Nobody won.`,
-            `${wth(nm(c))} gece 2'ye kadar tartıştınız. Kazanan olmadı.`,
+            `${wth(nm(c))} gece ikiye kadar tartıştınız. Kazanan olmadı.`,
           );
         },
       },
@@ -61,7 +105,8 @@ export const adultEvents: EventDef[] = [
     category: 'love',
     minAge: 20,
     cooldown: 6,
-    when: (c) => c.h.relatives('spouse').length > 0,
+    // a wedding this year is not an anniversary yet
+    when: (c) => c.h.relatives('spouse').some((r) => c.s.year - r.rel.sinceYear >= 1),
     text: '',
     apply: (c) => {
       const sp = c.h.relatives('spouse')[0];
@@ -69,7 +114,7 @@ export const adultEvents: EventDef[] = [
       c.h.closeness(sp.person.id, 5);
       c.h.stat('happiness', 4);
       return c.t(
-        `You and ${sp.person.firstName} celebrated ${years} years of marriage with dinner at your favorite place.`,
+        `You and ${sp.person.firstName} celebrated ${years === 1 ? 'your first year' : `${years} years`} of marriage with dinner at your favorite place.`,
         `${sp.person.firstName} ve sen ${years}. evlilik yıl dönümünüzü en sevdiğiniz mekânda yemekle kutladınız.`,
       );
     },
@@ -123,27 +168,29 @@ export const adultEvents: EventDef[] = [
     id: 'base.kid_moment',
     category: 'family',
     cooldown: 3,
-    when: (c) => c.h.relatives('child').some((k) => c.h.ageOf(k.person) < 12),
+    // ages 3–11: a newborn does not draw dragons or tell the class anything
+    when: (c) => c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 3 && c.h.ageOf(k.person) < 12),
     text: '',
     apply: (c) => {
-      const kid = c.h.relatives('child').filter((k) => c.h.ageOf(k.person) < 12)[0];
+      const kid = c.h.relatives('child').filter((k) => c.h.ageOf(k.person) >= 3 && c.h.ageOf(k.person) < 12)[0];
       c.h.closeness(kid.person.id, 5);
       c.h.stat('happiness', 4);
       const i = c.rng.int(0, 3);
-      const line = c.t(
-        [
-          `drew a picture of you as a dragon. You framed it.`,
-          `asked why the sky is blue. You said "science" and changed the subject.`,
-          `told the whole class you're a secret agent.`,
-          `learned to ride a bike today. You cried a little.`,
-        ][i],
-        [
-          `seni ejderha olarak çizdi. Resmi çerçeveletip duvara astın.`,
-          `gökyüzünün neden mavi olduğunu sordu. "Bilim" deyip konuyu değiştirdin.`,
-          `bütün sınıfa senin gizli ajan olduğunu söyledi.`,
-          `bugün bisiklete binmeyi öğrendi. Biraz ağladın.`,
-        ][i],
-      );
+      const small = c.h.ageOf(kid.person) <= 5;
+      const LINES: [string, string][] = small
+        ? [
+            ['drew a picture of you as a dragon. You framed it.', 'seni ejderha olarak çizdi. Resmi çerçeveletip duvara astın.'],
+            ['asked why the sky is blue. You said "science" and changed the subject.', 'gökyüzünün neden mavi olduğunu sordu. "Bilim" deyip konuyu değiştirdin.'],
+            ['told the whole nursery you\'re a secret agent.', 'bütün anaokuluna senin gizli ajan olduğunu söyledi.'],
+            ['put your shoes on the wrong feet, then yours, then the cat\'s. Proudly.', 'önce kendi ayakkabılarını ters giydi, sonra seninkileri. Gururla.'],
+          ]
+        : [
+            ['drew a picture of you as a dragon. You framed it.', 'seni ejderha olarak çizdi. Resmi çerçeveletip duvara astın.'],
+            ['asked why the sky is blue. You said "science" and changed the subject.', 'gökyüzünün neden mavi olduğunu sordu. "Bilim" deyip konuyu değiştirdin.'],
+            ['told the whole class you\'re a secret agent.', 'bütün sınıfa senin gizli ajan olduğunu söyledi.'],
+            ['learned to ride a bike today. You cried a little.', 'bugün bisiklete binmeyi öğrendi. Biraz ağladın.'],
+          ];
+      const line = c.t(LINES[i][0], LINES[i][1]);
       return c.t(
         `Your ${kin(c, kid.person, 'child')} ${kid.person.firstName} ${line}`,
         `${cap(kin(c, kid.person, 'child'))} ${kid.person.firstName} ${line}`,
@@ -167,7 +214,7 @@ export const adultEvents: EventDef[] = [
     choices: [
       {
         id: 'move_in',
-        label: (c) => c.t('Move them in with you', 'Yanına taşınsın'),
+        label: (c) => c.t(`Move ${him(who(c))} in with you`, 'Yanına taşınsın'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 15);
           c.h.money(-wage(c, 4000));
@@ -208,9 +255,10 @@ export const adultEvents: EventDef[] = [
     id: 'base.sibling_loan',
     category: 'family',
     minAge: 20,
-    when: (c) => c.h.relatives('sibling').length > 0 && c.p.money > 2000,
+    maxAge: 75,
+    when: (c) => c.h.relatives('sibling').some((s) => c.h.ageOf(s.person) <= 78) && c.p.money > wage(c, 2000),
     setup: (c) => {
-      c.vars.pid = c.rng.pick(c.h.relatives('sibling')).person.id;
+      c.vars.pid = c.rng.pick(c.h.relatives('sibling').filter((s) => c.h.ageOf(s.person) <= 78)).person.id;
       c.vars.amt = wage(c, c.rng.int(1000, 6000));
     },
     title: (c) => {
@@ -232,7 +280,7 @@ export const adultEvents: EventDef[] = [
           if (c.rng.chance(0.5)) {
             c.h.money(amt);
             return c.t(
-              `You lent ${nm(c)} the money. Surprisingly, they paid it all back.`,
+              `You lent ${nm(c)} the money. Surprisingly, ${he(who(c))} paid it all back.`,
               `${dat(nm(c))} borç verdin. Şaşırtıcı ama kuruşu kuruşuna geri ödedi.`,
             );
           }
@@ -289,15 +337,19 @@ export const adultEvents: EventDef[] = [
     choices: [
       {
         id: 'callout',
-        label: (c) => c.t('Call them out in front of everyone', 'Herkesin önünde rezil et'),
+        label: (c) => c.t(`Call ${him(who(c))} out in front of everyone`, 'Herkesin önünde rezil et'),
         badge: 'Risky',
         resolve: (c) => {
           if (c.rng.chance(0.35)) {
-            c.h.promote();
             c.h.stat('happiness', 8);
+            if (c.h.promote())
+              return c.t(
+                `The room went silent, then the CEO asked to see your drafts. You were promoted to ${c.h.jobTitle()}.`,
+                `Salonda çıt çıkmadı, sonra CEO taslaklarını görmek istedi. ${c.h.jobTitle()} pozisyonuna terfi ettin.`,
+              );
             return c.t(
-              `The room went silent, then the CEO asked to see your drafts. You were promoted to ${c.h.jobTitle()}.`,
-              `Salonda çıt çıkmadı, sonra CEO taslaklarını görmek istedi. ${c.h.jobTitle()} pozisyonuna terfi ettin.`,
+              'The room went silent, then the CEO asked to see your drafts. The credit is yours now, in writing.',
+              'Salonda çıt çıkmadı, sonra CEO taslaklarını görmek istedi. Artık emeğin kayıtlarda senin adınla geçiyor.',
             );
           }
           c.h.setJob(null);
@@ -310,7 +362,7 @@ export const adultEvents: EventDef[] = [
       },
       {
         id: 'private',
-        label: (c) => c.t('Talk to them privately', 'Baş başa konuş'),
+        label: (c) => c.t(`Talk to ${him(who(c))} privately`, 'Baş başa konuş'),
         resolve: (c) => {
           c.h.stat('happiness', -1);
           return c.t(
@@ -374,9 +426,9 @@ export const adultEvents: EventDef[] = [
     category: 'work',
     minAge: 24,
     maxAge: 60,
-    when: (c) => !!c.p.jobId && c.p.stats.smarts > 55 && eligibleJobs(c).length > 0,
+    when: (c) => !!c.p.jobId && c.p.stats.smarts > 55 && headhunted(c).length > 0,
     setup: (c) => {
-      const options = eligibleJobs(c);
+      const options = headhunted(c);
       const job = c.rng.pick(options);
       c.vars.job = job.id;
       c.vars.title = job.titles[Math.min(1, job.titles.length - 1)];
@@ -384,8 +436,8 @@ export const adultEvents: EventDef[] = [
     },
     title: (c) =>
       c.t(
-        `A recruiter offers you a role as ${c.vars.title}.`,
-        `Bir İK avcısı sana ${String(c.vars.titleTr ?? c.vars.title)} pozisyonu teklif ediyor.`,
+        `A headhunter offers you the role of ${c.vars.title}.`,
+        `Bir kelle avcısı seni ${String(c.vars.titleTr ?? c.vars.title)} pozisyonu için arıyor.`,
       ),
     text: (c) => c.t('The pay is better, the commute is worse.', 'Maaş daha iyi, yol daha uzun.'),
     choices: [
@@ -394,7 +446,7 @@ export const adultEvents: EventDef[] = [
         label: (c) => c.t('Take the new job', 'Yeni işi kabul et'),
         resolve: (c) => {
           c.h.setJob(String(c.vars.job));
-          c.h.promote();
+          promoteAnyway(c); // hired straight into the offered level: a new job, not a yearly promotion
           c.h.stat('happiness', 4);
           return c.t(`You started a new job as ${c.h.jobTitle()}.`, `${c.h.jobTitle()} olarak yeni işine başladın.`);
         },
@@ -450,15 +502,15 @@ export const adultEvents: EventDef[] = [
   {
     id: 'base.flu',
     category: 'health',
+    // toddlers have their own health events (vaccines, eating sand); this one starts at school age
+    minAge: 4,
     cooldown: 3,
     text: '',
     apply: (c) => {
       c.h.stat('health', -4);
       const i = c.rng.int(0, 2);
-      return c.t(
-        ['You caught a nasty flu and spent a week in bed.', 'You got food poisoning from a gas station sandwich.', 'You sprained your ankle on the stairs.'][i],
-        ['Fena bir gribe yakalandın ve bir hafta yatakta kaldın.', 'Benzinlikten aldığın tostla zehirlendin.', 'Merdivende ayağını burktun.'][i],
-      );
+      const lines = FLU.find((b) => c.age <= b.upTo)!.lines;
+      return c.t(lines[i][0], lines[i][1]);
     },
     tone: 'bad',
   },
@@ -581,6 +633,7 @@ export const adultEvents: EventDef[] = [
     id: 'base.wallet',
     category: 'random',
     minAge: 10,
+    cooldown: 12, // a found wallet is a story, not a yearly income
     setup: (c) => {
       c.vars.amt = wage(c, c.rng.int(80, 600));
     },
@@ -674,14 +727,15 @@ export const adultEvents: EventDef[] = [
       c.h.stat('looks', 2);
       c.h.achieve('viral');
       const i = c.rng.int(0, 2);
+      const [snack, snackTr] = byCountry(c, SNACK);
       return c.t(
         [
-          'Your video of a pigeon stealing a simit went viral. 2 million views.',
+          `Your video of a pigeon stealing a ${snack} went viral. 2 million views.`,
           'Your rant about pineapple pizza went viral. You are now a "food critic."',
           'Your dance in the supermarket went viral. Strangers recognize you.',
         ][i],
         [
-          'Simit çalan bir güvercini çektiğin video viral oldu. 2 milyon izlenme.',
+          `${snackTr[0].toLocaleUpperCase('tr')}${snackTr.slice(1)} çalan bir güvercini çektiğin video viral oldu. 2 milyon izlenme.`,
           'Ananaslı pizzaya ettiğin isyan viral oldu. Artık bir "gurme"sin.',
           'Markette dans ettiğin video viral oldu. Sokakta tanınıyorsun.',
         ][i],
@@ -693,7 +747,7 @@ export const adultEvents: EventDef[] = [
     category: 'heirloom',
     minAge: 25,
     cooldown: 15,
-    when: (c) => c.s.dynasty.heirlooms.length > 0 && c.p.money < 5000,
+    when: (c) => c.s.dynasty.heirlooms.length > 0 && c.p.money < wage(c, 5000),
     setup: (c) => {
       const item = c.rng.pick(c.s.dynasty.heirlooms);
       c.vars.uid = item.uid;
@@ -756,6 +810,8 @@ export const adultEvents: EventDef[] = [
     id: 'base.inheritance_far',
     category: 'money',
     minAge: 25,
+    // a great-aunt you never met is not alive when you are 90
+    maxAge: 60,
     once: true,
     weight: 2,
     setup: (c) => {

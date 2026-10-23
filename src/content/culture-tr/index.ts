@@ -2,18 +2,37 @@ import type { ActivityDef, ContentPack, Ctx, EventDef } from '../types';
 import type { GameState } from '../../engine/types';
 import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
-import { cap, dat, eligibleJobs, gen, kin, kinWord, nm, single, wage, who, wth } from '../base/util';
+import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, single, wage, who, wth } from '../base/util';
+import { isCoastal } from '../../engine/places';
 
 // "Türkiye" culture pack: everyday Turkish life moments for characters living in Türkiye.
 export const CULTURE_TR_ENTITLEMENT = 'pack.culture_tr';
 
 const inTR = (c: Ctx) => c.p.countryId === 'tr';
-/** Married within the last two years: the wedding parties (kına, düğün, takı) can trail the official ceremony. */
-const justMarried = (c: Ctx) => c.h.relatives('spouse').some((s) => c.s.year - s.rel.sinceYear <= 2);
+/**
+ * Married within the last two years: the wedding parties (kına, düğün, takı) can trail the official ceremony.
+ * Only a wedding you had in this life counts (proposals give the 'married' achievement); an heir who takes over
+ * already married gets a fresh spouse link that year, and that is not a wedding.
+ */
+const justMarried = (c: Ctx) => c.p.achievements.includes('married') && c.h.relatives('spouse').some((s) => c.s.year - s.rel.sinceYear <= 2);
+/** Wedding parties with families, gold and davul zurna are for a first-ish wedding, not one at 79. */
+const WEDDING_MAX_AGE = 50;
+const hasMom = (c: Ctx) => c.h.relatives('mother').length > 0;
+const hasDad = (c: Ctx) => c.h.relatives('father').length > 0;
+const coastal = (c: Ctx) => isCoastal(c.p.city);
 /** Running a household of your own (paying the bills), not living with the parents. */
 const ownHome = (c: Ctx) => c.p.home.owned || (!!c.p.jobId && c.age >= 23);
 /** A child of yours who has children of their own and is at least `minAge` years old. */
 const hasGrandkids = (c: Ctx, minAge: number) => c.h.relatives('child').some((k) => (k.person.kids ?? 0) > 0 && c.h.ageOf(k.person) >= minAge);
+/** Grandchildren with real records (newer saves), alive and within an age range. */
+const grandkidsAged = (c: Ctx, min: number, max: number) =>
+  c.h
+    .relatives('child')
+    .flatMap((k) => k.person.childIds ?? [])
+    .map((id) => c.s.people[id])
+    .filter((g) => !!g && g.deathYear === undefined && c.h.ageOf(g) >= min && c.h.ageOf(g) <= max);
+/** True when grandchildren have real records (otherwise only a count is known). */
+const knowsGrandkids = (c: Ctx) => c.h.relatives('child').some((k) => (k.person.childIds ?? []).length > 0);
 const family = (c: Ctx) => c.h.relatives(['mother', 'father', 'sibling', 'child', 'spouse']);
 const closeAll = (c: Ctx, kinds: Parameters<Ctx['h']['relatives']>[0], d: number) => c.h.relatives(kinds).forEach((r) => c.h.closeness(r.person.id, d));
 const isIzmir = (c: Ctx) => ['İzmir', 'Izmir'].includes(c.p.city);
@@ -53,7 +72,7 @@ const childhood: EventDef[] = [
     maxAge: 7,
     once: true,
     weight: 50,
-    when: (c) => inTR(c) && c.p.school === 'primary',
+    when: (c) => inTR(c) && c.p.school === 'primary' && hasMom(c),
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: 6 }).id;
     },
@@ -105,7 +124,7 @@ const childhood: EventDef[] = [
     maxAge: 10,
     once: true,
     weight: 25,
-    when: (c) => inTR(c) && c.p.gender === 'male',
+    when: (c) => inTR(c) && c.p.gender === 'male' && hasDad(c),
     title: (c) => c.t('Your circumcision feast (sünnet düğünü) is this weekend.', 'Bu hafta sonu sünnet düğünün var.'),
     text: (c) =>
       c.t(
@@ -217,7 +236,7 @@ const childhood: EventDef[] = [
     minAge: 6,
     maxAge: 11,
     once: true,
-    when: inTR,
+    when: (c) => inTR(c) && hasMom(c),
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: Math.max(5, c.age + c.rng.int(-1, 1)) }).id;
     },
@@ -315,7 +334,7 @@ const childhood: EventDef[] = [
     minAge: 7,
     maxAge: 17,
     cooldown: 4,
-    when: (c) => inTR(c) && (c.p.school === 'primary' || c.p.school === 'highschool'),
+    when: (c) => inTR(c) && (c.p.school === 'primary' || c.p.school === 'highschool') && hasMom(c) && hasDad(c),
     setup: (c) => {
       c.vars.grade = c.p.stats.smarts >= 70 ? 'takdir' : c.p.stats.smarts >= 45 ? 'tesekkur' : 'zayif';
     },
@@ -380,7 +399,7 @@ const childhood: EventDef[] = [
     minAge: 6,
     maxAge: 15,
     once: true,
-    when: inTR,
+    when: (c) => inTR(c) && hasMom(c),
     title: (c) => c.t('Feast of Sacrifice (Kurban Bayramı): you are the delivery kid.', 'Kurban Bayramı: dağıtım görevi sende.'),
     text: (c) =>
       c.t(
@@ -540,7 +559,7 @@ const youth: EventDef[] = [
     maxAge: 13,
     once: true,
     weight: 100,
-    when: (c) => inTR(c) && c.p.school === 'primary',
+    when: (c) => inTR(c) && c.p.school === 'primary' && hasMom(c) && hasDad(c),
     title: (c) => c.t('The high school entrance exam (LGS) is this year.', 'Bu yıl LGS var.'),
     text: (c) =>
       c.t(
@@ -643,7 +662,7 @@ const youth: EventDef[] = [
     maxAge: 17,
     once: true,
     weight: 100,
-    when: (c) => inTR(c) && c.p.school === 'highschool',
+    when: (c) => inTR(c) && c.p.school === 'highschool' && hasMom(c),
     title: (c) => c.t('The university entrance exam (YKS) is in six months.', "YKS'ye altı ay kaldı."),
     text: (c) => c.t("Your whole family has opinions. Your aunt's son got into medicine.", 'Bütün sülalenin bir fikri var. Teyzenin oğlu tıp kazanmış, haberin olsun.'),
     choices: [
@@ -693,7 +712,7 @@ const youth: EventDef[] = [
     maxAge: 21,
     once: true,
     weight: 40,
-    when: (c) => inTR(c) && c.p.school === 'university',
+    when: (c) => inTR(c) && c.p.school === 'university' && hasMom(c),
     title: (c) => c.t('University in a new city: where will you live?', 'Yeni şehirde üniversite: nerede kalacaksın?'),
     text: (c) => c.t('Your mother has packed enough dried food for a small army.', 'Annen küçük bir orduya yetecek kadar kuru gıda hazırladı bile.'),
     choices: [
@@ -737,7 +756,7 @@ const youth: EventDef[] = [
     maxAge: 30,
     once: true,
     weight: 20,
-    when: (c) => inTR(c) && c.p.gender === 'male' && c.p.jailYears === 0 && c.p.school !== 'university',
+    when: (c) => inTR(c) && c.p.gender === 'male' && c.p.jailYears === 0 && c.p.school !== 'university' && hasMom(c),
     title: (c) => c.t('Your military service papers (celp) have arrived.', 'Askerlik celbin geldi.'),
     text: (c) => c.t('Your mother is already preparing a farewell dinner. And crying.', 'Annen asker uğurlaması için yemekleri hazırlamaya başladı bile. Bir yandan da ağlıyor.'),
     choices: [
@@ -823,7 +842,7 @@ const youth: EventDef[] = [
     minAge: 22,
     maxAge: 32,
     once: true,
-    when: (c) => inTR(c) && c.p.jailYears === 0 && c.p.school === null && c.p.education !== 'none' && c.h.job()?.field !== 'public',
+    when: (c) => inTR(c) && c.p.jailYears === 0 && c.p.school === null && c.p.education !== 'none' && c.h.job()?.field !== 'public' && hasMom(c),
     title: (c) => c.t('Your mom wants you to take the civil service exam (KPSS).', "Annen KPSS'ye girmeni istiyor."),
     text: (c) =>
       c.t('"A government job (memuriyet) is for life. Tenure, a pension and home by half past five."', '"Devlet kapısı başka. Kadro, emeklilik, akşam beş buçukta evdesin."'),
@@ -862,7 +881,7 @@ function kpss(c: Ctx, need: number): string {
     c.h.setJob(c.rng.pick(posts).id);
     c.h.stat('happiness', 8);
     return c.t(
-      `You scored high and got a tenured post (kadro) as ${c.h.jobTitle()}. Your mother had fried dough (lokma) handed out to the whole street.`,
+      `You scored high and got a tenured post (kadro) as ${aOrAn(c.h.jobTitle() ?? '')}. Your mother had fried dough (lokma) handed out to the whole street.`,
       `Yüksek puan aldın ve ${c.h.jobTitle()} olarak kadroya girdin. Annen sevinçten mahalleye lokma döktürdü.`,
     );
   }
@@ -881,7 +900,7 @@ const love: EventDef[] = [
     minAge: 24,
     maxAge: 38,
     once: true,
-    when: (c) => inTR(c) && single(c),
+    when: (c) => inTR(c) && single(c) && hasMom(c),
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ gender: c.p.gender === 'female' ? 'male' : 'female', age: c.age + c.rng.int(-3, 4) }).id;
     },
@@ -993,11 +1012,12 @@ const love: EventDef[] = [
   {
     id: 'tr.dugun_salonu',
     category: 'love',
+    maxAge: WEDDING_MAX_AGE,
     once: true,
     weight: 60,
-    when: (c) => inTR(c) && justMarried(c),
+    when: (c) => inTR(c) && justMarried(c) && hasMom(c),
     title: (c) => c.t('The families want a proper wedding party (düğün).', 'Aileler adam gibi bir düğün istiyor.'),
-    text: (c) => c.t('Your new in-laws have a guest list of six hundred. You have met eleven of them.', 'Dünürlerin altı yüz kişilik bir davetli listesi var. Sen bunların on birini tanıyorsun.'),
+    text: (c) => c.t('Your new in-laws have a guest list of six hundred. You have met eleven of them.', 'Karşı tarafın altı yüz kişilik bir davetli listesi var. Sen bunların on birini tanıyorsun.'),
     choices: [
       {
         id: 'salon',
@@ -1029,7 +1049,9 @@ const love: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 2);
           closeAll(c, ['mother', 'father'], -4);
-          return c.t('A quick ceremony at the registry office and a fish dinner by the sea. Your mother has not stopped sighing.', 'Belediyede kısa bir nikâh, akşamına deniz kenarında balık. Annen o günden beri iç çekiyor.');
+          return coastal(c)
+            ? c.t('A quick ceremony at the registry office and a fish dinner by the sea. Your mother has not stopped sighing.', 'Belediyede kısa bir nikâh, akşamına deniz kenarında balık. Annen o günden beri iç çekiyor.')
+            : c.t('A quick ceremony at the registry office and a kebab dinner for two. Your mother has not stopped sighing.', 'Belediyede kısa bir nikâh, akşamına baş başa bir kebap. Annen o günden beri iç çekiyor.');
         },
       },
     ],
@@ -1037,9 +1059,10 @@ const love: EventDef[] = [
   {
     id: 'tr.kina',
     category: 'love',
+    maxAge: WEDDING_MAX_AGE,
     once: true,
     weight: 60,
-    when: (c) => inTR(c) && justMarried(c) && c.p.gender === 'female',
+    when: (c) => inTR(c) && justMarried(c) && c.p.gender === 'female' && hasMom(c),
     title: (c) => c.t('Tonight is your henna night (kına gecesi).', 'Bu gece kına gecen.'),
     text: (c) => c.t('Henna is about to be pressed into your palm. Tradition says the bride must cry.', 'Avucuna kına yakılacak. Adettendir, gelin ağlamalı.'),
     choices: [
@@ -1085,6 +1108,7 @@ const love: EventDef[] = [
   {
     id: 'tr.taki',
     category: 'love',
+    maxAge: WEDDING_MAX_AGE,
     once: true,
     weight: 60,
     when: (c) => inTR(c) && justMarried(c),
@@ -1153,10 +1177,15 @@ const adult: EventDef[] = [
         );
       }
       c.h.stat('happiness', 3);
+      // one row per slot, picked once; the middle line depends on whether you are the visitor or the visited
       return line(c, [
         ['Bayram visits: eleven houses, eleven cups of tea, one sugar coma.', 'Bayram ziyareti turu: on bir ev, on bir bardak çay, bir de şeker koması.'],
-        ["Bayram at the grandparents'. Your aunt asked about your salary in front of everyone.", 'Bayramda dedengildesin. Halan herkesin önünde "Maaşın ne kadar?" diye sordu.'],
-        ['You handed out pocket money (harçlık) to the kids on your street. You are officially an elder now.', 'Sokaktaki çocuklara bayram harçlığı dağıttın. Artık resmen "büyükler" kategorisindesin.'],
+        c.age < 45
+          ? ["Bayram at the grandparents'. Your aunt asked about your salary in front of everyone.", 'Bayramda dedengildesin. Halan herkesin önünde "Maaşın ne kadar?" diye sordu.']
+          : ['The whole family came to you for bayram. Twenty-two shoes by the door, one bathroom.', 'Bayramda bütün aile sana geldi. Kapının önünde yirmi iki ayakkabı, evde tek banyo.'],
+        c.age < 60
+          ? ['You handed out pocket money (harçlık) to the kids on your street. You are officially an elder now.', 'Sokaktaki çocuklara bayram harçlığı dağıttın. Artık resmen "büyükler" kategorisindesin.']
+          : ['A queue of grandchildren and neighbors kissed your hand. Your harçlık budget did not survive the morning.', 'Torunlar ve komşu çocukları elini öpmek için sıraya girdi. Harçlık bütçen öğleni görmedi.'],
       ]);
     },
   },
@@ -1255,7 +1284,9 @@ const adult: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -4);
           c.h.stat('health', -1);
-          return c.t('You moved to a cheaper flat. Your commute is now two buses and a ferry.', 'Daha ucuz bir daireye taşındın. İşe gidiş artık iki otobüs bir vapur.');
+          return coastal(c)
+            ? c.t('You moved to a cheaper flat. Your commute is now two buses and a ferry.', 'Daha ucuz bir daireye taşındın. İşe gidiş artık iki otobüs bir vapur.')
+            : c.t('You moved to a cheaper flat. Your commute is now two buses and a dolmuş.', 'Daha ucuz bir daireye taşındın. İşe gidiş artık iki otobüs bir dolmuş.');
         },
       },
     ],
@@ -1334,7 +1365,7 @@ const adult: EventDef[] = [
           if (c.rng.chance(0.3) && c.h.promote()) {
             c.h.stat('happiness', 4);
             return c.t(
-              `The tea man ${nm(c)} tipped you off about an opening upstairs before it was posted. You are now ${c.h.jobTitle()}.`,
+              `The tea man ${nm(c)} tipped you off about an opening upstairs before it was posted. You are now ${aOrAn(c.h.jobTitle() ?? '')}.`,
               `Çaycı ${nm(c)} üst kattaki boş kadroyu ilan edilmeden sana fısıldadı. Artık ${c.h.jobTitle()} unvanın var.`,
             );
           }
@@ -1364,6 +1395,7 @@ const adult: EventDef[] = [
   {
     id: 'tr.tapu',
     category: 'money',
+    maxAge: 85,
     once: true,
     weight: 25,
     when: (c) => inTR(c) && c.p.home.owned,
@@ -1402,6 +1434,7 @@ const adult: EventDef[] = [
     id: 'tr.aidat',
     category: 'money',
     minAge: 25,
+    maxAge: 88,
     cooldown: 7,
     when: (c) => inTR(c) && ownHome(c),
     title: (c) => c.t('Emergency building meeting (apartman toplantısı).', 'Olağanüstü apartman toplantısı.'),
@@ -1447,6 +1480,7 @@ const adult: EventDef[] = [
     id: 'tr.deprem',
     category: 'random',
     minAge: 25,
+    maxAge: 85,
     once: true,
     when: (c) => inTR(c) && c.p.jailYears === 0,
     title: (c) => c.t('Your building holds an earthquake drill.', 'Apartmanda deprem tatbikatı var.'),
@@ -1491,6 +1525,7 @@ const adult: EventDef[] = [
     id: 'tr.kentsel',
     category: 'money',
     minAge: 30,
+    maxAge: 85,
     once: true,
     weight: 15,
     when: (c) => inTR(c) && c.p.home.owned,
@@ -1871,7 +1906,8 @@ const later: EventDef[] = [
     minAge: 55,
     cooldown: 6,
     weight: 14,
-    when: (c) => inTR(c) && hasGrandkids(c, 30),
+    // a grandchild of 6 to 16 learns tavla; older saves only know a count, so fall back to a child of 30+ with kids
+    when: (c) => inTR(c) && (knowsGrandkids(c) ? grandkidsAged(c, 6, 16).length > 0 : hasGrandkids(c, 30)),
     title: (c) => c.t('Your grandchild (torun) wants to learn tavla (backgammon).', 'Torunun tavla öğrenmek istiyor.'),
     text: (c) => c.t('The board is older than their parents and has seen many tea houses.', 'Tavla anne babasından yaşlı; çok kahvehane görmüş.'),
     choices: [
@@ -1912,8 +1948,9 @@ const later: EventDef[] = [
     category: 'family',
     minAge: 60,
     once: true,
-    weight: 12,
-    when: (c) => inTR(c) && hasGrandkids(c, 42),
+    weight: 30,
+    // a grandchild of marrying age; older saves only know a count, so a child of 50+ with kids stands in
+    when: (c) => inTR(c) && (knowsGrandkids(c) ? grandkidsAged(c, 22, 40).length > 0 : hasGrandkids(c, 50)),
     title: (c) => c.t('Your grandchild is getting married!', 'Torunun evleniyor!'),
     text: (c) => c.t('At the gold-pinning (takı), everyone is waiting to see what the grandparent pins on.', 'Takı merasiminde herkes senin ne takacağını merak ediyor.'),
     choices: [
@@ -1974,7 +2011,9 @@ const activities: ActivityDef[] = [
       c.h.stat('happiness', 4);
       return line(c, [
         ['You drank five glasses of tea on the balcony and learned who in the building is getting divorced.', 'Balkonda beş bardak çay içtin ve apartmanda kimin boşandığını öğrendin.'],
-        ['Tea and simit with the neighbors. A seagull stole your simit.', 'Komşularla çay simit keyfi. Bir martı simidini kapıp gitti.'],
+        coastal(c)
+          ? ['Tea and simit with the neighbors. A seagull stole your simit.', 'Komşularla çay simit keyfi. Bir martı simidini kapıp gitti.']
+          : ['Tea and simit with the neighbors. A pigeon stole your simit.', 'Komşularla çay simit keyfi. Bir güvercin simidini kapıp gitti.'],
         ['The neighbor from upstairs read your fortune in your coffee cup (fal). She saw a journey, a letter and a dark-haired stranger.', 'Üst kattaki komşu kahve falına baktı. Yol göründü, bir haber var, bir de esmer biri.'],
         ['You asked for "just half a glass." Your glass was refilled seven times. Nobody listens to "just half."', '"Yarım bardak" dedin. Bardağın yedi kez doldu. "Yarım bardak" diyeni kimse dinlemez.'],
         ['The neighbors compared electricity bills, grandchildren and blood pressure, in that order.', 'Komşular sırasıyla elektrik faturalarını, torunları ve tansiyonlarını karşılaştırdı.'],
@@ -2118,7 +2157,9 @@ const activities: ActivityDef[] = [
         ['Every aunt asked when you are getting married, when the baby is coming, or why you got so thin.', 'Her teyze ya "Ne zaman evleniyorsun?", ya "Bebek ne zaman?", ya da "Neden bu kadar zayıfladın?" diye sordu.'],
         ['You splashed lemon cologne (kolonya) on every guest\'s hands like a pro.', 'Gelen her misafirin eline ustalıkla limon kolonyası döktün.'],
         ["Your uncle told the same story he tells every bayram. You mouthed it along with him.", 'Amcan her bayram anlattığı hikâyeyi yine anlattı. Sen de dudaklarınla eşlik ettin.'],
-        ['You kissed the hands of the elders and touched them to your forehead. Grandma still slipped you money, at your age.', 'Büyüklerin elini öpüp alnına koydun. Ninen bu yaşında bile cebine para sıkıştırdı.'],
+        c.age < 40
+          ? ['You kissed the hands of the elders and touched them to your forehead. Grandma still slipped you money, at your age.', 'Büyüklerin elini öpüp alnına koydun. Ninen bu yaşında bile cebine para sıkıştırdı.']
+          : ['The little ones kissed your hand and touched it to their foreheads. You slipped each of them money, just like your grandma used to.', 'Küçükler elini öpüp alınlarına koydu. Ninenin yaptığı gibi her birinin cebine para sıkıştırdın.'],
       ]);
     },
   },

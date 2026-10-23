@@ -182,3 +182,52 @@ describe('fame expansion v0.7', () => {
     expect(s.player.log.some((l) => l.text.includes('sahne adını'))).toBe(true);
   });
 });
+
+describe('fame v0.7 playtest fixes', () => {
+  it('"Chase fame" closes for years after "Not yet", after retiring, and for good after 60', () => {
+    const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed: 3 }, profile('en'));
+    s.year += 20;
+    const start = famePack.activities!.find((a) => a.id === 'fame_start')!;
+    const open = () => {
+      const c = makeCtx(s);
+      return c.age <= (start.maxAge ?? 999) && start.available!(c);
+    };
+    expect(open()).toBe(true);
+    openEvent(s, findEvent('fame.choose_path')!.def);
+    choose(s, 'later');
+    expect(open()).toBe(false);
+    s.year += 7;
+    expect(open()).toBe(false);
+    s.year += 1;
+    expect(open()).toBe(true);
+    // pick a path, retire, and the door stays shut for a while
+    openEvent(s, findEvent('fame.choose_path')!.def);
+    choose(s, 'acting');
+    expect(open()).toBe(false);
+    doActivity(s, 'fame_quit');
+    expect(s.player.log[s.player.log.length - 1].text).toMatch(/as an? [a-z]/);
+    expect(open()).toBe(false);
+    s.year += 5;
+    expect(open()).toBe(true);
+    s.year = s.player.birthYear + 61;
+    expect(open()).toBe(false);
+  });
+
+  it('writes small fan counts in full in Turkish ("B" reads as billion)', async () => {
+    const { compact } = await import('../src/content/fame/state');
+    expect(compact(2900, 'tr')).toBe('2.900');
+    expect(compact(99_999, 'tr')).toBe('99.999');
+    expect(compact(250_400, 'tr')).toBe('250 bin');
+    expect(compact(999_999, 'tr')).toBe('1 milyon');
+    expect(compact(1_234_567, 'tr')).toBe('1,2 milyon');
+    expect(compact(2900, 'en')).toBe('2.9K');
+  });
+
+  it('retires a Turkish star with a lowercase title mid-sentence', () => {
+    const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed: 5 }, profile('tr'));
+    s.year += 25;
+    Object.assign(fameState(s.player), { path: 'acting', fans: 500 });
+    doActivity(s, 'fame_quit');
+    expect(s.player.log[s.player.log.length - 1].text).toContain('bir figüran olarak');
+  });
+});

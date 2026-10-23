@@ -1,7 +1,8 @@
 import type { Ctx, EventDef } from '../types';
-import { MAX_PETS, addPet, displayName, findPet, nextNum, petAge, petDies, petKind, petState, petsOf, type Pet, type PetKind } from '../../engine/pets';
+import { MAX_PETS, addPet, displayName, findPet, nextNum, petAge, petDies, petKind, petNames, petState, petsOf, type Pet, type PetKind } from '../../engine/pets';
 import { currentTier, homeTier, type HomeTier } from '../../engine/home';
 import { acc, cap, dat, gen, wage, wth } from './util';
+import { coastal } from './events-flavour';
 import {
   adoptableKinds,
   hasPet,
@@ -73,7 +74,7 @@ function pickName(c: Ctx, kind: PetKind): string {
     .filter((x) => x.kind === kind && !x.alive && !x.gone && !taken.has(x.name))
     .sort((a, b) => (b.deathYear ?? 0) - (a.deathYear ?? 0))[0];
   if (last) return last.name;
-  const pool = petKind(kind).names.filter((n) => !taken.has(n));
+  const pool = petNames(kind, c.p.countryId).filter((n) => !taken.has(n));
   return pool[c.rng.int(0, pool.length - 1)];
 }
 
@@ -201,7 +202,9 @@ const petEventsOnly: EventDef[] = [
           c.h.stat('happiness', -1);
           return Number(c.vars.school)
             ? say(c, pet, 'You told your teacher the dog ate it. She did not believe you. You had photos.', '"Ödevimi köpek yedi" dedin. Öğretmen inanmadı. Fotoğrafların vardı.')
-            : say(c, pet, 'You forgave {acc}. You will be wearing slippers to work for a week.', '{acc} affettin. Bir hafta işe terlikle gideceksin.');
+            : c.p.jobId
+              ? say(c, pet, 'You forgave {acc}. You will be wearing slippers to work for a week.', '{acc} affettin. Bir hafta işe terlikle gideceksin.')
+              : say(c, pet, 'You forgave {acc}. You will be wearing slippers everywhere for a week.', '{acc} affettin. Bir hafta her yere terlikle gideceksin.');
         },
       },
       {
@@ -536,12 +539,15 @@ const petEventsOnly: EventDef[] = [
     choices: [
       {
         id: 'sea',
-        label: sayP('Take {acc} to the sea', '{acc} denize götür'),
+        // the sea on the coast, the lake inland
+        label: (c) => (coastal(c) ? say(c, petById(c), 'Take {acc} to the sea', '{acc} denize götür') : say(c, petById(c), 'Take {acc} to the lake', '{acc} göle götür')),
         tone: 'good',
         resolve: (c) => {
           petCloser(petById(c), 15);
           c.h.stat('happiness', 6);
-          return say(c, petById(c), 'You spent the whole day by the water with {n}. Sand, sun, one stolen sandwich. You will remember this day.', 'Bütün günü {wth} deniz kenarında geçirdin. Kum, güneş, bir de çalınmış sandviç. Bu günü hiç unutmayacaksın.');
+          return coastal(c)
+            ? say(c, petById(c), 'You spent the whole day by the water with {n}. Sand, sun, one stolen sandwich. You will remember this day.', 'Bütün günü {wth} deniz kenarında geçirdin. Kum, güneş, bir de çalınmış sandviç. Bu günü hiç unutmayacaksın.')
+            : say(c, petById(c), 'You spent the whole day by the water with {n}. Reeds, sun, one stolen sandwich. You will remember this day.', 'Bütün günü {wth} göl kenarında geçirdin. Sazlıklar, güneş, bir de çalınmış sandviç. Bu günü hiç unutmayacaksın.');
         },
       },
       {

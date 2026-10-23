@@ -1,5 +1,6 @@
 import type { ContentPack } from '../types';
 import { loc } from '../base/util';
+import { cityName } from '../../engine/places';
 import { crimeActivities } from './activities';
 import { afterEvents } from './events-after';
 import { justiceEvents } from './events-justice';
@@ -83,12 +84,12 @@ export const crimePack: ContentPack = {
     if (!secret) return;
     // a parent who got away with something big may have left a little something behind
     const stash = st?.coldCase && st.bigScore > 0 ? Math.min(Math.round(st.bigScore * 0.25), localMoney(prev, 20000)) : 0;
-    crimeState(next).legacy = { name: prev.firstName, record: prev.criminalRecord, stash };
+    crimeState(next).legacy = { name: prev.firstName, record: prev.criminalRecord, stash, id: prev.id };
     if (prev.criminalRecord === 0) return; // the secret waits in the attic
     next.stats.happiness = Math.max(0, next.stats.happiness - 3);
     const tr = s.lang === 'tr';
     return tr
-      ? `${loc(prev.city)} herkes ${prev.firstName} ${prev.lastName} davasını hâlâ hatırlıyor. Fırıncı paranın üstünü sana iki kez sayıyor.`
+      ? `${loc(cityName(prev.city, 'tr'))} herkes ${prev.firstName} ${prev.lastName} davasını hâlâ hatırlıyor. Fırıncı paranın üstünü sana iki kez sayıyor.`
       : `Everyone in ${prev.city} still remembers ${prev.firstName} ${prev.lastName}'s trial. The baker counts your change twice.`;
   },
 };

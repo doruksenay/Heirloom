@@ -123,7 +123,9 @@ export const justiceEvents: EventDef[] = [
     },
     setup: (c) => {
       const st = crimeState(c.p);
-      c.vars.again = st.detective && c.h.person(st.detective) ? 1 : 0;
+      // the same detective comes back, until they retire (or die): then the case goes to someone new
+      const old = st.detective ? c.h.person(st.detective) : undefined;
+      c.vars.again = old && old.deathYear === undefined && c.h.ageOf(old) <= 65 ? 1 : 0;
       if (!c.vars.again) st.detective = c.h.newPerson({ age: c.rng.int(38, 55) }).id;
       c.vars.pid = st.detective!;
       c.vars.fugitive = st.fugitive ? 1 : 0;

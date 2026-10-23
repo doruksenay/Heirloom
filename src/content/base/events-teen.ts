@@ -1,6 +1,7 @@
 import type { Ctx, EventDef } from '../types';
 import type { Person, RelationKind } from '../../engine/types';
-import { acc, cap, dat, eligibleJobs, gen, kinWord, nm, single, wage, who, wth } from './util';
+import { acc, cap, dat, eligibleJobs, gen, kinWord, nm, olderThanPlayer, single, wage, who, wth } from './util';
+import { he, him, his, inTr } from './events-flavour';
 
 // Teen and young-adult years (13–24): braces, curfews, first jobs, first flats, first heartbreaks.
 // University life lives in the Campus pack and YKS / askerlik in the Türkiye pack, so they are not here.
@@ -9,8 +10,8 @@ import { acc, cap, dat, eligibleJobs, gen, kinWord, nm, single, wage, who, wth }
 
 type Case = 'nom' | 'dat' | 'acc' | 'gen' | 'wth';
 
-/** Turkish possessive kinship word ("annen", "kız kardeşin") with a case suffix: annene, babanı, arkadaşınla. */
-function trKin(p: Person, kind: string, cs: Case): string {
+/** Turkish possessive kinship word ("annen", "ablan", "kız kardeşin") with a case suffix: annene, babanı, ablanla. */
+function trKin(p: Person, kind: string, cs: Case, older = false): string {
   const f = p.gender === 'female';
   const base =
     kind === 'mother'
@@ -18,9 +19,13 @@ function trKin(p: Person, kind: string, cs: Case): string {
       : kind === 'father'
         ? 'baban'
         : kind === 'sibling'
-          ? f
-            ? 'kız kardeşin'
-            : 'erkek kardeşin'
+          ? older
+            ? f
+              ? 'ablan'
+              : 'ağabeyin'
+            : f
+              ? 'kız kardeşin'
+              : 'erkek kardeşin'
           : 'arkadaşın';
   const back = /[aıou][^aeıioöuü]*$/.test(base);
   switch (cs) {
@@ -41,7 +46,7 @@ const kindOf = (c: Ctx, id: string): RelationKind => c.p.relations.find((r) => r
 /** English kinship word for the person in c.vars[key]: "mom", "brother". */
 const ke = (c: Ctx, key = 'par') => kinWord(who(c, key), kindOf(c, String(c.vars[key])));
 /** Turkish kinship word with a case for the person in c.vars[key]: "annen", "babana". */
-const kt = (c: Ctx, key = 'par', cs: Case = 'nom') => trKin(who(c, key), kindOf(c, String(c.vars[key])), cs);
+const kt = (c: Ctx, key = 'par', cs: Case = 'nom') => trKin(who(c, key), kindOf(c, String(c.vars[key])), cs, olderThanPlayer(c, who(c, key)));
 
 const parents = (c: Ctx) => c.h.relatives(['mother', 'father']);
 const hasParent = (c: Ctx) => parents(c).length > 0;
@@ -179,7 +184,7 @@ export const teenEvents: EventDef[] = [
     },
     title: (c) => c.t('A screenshot of you is going around the group chat.', 'Senin bir ekran görüntün sınıf grubunda elden ele dolaşıyor.'),
     text: (c) =>
-      c.t(`In it, you called ${gen(nm(c))} new haircut "brave."`, `Görüntüde ${gen(nm(c))} yeni saçı için "cesur bir tercih" demişsin.`),
+      c.t(`In it, you called ${nm(c)}'s new haircut "brave."`, `Görüntüde ${gen(nm(c))} yeni saçı için "cesur bir tercih" demişsin.`),
     choices: [
       {
         id: 'sorry',
@@ -207,7 +212,7 @@ export const teenEvents: EventDef[] = [
       },
       {
         id: 'counter',
-        label: (c) => c.t('Post an even worse screenshot of them', 'Onun daha beter bir ekran görüntüsünü paylaş'),
+        label: (c) => c.t(`Post an even worse screenshot of ${him(who(c))}`, 'Onun daha beter bir ekran görüntüsünü paylaş'),
         badge: 'Risky',
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), -10);
@@ -255,7 +260,7 @@ export const teenEvents: EventDef[] = [
           }
           c.h.stat('happiness', -4);
           return c.t(
-            `${nm(c)} said they were "waiting for someone." That someone turned out to be their phone.`,
+            `${nm(c)} said ${he(who(c))} was "waiting for someone." That someone turned out to be ${his(who(c))} phone.`,
             `${nm(c)} "Birini bekliyorum" dedi. O biri telefonu çıktı.`,
           );
         },
@@ -508,12 +513,14 @@ export const teenEvents: EventDef[] = [
             c.h.stat('happiness', -3);
             return c.t(
               'The vice principal was in the same bakery, buying the same pastry. Your parents got a call.',
-              'Müdür yardımcısı da aynı fırındaymış, aynı poğaçadan alıyormuş. Velini aradılar.',
+              inTr(c)
+                ? 'Müdür yardımcısı da aynı fırındaymış, aynı poğaçadan alıyormuş. Velini aradılar.'
+                : 'Müdür yardımcısı da aynı fırındaymış, aynı çörekten alıyormuş. Velini aradılar.',
             );
           }
           c.h.stat('happiness', 5);
           c.h.stat('smarts', -1);
-          return c.t('Warm pastries, zero consequences. A dangerous lesson.', 'Sıcak poğaça, sıfır ceza. Tehlikeli bir ders oldu bu.');
+          return c.t('Warm pastries, zero consequences. A dangerous lesson.', inTr(c) ? 'Sıcak poğaça, sıfır ceza. Tehlikeli bir ders oldu bu.' : 'Sıcak çörek, sıfır ceza. Tehlikeli bir ders oldu bu.');
         },
       },
       {
@@ -570,7 +577,7 @@ export const teenEvents: EventDef[] = [
         resolve: (c) => {
           c.h.closeness(String(c.vars.par), -6);
           return c.t(
-            `You blocked your ${ke(c)}. Now they comment on your posts through your aunt.`,
+            `You blocked your ${ke(c)}. Now ${he(who(c, 'par'))} comments on your posts through your aunt.`,
             `${cap(kt(c, 'par', 'acc'))} engelledin. Artık paylaşımlarına teyzenin hesabından yorum yapıyor.`,
           );
         },
@@ -655,7 +662,7 @@ export const teenEvents: EventDef[] = [
       },
       {
         id: 'raid',
-        label: (c) => c.t('Raid their wardrobe in return', 'Sen de onun dolabına dal'),
+        label: (c) => c.t(`Raid ${his(who(c, 'sib'))} wardrobe in return`, 'Sen de onun dolabına dal'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.sib), 2);
           c.h.stat('happiness', 3);
@@ -670,7 +677,7 @@ export const teenEvents: EventDef[] = [
         label: (c) => c.t('Let it go', 'Boş ver'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.sib), 4);
-          return c.t('You let it go. The hoodie belongs to them now. That is the law.', 'Boş verdin. Kapüşonlu artık onun. Kanun böyle.');
+          return c.t(`You let it go. The hoodie belongs to ${him(who(c, 'sib'))} now. That is the law.`, 'Boş verdin. Kapüşonlu artık onun. Kanun böyle.');
         },
       },
     ],
@@ -1092,7 +1099,7 @@ export const teenEvents: EventDef[] = [
         label: (c) => c.t('Stay home', 'Evde kal'),
         resolve: (c) => {
           c.h.stat('happiness', -2);
-          return c.t(`You stayed home and watched ${gen(nm(c))} trip in stories.`, `Evde kalıp ${gen(nm(c))} yolculuğunu hikâyelerden izledin.`);
+          return c.t(`You stayed home and watched ${nm(c)}'s trip in stories.`, `Evde kalıp ${gen(nm(c))} yolculuğunu hikâyelerden izledin.`);
         },
       },
     ],
@@ -1191,7 +1198,10 @@ export const teenEvents: EventDef[] = [
     when: (c) => hasParent(c) && !c.h.has('license'),
     setup: pickParent,
     title: (c) => c.t(`Your ${ke(c)} is teaching you to drive.`, `${cap(kt(c))} sana araba kullanmayı öğretiyor.`),
-    text: (c) => c.t('A minibus just pulled out right in front of you.', 'Önüne birden bir dolmuş kırdı.'),
+    text: (c) =>
+      inTr(c)
+        ? c.t('A minibus just pulled out right in front of you.', 'Önüne birden bir dolmuş kırdı.')
+        : c.t('A delivery van just pulled out right in front of you.', 'Önüne birden bir kamyonet kırdı.'),
     choices: [
       {
         id: 'brake',
@@ -1218,7 +1228,7 @@ export const teenEvents: EventDef[] = [
           if (c.rng.chance(0.5)) {
             c.h.stat('happiness', 4);
             return c.t(
-              `You swerved perfectly. Your ${ke(c)} is now checking their own heartbeat.`,
+              `You swerved perfectly. Your ${ke(c)} is now checking ${his(who(c, 'par'))} own heartbeat.`,
               `Kusursuz bir manevra yaptın. ${cap(kt(c))} şu an kendi nabzını ölçüyor.`,
             );
           }
@@ -1237,10 +1247,9 @@ export const teenEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -2);
           c.h.closeness(String(c.vars.par), 1);
-          return c.t(
-            'You swapped seats on the spot. The minibus driver honked his approval.',
-            'Oracıkta yer değiştirdiniz. Dolmuş şoförü kornayla onayını bildirdi.',
-          );
+          return inTr(c)
+            ? c.t('You swapped seats on the spot. The minibus driver honked his approval.', 'Oracıkta yer değiştirdiniz. Dolmuş şoförü kornayla onayını bildirdi.')
+            : c.t('You swapped seats on the spot. The van driver honked his approval.', 'Oracıkta yer değiştirdiniz. Kamyonet şoförü kornayla onayını bildirdi.');
         },
       },
     ],
@@ -1389,7 +1398,7 @@ export const teenEvents: EventDef[] = [
               `Çizelge işe yaradı. ${nm(c)} çıkartmalara bayılıyormuş. Artık arkadaşsınız.`,
             );
           }
-          return c.t(`${nm(c)} gave themselves a gold star for "existing."`, `${nm(c)} kendine "var olduğu için" altın yıldız verdi.`);
+          return c.t(`${nm(c)} gave ${him(who(c))}self a gold star for "existing."`, `${nm(c)} kendine "var olduğu için" altın yıldız verdi.`);
         },
       },
       {
@@ -1429,7 +1438,7 @@ export const teenEvents: EventDef[] = [
       },
       {
         id: 'clean',
-        label: (c) => c.t('Let them "just tidy a little"', '"Azıcık toparlamasına" izin ver'),
+        label: (c) => c.t(`Let ${him(who(c, 'par'))} "just tidy a little"`, '"Azıcık toparlamasına" izin ver'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.par), 3);
           c.h.stat('happiness', -1);
@@ -1441,7 +1450,7 @@ export const teenEvents: EventDef[] = [
       },
       {
         id: 'hide',
-        label: (c) => c.t('Keep them at the door', 'Kapıda karşıla, içeri alma'),
+        label: (c) => c.t(`Keep ${him(who(c, 'par'))} at the door`, 'Kapıda karşıla, içeri alma'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.par), -4);
           return c.t(
@@ -1652,7 +1661,7 @@ export const teenEvents: EventDef[] = [
         resolve: (c) => {
           c.h.closeness(String(c.vars.a), 8);
           c.h.closeness(String(c.vars.b), -15);
-          return c.t(`You took ${gen(nm(c, 'a'))} side. ${nm(c, 'b')} unfollowed you within the hour.`, `${gen(nm(c, 'a'))} tarafını tuttun. ${nm(c, 'b')} bir saat içinde seni takipten çıktı.`);
+          return c.t(`You took ${nm(c, 'a')}'s side. ${nm(c, 'b')} unfollowed you within the hour.`, `${gen(nm(c, 'a'))} tarafını tuttun. ${nm(c, 'b')} bir saat içinde seni takipten çıktı.`);
         },
       },
       {
@@ -1661,7 +1670,7 @@ export const teenEvents: EventDef[] = [
         resolve: (c) => {
           c.h.closeness(String(c.vars.b), 8);
           c.h.closeness(String(c.vars.a), -15);
-          return c.t(`You took ${gen(nm(c, 'b'))} side. ${nm(c, 'a')} kept the jacket out of spite.`, `${gen(nm(c, 'b'))} tarafını tuttun. ${nm(c, 'a')} inadına ceketi geri vermedi.`);
+          return c.t(`You took ${nm(c, 'b')}'s side. ${nm(c, 'a')} kept the jacket out of spite.`, `${gen(nm(c, 'b'))} tarafını tuttun. ${nm(c, 'a')} inadına ceketi geri vermedi.`);
         },
       },
       {
@@ -1832,7 +1841,7 @@ export const teenEvents: EventDef[] = [
     },
     title: (c) => c.t(`Your old teacher ${nm(c)} sends you a message.`, `Eski öğretmenin ${nm(c)} sana bir mesaj attı.`),
     text: (c) =>
-      c.t('A friend of theirs is hiring, and they already put in a word for you.', 'Bir tanıdığı eleman arıyormuş, senin için çoktan iyi bir söz söylemiş bile.'),
+      c.t(`A friend of ${his(who(c))} is hiring, and ${he(who(c))} has already put in a word for you.`, 'Bir tanıdığı eleman arıyormuş, senin için çoktan iyi bir söz söylemiş bile.'),
     choices: [
       {
         id: 'take',
@@ -1844,7 +1853,7 @@ export const teenEvents: EventDef[] = [
             c.h.setJob(c.rng.pick(jobs).id);
             c.h.stat('happiness', 7);
             return c.t(
-              `Thanks to ${nm(c)}, you got the job: ${c.h.jobTitle()}. You sent them chocolates and a very long thank-you card.`,
+              `Thanks to ${nm(c)}, you got the job: ${c.h.jobTitle()}. You sent ${him(who(c))} chocolates and a very long thank-you card.`,
               `${nm(c)} sayesinde artık ${c.h.jobTitle()} olarak çalışıyorsun. Kutu kutu çikolata ve upuzun bir teşekkür kartı gönderdin.`,
             );
           }
@@ -1971,8 +1980,8 @@ export const teenEvents: EventDef[] = [
       c.vars.pid = c.h.newPerson({ age: Math.max(18, c.age + c.rng.int(-2, 3)), gender: opposite(c) }).id;
     },
     title: (c) =>
-      c.t(`${nm(c, 'fid')} wants to set you up with their cousin ${nm(c)}.`, `${nm(c, 'fid')} seni kuzeni ${wth(nm(c))} tanıştırmak istiyor.`),
-    text: (c) => c.t('"Trust me," they said. Nothing good has ever followed those words.', '"Bana güven" dedi. Bu sözden sonra hiç iyi bir şey olmamıştır.'),
+      c.t(`${nm(c, 'fid')} wants to set you up with ${his(who(c, 'fid'))} cousin ${nm(c)}.`, `${nm(c, 'fid')} seni kuzeni ${wth(nm(c))} tanıştırmak istiyor.`),
+    text: (c) => c.t(`"Trust me," ${he(who(c, 'fid'))} said. Nothing good has ever followed those words.`, '"Bana güven" dedi. Bu sözden sonra hiç iyi bir şey olmamıştır.'),
     choices: [
       {
         id: 'go',
@@ -2171,7 +2180,7 @@ export const teenEvents: EventDef[] = [
       },
       {
         id: 'chores',
-        label: (c) => c.t('Trade your silence for their chores', 'Susmanın karşılığında işlerini yaptır'),
+        label: (c) => c.t(`Trade your silence for ${his(who(c, 'sib'))} chores`, 'Susmanın karşılığında işlerini yaptır'),
         resolve: (c) => {
           c.h.closeness(String(c.vars.sib), -3);
           c.h.stat('happiness', 4);

@@ -1,19 +1,55 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { eligibleJobs, nm, wage, wth } from './util';
+import { MAX_HIRE_AGE, aOrAn, eligibleJobs, familyFirstNames, nm, wage, wth } from './util';
 import { firstNames } from '../../engine/world';
-import { titleFor } from '../../engine/careers';
+import { EDUCATION_RANK, titleFor, type JobDef } from '../../engine/careers';
+import { MAJORS, peekCampus } from '../campus/state';
 
 // Events opened by the engine at life-stage moments or by activities. They never fire at random.
 
 const VIBES_EN = ['makes you laugh until you snort', 'is a little too into crypto', 'brought you a flower', 'talked about their ex for an hour', 'knows every bird by name'];
 const VIBES_TR = [
-  'seni gülmekten domuz gibi horlatıyor',
+  'seni kahkahadan kırıp geçiriyor',
   'kriptoya biraz fazla kafayı takmış',
   'sana bir çiçek getirdi',
   'bir saat boyunca eski sevgilisini anlattı',
   'her kuşu adıyla tanıyor',
 ];
 const vibeTr = (en: string) => VIBES_TR[VIBES_EN.indexOf(en)] ?? en;
+
+/** Oldest age at which the job listings still answer. */
+export const JOB_SEARCH_MAX_AGE = MAX_HIRE_AGE;
+/** From this age nobody is hired as an intern or junior: listings start one rung up. */
+export const SENIOR_HIRE_AGE = 50;
+
+/** Entry titles that only make sense for someone starting out. */
+const TRAINEE = /\b(junior|intern|apprentice|trainee|cadet|probationary|resident|academy)\b/i;
+
+/** The rung a new hire starts on: nobody over 50 is hired as an intern, junior or apprentice. */
+export const startLevel = (job: JobDef, age: number) => (age >= SENIOR_HIRE_AGE && job.titles.length > 1 && TRAINEE.test(job.titles[0]) ? 1 : 0);
+
+/**
+ * Up to three listings, best matches first: jobs in the field of the player's degree (Campus major),
+ * then jobs that need the education the player has, so a medical graduate is not sent down a mine.
+ */
+function listings(c: Ctx): JobDef[] {
+  // eligibleJobs already says no past 65, and only part-time work for school pupils
+  const pool = [...eligibleJobs(c)];
+  // shuffle with one rng call per job, so the count never depends on the language
+  for (let i = pool.length - 1; i > 0; i--) {
+    const k = c.rng.int(0, i);
+    [pool[i], pool[k]] = [pool[k], pool[i]];
+  }
+  const major = peekCampus(c.p)?.major;
+  const fields = major ? MAJORS[major].fields : [];
+  const rank = EDUCATION_RANK[c.p.education];
+  const tier = (j: JobDef) => (fields.includes(j.field) ? 2 : 0) + (rank >= EDUCATION_RANK.highschool && EDUCATION_RANK[j.education] >= rank ? 1 : 0);
+  const sorted = [...pool].sort((a, b) => tier(b) - tier(a));
+  // two best matches, plus one wildcard so there is still some variety
+  const picks = sorted.slice(0, 2);
+  const wild = pool.find((j) => !picks.includes(j));
+  if (wild) picks.push(wild);
+  return picks;
+}
 
 const jobChoice = (i: number): ChoiceDef => ({
   id: `job${i}`,
@@ -26,8 +62,13 @@ const jobChoice = (i: number): ChoiceDef => ({
     const chance = 0.35 + c.p.stats.smarts / 250 + c.p.stats.looks / 500 - (c.p.criminalRecord > 0 ? 0.2 : 0);
     if (c.rng.chance(chance)) {
       c.h.setJob(id);
+      const job = c.h.job();
+      if (job && startLevel(job, c.age) > 0) {
+        c.p.jobLevel = startLevel(job, c.age);
+        c.p.jobTitle = c.h.jobTitle();
+      }
       c.h.stat('happiness', 6);
-      return c.t(`You got the job! You are now a ${c.h.jobTitle()}.`, `İşi kaptın! Artık ${c.h.jobTitle()} olarak çalışıyorsun.`);
+      return c.t(`You got the job! You are now ${aOrAn(c.h.jobTitle() ?? '')}.`, `İşi kaptın! Artık ${c.h.jobTitle()} olarak çalışıyorsun.`);
     }
     c.h.stat('happiness', -3);
     return c.t(
@@ -146,18 +187,20 @@ export const scheduledEvents: EventDef[] = [
     category: 'work',
     scheduled: true,
     setup: (c) => {
-      const options = [...eligibleJobs(c)].sort(() => c.rng.next() - 0.5).slice(0, 3);
-      options.forEach((j, i) => {
+      listings(c).forEach((j, i) => {
+        const level = startLevel(j, c.age);
         c.vars[`job${i}`] = j.id;
-        c.vars[`title${i}`] = j.titles[0];
-        c.vars[`titleTr${i}`] = titleFor(j, 0, 'tr');
+        c.vars[`title${i}`] = titleFor(j, level, 'en');
+        c.vars[`titleTr${i}`] = titleFor(j, level, 'tr');
       });
     },
     title: (c) => c.t('Job listings this week', 'Bu haftanın iş ilanları'),
     text: (c) =>
       c.vars.job0
         ? c.t('Pick one to apply for.', 'Başvurmak için birini seç.')
-        : c.t('Nothing matches your education right now.', 'Şu an eğitimine uygun bir ilan yok.'),
+        : c.age > JOB_SEARCH_MAX_AGE
+          ? c.t('The listings want "young, dynamic team players". You have earned your rest.', 'İlanlar "genç ve dinamik ekip arkadaşları" arıyor. Sen dinlenmeyi hak ettin.')
+          : c.t('Nothing matches your education right now.', 'Şu an eğitimine uygun bir ilan yok.'),
     choices: [
       jobChoice(0),
       jobChoice(1),
@@ -229,8 +272,16 @@ export const scheduledEvents: EventDef[] = [
     setup: (c) => {
       const g = c.rng.chance(0.5) ? 'female' : 'male';
       c.vars.gender = g;
-      const pool = [...firstNames(c.p.countryId, g)].sort(() => c.rng.next() - 0.5);
-      for (let i = 0; i < 3; i++) c.vars[`name${i}`] = pool[i];
+      // never offer a name someone in the family already has (a parent, a sibling, an earlier child, a grandchild...)
+      const taken = familyFirstNames(c);
+      const all = firstNames(c.p.countryId, g);
+      const free = all.filter((n) => !taken.has(n));
+      const pool = free.length >= 3 ? [...free] : [...free, ...all.filter((n) => !free.includes(n))];
+      for (let i = 0; i < 3; i++) {
+        const k = c.rng.int(i, pool.length - 1);
+        [pool[i], pool[k]] = [pool[k], pool[i]];
+        c.vars[`name${i}`] = pool[i];
+      }
     },
     title: (c) =>
       c.t(
@@ -257,7 +308,7 @@ function propose(c: Ctx, bonus: number, cost: number): string {
       ring.story.push(c.t(`Worn by ${nm(c)} at the wedding in ${c.s.year}.`, `${c.s.year} yılındaki düğünde ${nm(c)} taktı.`));
       line = c.t(
         `${nm(c)} said yes! You married with ${ring.name}. It finally found a new finger.`,
-        `${nm(c)} evet dedi! ${ring.name} ile evlendiniz. Yüzük nihayet yeni bir parmağa kavuştu.`,
+        `${nm(c)} evet dedi! Nikâhta ${ring.name} takıldı; yüzük nihayet yeni bir parmağa kavuştu.`,
       );
     }
     return line;

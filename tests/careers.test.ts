@@ -101,11 +101,13 @@ describe('yearly career logic', () => {
   });
 
   it('raises military ranks with years of service', () => {
+    // one call per calendar year (at most one promotion per year), keeping the player's age fixed
+    const nextYear = (g: GameState) => (g.year++, g.player.birthYear++);
     const s = withJob(fresh(), 40, 'soldier', 0, 12);
-    for (let i = 0; i < 5; i++) careerOnYear(makeCtx(s));
+    for (let i = 0; i < 5; i++) careerOnYear(makeCtx(s)), nextYear(s);
     expect(s.player.jobLevel).toBe(3);
     const o = withJob(fresh(2), 45, 'officer', 0, 16);
-    for (let i = 0; i < 5; i++) careerOnYear(makeCtx(o));
+    for (let i = 0; i < 5; i++) careerOnYear(makeCtx(o)), nextYear(o);
     expect(o.player.jobLevel).toBeGreaterThanOrEqual(3);
   });
 

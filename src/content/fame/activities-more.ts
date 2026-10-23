@@ -1,5 +1,6 @@
 import type { ActivityDef, Ctx } from '../types';
 import { wage } from '../base/util';
+import { say } from '../base/lines';
 import { fameState, gainFans, isPath, loseFans, peekFame } from './state';
 import { compact, fameOf, free, hasPath } from './util';
 
@@ -32,8 +33,12 @@ export const moreFameActivities: ActivityDef[] = [
       const paid = cost ? c.t(` It cost ${c.h.fmt(cost)}.`, ` Masrafı ${c.h.fmt(cost)} tuttu.`) : '';
       if (q >= 75)
         return c.t(
-          `The video for "${song.title}" is one long take with a dance in a dolmuş. Everyone is copying it. ${compact(c, g)} new fans.${paid}`,
-          `"${song.title}" klibini tek planda, dolmuşta dans ederek çektin. Herkes taklit ediyor. ${compact(c, g)} yeni hayran.${paid}`,
+          c.p.countryId === 'tr'
+            ? `The video for "${song.title}" is one long take with a dance in a dolmuş. Everyone is copying it. ${compact(c, g)} new fans.${paid}`
+            : `The video for "${song.title}" is one long take with a dance on a city bus. Everyone is copying it. ${compact(c, g)} new fans.${paid}`,
+          c.p.countryId === 'tr'
+            ? `"${song.title}" klibini tek planda, dolmuşta dans ederek çektin. Herkes taklit ediyor. ${compact(c, g)} yeni hayran.${paid}`
+            : `"${song.title}" klibini tek planda, şehir otobüsünde dans ederek çektin. Herkes taklit ediyor. ${compact(c, g)} yeni hayran.${paid}`,
         );
       if (q >= 45)
         return c.t(
@@ -77,8 +82,12 @@ export const moreFameActivities: ActivityDef[] = [
       const g = gainFans(c, f, f.fans * 0.02 + 300);
       const pay = f.fans >= 50000 ? wage(c, Math.min(30000, f.fans * 0.005)) : 0;
       c.h.money(pay);
-      const what = line(c, [
+      const what = say(c, 'fame_podcast', [
         ['Your guest was two hours late and blamed the traffic.', 'Konuğun iki saat geç kaldı ve trafiği suçladı.'],
+        ['You interviewed your own dentist. Surprisingly gripping.', 'Kendi diş hekiminle röportaj yaptın. Şaşırtıcı derecede sürükleyiciydi.'],
+        ['A listener sent a voice note that made you cry on air. Your best episode yet.', 'Bir dinleyicinin sesli mesajı seni yayında ağlattı. Şimdiye kadarki en iyi bölümün.'],
+        ['You and your guest laughed so hard that most of the episode is just wheezing. People loved it.', 'Konuğunla o kadar güldünüz ki bölümün çoğu hırıltıdan ibaret. İnsanlar bayıldı.'],
+        ['You recorded inside a wardrobe for better sound. It worked. You may live there now.', 'Daha iyi ses için gardıropta kayıt yaptın. İşe yaradı. Artık orada yaşayabilirsin.'],
         ['You argued with a guest about ketchup on pizza for a whole episode.', 'Bir konukla bütün bölüm boyunca pizzaya ketçap konur mu diye tartıştın.'],
         ['Your grandmother called in and stole the show.', 'Babaannen yayına bağlandı ve bütün ilgiyi üstüne çekti.'],
         ['You recorded a whole episode with the microphone switched off.', 'Bütün bir bölümü mikrofon kapalıyken kaydettin.'],
@@ -97,10 +106,20 @@ export const moreFameActivities: ActivityDef[] = [
     available: (c) => isPath(c, 'social') && free(c),
     run: (c) => {
       const f = fameState(c.p);
-      const what = line(c, [
-        ['You answered questions for two hours. Someone asked for your simit recipe.', 'İki saat soru cevapladın. Biri simit tarifini sordu.'],
+      const home = c.p.countryId === 'tr';
+      const what = say(c, 'fame_live', [
+        home
+          ? ['You answered questions for two hours. Someone asked for your simit recipe.', 'İki saat soru cevapladın. Biri simit tarifini sordu.']
+          : ['You answered questions for two hours. Someone asked for your pancake recipe.', 'İki saat soru cevapladın. Biri krep tarifini sordu.'],
         ['You played a video game live and lost to a twelve-year-old.', 'Canlı yayında oyun oynadın ve on iki yaşında bir çocuğa yenildin.'],
-        ['You cooked menemen live. The onion debate lasted longer than the cooking.', 'Canlı yayında menemen yaptın. Soğan tartışması pişirmekten uzun sürdü.'],
+        home
+          ? ['You cooked menemen live. The onion debate lasted longer than the cooking.', 'Canlı yayında menemen yaptın. Soğan tartışması pişirmekten uzun sürdü.']
+          : ['You cooked pasta live. The debate about breaking spaghetti lasted longer than the cooking.', 'Canlı yayında makarna yaptın. Spagettiyi kırmak caiz mi tartışması pişirmekten uzun sürdü.'],
+        ['You fell asleep live for ten minutes. It is your most-watched stream ever.', 'Canlı yayında on dakika uyuyakaldın. Şimdiye kadarki en çok izlenen yayının oldu.'],
+        ['Your cat walked across the keyboard live and ended the stream. The clip went everywhere.', 'Canlı yayında kedin klavyenin üstünden geçip yayını kapattı. O an her yere yayıldı.'],
+        ['You read your comments out loud in funny voices. The comments got much nicer, oddly.', 'Yorumları komik seslerle yüksek sesle okudun. Yorumlar tuhaf bir şekilde çok daha nazikleşti.'],
+        ['You did a live Q&A with your grandmother. She answered every question. You answered none.', 'Babaannenle canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.'],
+        ['You tried to learn a song live with the chat as your teacher. Two thousand teachers, zero agreement.', 'Sohbet kısmını öğretmen yapıp canlı yayında şarkı öğrenmeye çalıştın. İki bin öğretmen, sıfır uzlaşma.'],
       ]);
       const gifts = wage(c, Math.min(20000, 20 + f.fans * 0.004));
       c.h.money(gifts);
@@ -169,8 +188,13 @@ export const moreFameActivities: ActivityDef[] = [
       const cost = wage(c, 2000);
       c.h.money(-cost);
       c.h.stat('looks', c.rng.int(2, 4));
-      const what = line(c, [
+      const what = say(c, 'fame_stylist', [
         ['Your stylist burned your favourite cargo shorts. In a ceremony.', 'Stilistin en sevdiğin kargo şortunu yaktı. Törenle.'],
+        ['Your stylist put you in a hat. You are now a hat person. There is no going back.', 'Stilistin sana bir şapka giydirdi. Artık şapkasız sokağa çıkamıyorsun. Dönüşü yok.'],
+        ['Your stylist threw out everything you own with a logo on it. Your wardrobe is three socks.', 'Stilistin logolu ne varsa attı. Gardırobunda üç çorap kaldı.'],
+        ['Your stylist made you practice walking. Apparently you have been doing it wrong for years.', 'Stilistin sana yürüme alıştırması yaptırdı. Meğer yıllardır yanlış yürüyormuşsun.'],
+        ['Your stylist chose a colour palette for you called "autumn dusk". You are autumn dusk now.', 'Stilistin sana "sonbahar alacakaranlığı" adında bir renk paleti seçti. Artık sen de bir sonbahar alacakaranlığısın.'],
+        ['Your stylist sent you down a red carpet in shoes you cannot walk in. You stood very still and looked mysterious.', 'Stilistin seni içinde yürüyemediğin ayakkabılarla kırmızı halıya gönderdi. Kıpırdamadan durup gizemli göründün.'],
         ['Your stylist called your haircut "brave". It was not a compliment.', 'Stilistin saç kesimine "cesur" dedi. İltifat değildi.'],
         ['You got a whole new look. Your own mother walked past you in the street.', 'Baştan aşağı yeni bir tarzın oldu. Öz annen sokakta yanından geçip gitti.'],
       ]);

@@ -4,9 +4,10 @@ import { getRibbon, ribbonDesc, ribbonName } from '../../engine/ribbons';
 import { T, Tn, fmtInt } from '../../i18n/ui';
 import { causeTr } from '../../engine/game';
 import { goalDef, goalLabel } from '../../engine/goals';
-import { continueAsChild, heirs } from '../../engine/game';
+import { continueAsChild, heirOptions, heirs } from '../../engine/game';
 import { ageOf } from '../../engine/context';
 import { Avatar } from '../Avatar';
+import { cityName } from '../../engine/places';
 import { Icon } from '../icons';
 import { track } from '../../platform/analytics';
 import { Tip } from '../Tip';
@@ -15,6 +16,8 @@ export function Summary({ app }: { app: AppApi }) {
   const s = app.game!;
   const r = s.dead!;
   const kids = heirs(s);
+  const handed = !!r.handedOver;
+  const grandkid = new Set(heirOptions(s).filter((o) => o.kind === 'grandchild').map((o) => o.person.id));
   const ribbon = getRibbon(r.ribbon);
   const tr = app.lang === 'tr';
   const rName = ribbon ? ribbonName(ribbon, app.lang) : '';
@@ -31,14 +34,16 @@ export function Summary({ app }: { app: AppApi }) {
     [T('Career'), r.career],
     [T('Love'), r.partnerName ? (r.partnerYears ? T('{name}, {n} years', { name: r.partnerName, n: r.partnerYears }) : r.partnerName) : T('Never settled down')],
     [T('Family'), familyLine],
-    [T('Cause'), tr ? causeTr(r.cause) : r.cause],
   ];
-  if (r.heirloomNote) rows.push([T('Left behind'), r.heirloomNote, true]);
-  rows.push([T('Final words'), `"${r.finalWords}"`]);
+  if (!handed) rows.push([T('Cause'), tr ? causeTr(r.cause) : r.cause]);
+  if (r.heirloomNote) rows.push([T(handed ? 'Handed on' : 'Left behind'), r.heirloomNote, true]);
+  rows.push([T(handed ? 'Parting words' : 'Final words'), `"${r.finalWords}"`]);
 
   const share = async () => {
     const text = [
-      T('{name} ({from}–{to}) lived {age} years in {city}.', { name: r.name, from: r.birthYear, to: r.deathYear, age: r.age, city: r.city }),
+      handed
+        ? T('{name} (born {from}) passed the torch at {age} in {city}.', { name: r.name, from: r.birthYear, age: r.age, city: cityName(r.city, app.lang) })
+        : T('{name} ({from}–{to}) lived {age} years in {city}.', { name: r.name, from: r.birthYear, to: r.deathYear, age: r.age, city: cityName(r.city, app.lang) }),
       `${r.career}.`,
       `${familyLine}.`,
       T('Final words: "{w}"', { w: r.finalWords }),
@@ -59,18 +64,18 @@ export function Summary({ app }: { app: AppApi }) {
     <div class="screen" style={{ background: 'var(--bg-deep)' }}>
       <div class="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center', border: '1px solid var(--accent-soft)', padding: '26px 20px' }}>
         <div class="eyebrow" style={{ color: 'var(--accent)', letterSpacing: '0.14em' }}>
-          {r.age >= 70 ? T('A life well lived') : T('Gone too soon')}
+          {handed ? T('Passing the torch') : r.age >= 70 ? T('A life well lived') : T('Gone too soon')}
         </div>
         <Avatar id={r.personId + r.name.split(' ')[0]} gender={r.gender} age={r.age} size={92} label={r.name} />
         <div>
           <h1 class="title-xl">{r.name}</h1>
           <div class="muted num" style={{ marginTop: '4px' }}>
-            {r.birthYear} – {r.deathYear} · {r.city}
+            {handed ? T('Born {year}', { year: r.birthYear }) : `${r.birthYear} – ${r.deathYear}`} · {cityName(r.city, app.lang)}
           </div>
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', fontWeight: 800, lineHeight: 1, color: 'var(--accent)' }}>{r.age}</div>
         <div class="eyebrow" style={{ marginTop: '-6px' }}>
-          {T('years lived · legacy +{n}', { n: fmtInt(r.legacy) })}
+          {handed ? T('Handed over at {n}', { n: r.age }) : T('years lived')} · {T('legacy +{n}', { n: fmtInt(r.legacy) })}
         </div>
         {ribbon && (
           <div class="chip accent" style={{ fontSize: '14px', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', whiteSpace: 'normal' }}>
@@ -84,7 +89,7 @@ export function Summary({ app }: { app: AppApi }) {
             {(s.player.goals ?? []).map((g) => (
               <div key={g.id} class="row" style={{ gap: '8px', color: g.done ? 'var(--text)' : 'var(--muted)' }}>
                 <span aria-hidden="true">{g.done ? '✓' : '✗'}</span>
-                <span>{goalDef(g.id) ? goalLabel(goalDef(g.id)!, app.lang) : g.id}</span>
+                <span>{goalDef(g.id) ? goalLabel(goalDef(g.id)!, app.lang, s) : g.id}</span>
               </div>
             ))}
           </div>
@@ -99,7 +104,7 @@ export function Summary({ app }: { app: AppApi }) {
         </div>
       </div>
 
-      {kids.length > 0 && (
+      {kids.length > 0 && !handed && (
         <Tip app={app} id="continue" icon="family">
           {T('This is where Heirloom begins. Continue as one of your children: they inherit your home, your heirlooms and most of your money.')}
         </Tip>
@@ -109,8 +114,9 @@ export function Summary({ app }: { app: AppApi }) {
           <button type="button" class="btn primary" key={k.id} onClick={() => {
               track('continue_child', { gen: s.dynasty.generation + 1 });
               app.act((g) => continueAsChild(g, k.id));
+              app.go('life');
             }} style={{ minHeight: '58px' }}>
-            {T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
+            {grandkid.has(k.id) ? T('Continue as your grandchild {name}, {n}', { name: k.firstName, n: ageOf(s, k) }) : T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
           </button>
         ))}
         {kids.length === 0 && <div class="banner">{T('No children to carry on. The {name} story ends here, but a new family can begin.', { name: s.dynasty.familyName })}</div>}
