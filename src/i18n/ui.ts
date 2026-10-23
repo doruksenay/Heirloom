@@ -264,6 +264,9 @@ export const TR: Record<string, string> = {
   'Privacy policy': 'Gizlilik politikası',
   'Heirloom: Life Simulator · {v} test build': 'Heirloom: Life Simulator · {v} test sürümü',
   'Share anonymous usage data': 'Anonim kullanım verisi paylaş',
+  'Nothing to do here right now.': 'Şu an burada yapılacak bir şey yok.',
+  'Hide locked activities': 'Kapalı aktiviteleri gizle',
+  '{n} locked for now': 'Şimdilik kapalı: {n}',
   'Which screens are used and crash reports. No names, no saves. Helps us fix bugs.':
     'Hangi ekranların kullanıldığı ve çökme raporları. İsim yok, kayıt yok. Hataları düzeltmemize yardım eder.',
 
