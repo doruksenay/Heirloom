@@ -286,7 +286,7 @@ function yearlyTick(c: Ctx): string | null {
       person.deathYear = s.year;
       const label = { mother: 'mother', father: 'father', sibling: person.gender === 'female' ? 'sister' : 'brother', spouse: person.gender === 'female' ? 'wife' : 'husband', partner: 'partner', ex: 'ex', child: person.gender === 'female' ? 'daughter' : 'son', friend: 'friend' }[rel.kind];
       if (rel.kind === 'ex' || rel.kind === 'friend') continue;
-      const labelTr = { mother: 'Annen', father: 'Baban', sibling: person.gender === 'female' ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: person.gender === 'female' ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: person.gender === 'female' ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın' }[rel.kind];
+      const labelTr = { mother: 'Annen', father: 'Baban', sibling: person.birthYear < p.birthYear ? (person.gender === 'female' ? 'Ablan' : 'Ağabeyin') : person.gender === 'female' ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: person.gender === 'female' ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: person.gender === 'female' ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın' }[rel.kind];
       h.log(c.t(`Your ${label} ${person.firstName} passed away at ${pa}.`, `${labelTr} ${person.firstName}, ${pa} yaşında hayata gözlerini yumdu.`), 'bad');
       h.stat('happiness', -Math.round(rel.closeness / 6));
       if ((rel.kind === 'mother' || rel.kind === 'father') && rng.chance(0.6)) {

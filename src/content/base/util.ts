@@ -63,7 +63,8 @@ export function kin(c: Ctx, p: Person, kind: string): string {
     case 'father':
       return 'baban';
     case 'sibling':
-      return f ? 'kız kardeşin' : 'erkek kardeşin';
+      // Turkish names older siblings differently: ablan / ağabeyin
+      return olderThanPlayer(c, p) ? (f ? 'ablan' : 'ağabeyin') : f ? 'kız kardeşin' : 'erkek kardeşin';
     case 'child':
       return f ? 'kızın' : 'oğlun';
     case 'spouse':
@@ -81,3 +82,9 @@ export function cap(s: string): string {
   const first = s[0] === 'i' ? 'İ' : s[0] === 'ı' ? 'I' : s[0].toUpperCase();
   return first + s.slice(1);
 }
+
+/** True when this person was born before the player (siblings: abla / ağabey in Turkish). */
+export const olderThanPlayer = (c: Ctx, p: Person) => p.birthYear < c.p.birthYear;
+
+/** English indefinite article: aOrAn('Associate') → "an Associate", aOrAn('Pilot') → "a Pilot". */
+export const aOrAn = (word: string) => (/^[aeiou]/i.test(word) || /^hon/i.test(word) ? `an ${word}` : `a ${word}`);
