@@ -5,6 +5,7 @@ import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
 import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, single, wage, who, wth } from '../base/util';
 import { isCoastal } from '../../engine/places';
+import { pickIndex, say, sayWith, type Pair } from '../base/lines';
 
 // "Türkiye" culture pack: everyday Turkish life moments for characters living in Türkiye.
 export const CULTURE_TR_ENTITLEMENT = 'pack.culture_tr';
@@ -2006,6 +2007,147 @@ const events: EventDef[] = [...childhood, ...youth, ...love, ...adult, ...later]
 
 // ------------------------------------------------------------------ activities
 
+// Repeatable activities pick their line with `say` (base/lines.ts): one rng call, and a line does not
+// come back until most of its list has been seen in this life. Everything here happens outside, at a
+// market, on a ferry or at somebody's door, so none of it runs in prison (`jailOk: false`).
+
+const FERRY_IST: Pair[] = [
+  ['You crossed the Bosphorus from Europe to Asia by ferry, drank tea from a thin tulip glass and threw simit to the gulls. Perfect.', 'Boğaz vapuruyla Avrupa yakasından Anadolu yakasına geçtin, ince belli bardakta çayını yudumladın, martılara simit attın. Daha ne olsun.'],
+  ['A gull snatched the simit right out of your hand in mid-air. You have never been robbed so gracefully.', 'Bir martı simidi havada elinden kaptı. Hayatında hiç bu kadar zarif soyulmamıştın.'],
+  ['You sat on the open deck at the back, wind in your face, and let the city drift past for twenty minutes.', 'Arka güvertede oturdun, rüzgâr yüzünü yaladı geçti. Şehir de yirmi dakika boyunca önünden akıp gitti.'],
+  ['The tea seller walked past three times. Three times you had another glass.', 'Çaycı önünden üç kez geçti, üçünde de bir çay daha aldın.'],
+  ['You ran down the pier and jumped aboard just as the ropes came off. Half the deck applauded.', 'Koşa koşa iskeleye vardın, halatlar çözülürken son anda vapura atladın. Güvertenin yarısı alkışladı.'],
+  ["You passed the Maiden's Tower and made up a brand new legend about it. You were the hero.", 'Kız Kulesi önünden geçerken ona yepyeni bir efsane uydurdun. Kahramanı sendin.'],
+  ['A dolphin surfaced next to the ferry. Half the passengers saw it; the other half will never believe them.', 'Vapurun yanında bir yunus belirdi. Yolcuların yarısı gördü, öbür yarısı asla inanmayacak.'],
+  ["Fog rolled in over the Bosphorus and the ferry's horn sounded like a sad old uncle. You loved every second.", 'Boğaz\'a sis çöktü, vapurun düdüğü dertli bir amca gibi öttü. Her saniyesine bayıldın.'],
+  ['You shared your simit with an old man who told you the whole history of the Bosphorus ferries. A free guided tour.', 'Simidini yaşlı bir amcayla paylaştın, o da sana Boğaz vapurlarının bütün tarihini anlattı. Bedava rehberlik.'],
+  ['You fed the gulls from the back deck until the simit ran out. They followed you all the way across anyway.', 'Arka güvertede simit bitene kadar martıları besledin. Yine de karşı kıyıya kadar peşinden geldiler.'],
+  ['Sunset on the Bosphorus, a glass of tea and nowhere to be. You took the ferry back just to do it again.', 'Boğaz\'da gün batımı, elinde bir bardak çay, yetişecek hiçbir yer yok. Sırf bir daha yaşamak için dönüş vapuruna da bindin.'],
+  ['Someone was playing the saz on the lower deck. First one passenger sang along, then the whole ferry.', 'Alt katta biri saz çalıyordu. Önce bir yolcu eşlik etti, sonra bütün vapur.'],
+];
+
+const FERRY_IZMIR: Pair[] = [
+  ['You crossed the bay to Karşıyaka by ferry, drank tea from a thin tulip glass and threw simit to the gulls. Perfect.', 'Körfez vapuruyla karşıya geçtin, ince belli bardakta çayını yudumladın, martılara simit attın. Daha ne olsun.'],
+  ['The ferry crossed the bay at sunset and the whole Kordon glowed orange. You forgot to take a photo, and that was fine.', 'Vapur gün batımında körfezi geçti, bütün Kordon turuncuya boyandı. Fotoğraf çekmeyi unuttun, iyi ki de unuttun.'],
+  ['A gull took the simit from your fingers so politely that you nearly thanked it.', 'Bir martı simidi parmaklarının arasından öyle kibarca aldı ki neredeyse teşekkür edecektin.'],
+  ['The afternoon sea breeze (imbat) blew your hair in every direction at once. You reached Konak looking like a poet.', 'İmbat saçlarını aynı anda her yöne savurdu. Konak\'a şair kılığında vardın.'],
+  ['You sat on the open deck with a boyoz (an İzmir pastry) in one hand and tea in the other. İzmir has life figured out.', 'Açık güvertede bir elinde boyoz, bir elinde çay oturdun. İzmirliler hayatı çözmüş.'],
+  ['A flock of flamingos flew low over the bay. Everyone on deck went quiet for a moment.', 'Bir flamingo sürüsü körfezin üstünden alçaktan uçtu. Güvertedeki herkes bir an sustu.'],
+  ['Two old men argued about Göztepe and Karşıyaka football the whole crossing. Nobody won; the ferry docked.', 'İki amca bütün yol Göztepe mi Karşıyaka mı diye tartıştı. Kazanan olmadı, vapur yanaştı.'],
+  ['Two teas on the way over, one on the way back. Purely for balance.', 'Gidişte iki, dönüşte bir çay içtin. Tamamen denge için.'],
+  ['You ran for the ferry and made it with one second to spare. Even the gulls looked impressed.', 'Vapura koştun ve son saniyede yetiştin. Martılar bile etkilenmiş görünüyordu.'],
+  ['The bay was flat as glass. You watched Karşıyaka slide away and thought about nothing at all. Bliss.', 'Körfez cam gibiydi. Karşıyaka\'nın uzaklaşmasını izledin ve hiçbir şey düşünmedin. Mutluluk buymuş.'],
+  ['A kid next to you fed the gulls with you. The two of you are now a small seagull charity.', 'Yanındaki çocukla birlikte martılara simit attınız. Artık iki kişilik bir martı yardım derneğisiniz.'],
+];
+
+const teaLines = (c: Ctx): Pair[] => [
+  ['You drank five glasses of tea on the balcony and learned who in the building is getting divorced.', 'Balkonda beş bardak çay içtin ve apartmanda kimin boşandığını öğrendin.'],
+  coastal(c)
+    ? ['Tea and simit with the neighbors. A seagull stole your simit.', 'Komşularla çay simit keyfi. Bir martı simidini kapıp gitti.']
+    : ['Tea and simit with the neighbors. A pigeon stole your simit.', 'Komşularla çay simit keyfi. Bir güvercin simidini kapıp gitti.'],
+  ['The neighbor from upstairs read your fortune in your coffee cup (fal). She saw a journey, a letter and a dark-haired stranger.', 'Üst kattaki komşu kahve falına baktı. Yol göründü, bir haber var, bir de esmer biri.'],
+  ['You asked for "just half a glass." Your glass was refilled seven times. Nobody listens to "just half."', '"Yarım bardak" dedin. Bardağın yedi kez doldu. "Yarım bardak" diyeni kimse dinlemez.'],
+  ['The neighbors compared electricity bills, grandchildren and blood pressure, in that order.', 'Komşular sırasıyla elektrik faturalarını, torunları ve tansiyonlarını karşılaştırdı.'],
+  ['The neighbor brought her famous börek. You had three slices and now owe her a visit.', 'Komşu meşhur böreğini getirdi. Üç dilim yedin, artık bir ziyaret borçlusun.'],
+  ["Somebody's nephew got into medical school. You heard the news eleven times in one afternoon.", 'Birinin yeğeni tıp fakültesini kazanmış. Bir öğleden sonrada haberi on bir kez dinledin.'],
+  ['You tried to leave three times. "Sit, sit, one more glass" won every time.', 'Üç kez kalkmaya yeltendin. "Otur otur, bir bardak daha" her seferinde kazandı.'],
+  ['The building manager came up for "one quick tea" and stayed two hours explaining the new heating fees.', 'Apartman yöneticisi "Bir çay içip kalkacağım" diye geldi, iki saat yeni kalorifer paylarını anlattı.'],
+  ['The neighbors fixed the economy, the traffic and the price of tomatoes before the second pot was empty.', 'Komşular ikinci demlik bitmeden ekonomiyi, trafiği ve domates fiyatlarını çözdü.'],
+  ['Someone brought out a plate of sunflower seeds. Two hours and a mountain of shells later, you knew everyone\'s secrets.', 'Biri bir tabak çekirdek çıkardı. İki saat ve bir dağ kabuk sonra herkesin sırrını biliyordun.'],
+];
+
+/** Kahvehane lines; `true` marks the ones where you lost a game and pay for the table's tea (2 of 10, as before 1 of 5). */
+const KAHVEHANE: (readonly [string, string, boolean])[] = [
+  ['You played okey (a tile game) for three hours and won exactly one hand. You talked about that hand for three more.', 'Üç saat okey oynadın, tek bir el kazandın. Sonraki üç saat o eli anlattın.', false],
+  ['The man at the next table explained how to fix the national football team. Everyone agreed, then everyone disagreed.', 'Yan masadaki amca milli takımın nasıl düzeleceğini anlattı. Önce herkes katıldı, sonra herkes itiraz etti.', false],
+  ['You read three newspapers for the price of one tea. The crossword in the third was already done.', 'Bir çay parasına üç gazete okudun. Üçüncüsünün bulmacasını biri çoktan çözmüştü.', false],
+  ['You lost at batak (a card game), so the whole table\'s tea is on you. Loser pays.', 'Batakta kaybettin, bütün masanın çayı senden. Kaybeden öder.', true],
+  ['You stood behind the okey players giving advice nobody asked for. They call you "the consultant" now.', 'Okey oynayanların arkasında durup kimsenin istemediği akıllar verdin. Artık sana "danışman" diyorlar.', false],
+  ['You watched the match on the old TV with forty strangers. At the goal you hugged three of them.', 'Kahvehanenin eski televizyonunda kırk yabancıyla maç izledin. Golde üçüne sarıldın.', false],
+  ['You threw the wrong tile at the very end of an okey game. The whole table\'s tea is on you.', 'Okeyde son taşı yanlış attın. Bütün masanın çayı senden.', true],
+  ['A retired teacher solved the crossword out loud and waited for applause after every word. He got it.', 'Emekli bir öğretmen bulmacayı yüksek sesle çözdü ve her kelimeden sonra alkış bekledi. Aldı da.', false],
+  ['The tea boy remembered exactly how you take your tea. You are officially a regular.', 'Çaycı çocuk çayını nasıl içtiğini ezbere biliyordu. Artık resmen müdavimsin.', false],
+  ['Someone asked whether the old days were better. The debate lasted until closing time and settled nothing.', 'Biri "Eski günler daha mı güzeldi?" diye sordu. Tartışma kapanış saatine kadar sürdü, hiçbir sonuca varmadı.', false],
+];
+
+const TAVLA: Pair[] = [
+  ['You rolled double sixes (düşeş) three times in a row and slammed the board shut. Küt.', 'Üst üste üç düşeş attın ve tavlayı küt diye kapattın.'],
+  ['Your opponent rolled double ones (hep yek) and still beat you. Humiliating.', 'Rakibin hep yek attı ve yine de seni yendi. Rezalet.'],
+  ['You lost by a double game (mars). This topic is now closed.', 'Mars oldun. Bu konu kapanmıştır.'],
+  ['You played until the tea went cold and the score was "who\'s counting?"', 'Çay soğuyana kadar oynadınız. Skor mu? "Sayan mı var?"'],
+  ['You moved your checkers so fast your opponent asked you to "count out loud, please."', 'Pulları o kadar hızlı oynadın ki rakibin "Yüksek sesle say lütfen" dedi.'],
+  ['You beat your uncle for the first time. He demanded a rematch, then another, then one more.', 'Amcanı ilk kez yendin. Rövanş istedi, sonra bir rövanş daha, sonra bir tane daha.'],
+  ['You called out the dice like an old pro: "şeş beş!" The whole table nodded with respect.', 'Zarları ustalar gibi "şeş beş!" diye bağırarak attın. Masadakiler saygıyla başını salladı.'],
+  ['You were five checkers from winning when your opponent rolled double sixes twice. Fate plays tavla too.', 'Kazanmana beş pul kalmıştı ki rakibin iki kez düşeş attı. Kader de tavla oynuyor.'],
+  ['You played on a balcony over the street. The neighbors started taking bets from their windows.', 'Sokağa bakan bir balkonda oynadınız. Komşular pencerelerden bahse girmeye başladı.'],
+  ['You tried a clever strategy you saw online. It lost spectacularly but looked very stylish.', 'İnternette gördüğün havalı bir taktiği denedin. Rezil oldun ama çok şık görünüyordun.'],
+  ['Three games, three wins. You will be unbearable for at least a week.', 'Üç oyun, üç galibiyet. En az bir hafta çekilmez olacaksın.'],
+];
+
+const pazarLines = (sib: string): Pair[] => [
+  ['"Taste it, taste it!" A stallholder pushed a slice of melon into your hand. You left with three kilos of peaches.', `"Tadına bak ${sib}, tadına bak!" Bir pazarcı eline bir dilim kavun tutuşturdu. Üç kilo şeftaliyle döndün.`],
+  ['You went at closing time and got a whole crate of tomatoes for the price of a tea.', 'Pazar sonuna gittin, bir kasa domatesi bir çay parasına aldın.'],
+  ['You dragged your shopping trolley through the crowd and ran over three toes, one of them yours.', 'Pazar arabanı kalabalıkta sürükledin, üç ayak ezdin; biri kendininki.'],
+  ['A stallholder sang a whole song about his cucumbers. You bought some out of respect.', 'Bir pazarcı salatalıkları için koca bir şarkı uydurmuştu. Saygından bir kilo aldın.'],
+  ['You picked every tomato one by one. The stallholder sighed: "They\'re all the same, all beautiful."', 'Domatesleri tek tek seçtin. Pazarcı iç geçirdi: "Hepsi aynı, hepsi güzel."'],
+  ['You haggled a few coins off the cherries and felt like a business genius all day.', 'Kirazda pazarlık yapıp birkaç kuruş indirdin, bütün gün kendini iş dâhisi gibi hissettin.'],
+  ['The stallholders shouted over each other: "Here, here, the sweetest ones are here!" You bought from the loudest.', 'Pazarcılar birbirinin sesini bastırdı: "Buraya buraya, en tatlısı burada!" En yüksek sesle bağırandan aldın.'],
+  ['You ran into your old teacher at the cheese stall. You both acted as if this was perfectly normal.', 'Peynirci tezgâhında eski öğretmeninle karşılaştın. İkiniz de bu çok normalmiş gibi davrandınız.'],
+  ['Your bags were so heavy you rested on every bench on the way home. Worth it.', 'Poşetler o kadar ağırdı ki eve dönerken her bankta mola verdin. Değdi ama.'],
+  ['A stallholder gave you a free bunch of parsley "for a loyal customer." It was your first time there.', 'Bir pazarcı "Müdavimimizsin" deyip bir demet maydanozu hediye etti. Oraya ilk kez gidiyordun.'],
+  ['You went for tomatoes and came back with tomatoes, peppers, a melon, slippers and a tablecloth.', 'Domates almaya gittin; domates, biber, kavun, bir çift terlik ve bir masa örtüsüyle döndün.'],
+];
+
+/** Halı saha lines; `true` marks a lost match where your side pays for the pitch (3 of 12, as before 1 of 4). */
+const HALISAHA: (readonly [string, string, boolean])[] = [
+  ['One goal, four open misses. In the group chat, only the goal exists.', 'Bir gol attın, dört net pozisyon kaçırdın. Mesaj grubunda sadece gol konuşuluyor.', false],
+  ['You went in goal because nobody else would and let in eleven. The losing side pays for the pitch.', 'Kimse geçmeyince kaleye sen geçtin, on bir gol yedin. Saha parası kaybedenden.', true],
+  ['The match ended fourteen–thirteen. Both teams claim they won.', 'Maç on dört on üç bitti. İki takım da kazandığını iddia ediyor.', false],
+  ['You played a whole hour at full speed, then spent the next hour lying on the artificial grass.', 'Bir saat bütün hızınla oynadın, sonraki bir saati suni çimin üstünde yatarak geçirdin.', false],
+  ['You lost by one goal in the last minute. The pitch fee and the ayran afterwards are on your team.', 'Son dakikada tek golle kaybettiniz. Saha parası da maç sonu ayranları da sizden.', true],
+  ['You scored with a back-heel and will be calling it "a bicycle kick" for years.', 'Topuğunla bir gol attın. Yıllarca "rövaşata" diye anlatacaksın.', false],
+  ['The match stopped twice over whether the ball crossed the line. There is no line.', 'Maç iki kez "Top çizgiyi geçti mi?" tartışmasıyla durdu. Çizgi diye bir şey yok ki.', false],
+  ['Your side lost, so as agreed you paid for the pitch. The winners have not stopped talking since.', 'Kaybettiniz, söz verildiği gibi saha parasını siz ödediniz. Kazananlar o günden beri susmuyor.', true],
+  ['Someone brought a referee\'s whistle. Nobody obeyed it, not even him.', 'Biri hakem düdüğü getirmişti. Kimse dinlemedi, kendisi bile.', false],
+  ['You played in rain so heavy the artificial grass became a lake. Best match of the year.', 'O kadar yağmurda oynadınız ki suni çim göle döndü. Yılın en güzel maçıydı.', false],
+  ['You set up three goals and nobody thanked you. Midfielders understand.', 'Üç gol pası verdin, kimse teşekkür etmedi. Orta sahalar bilir.', false],
+  ['You played until the floodlights went off. Everyone limped home, grinning.', 'Işıklar sönene kadar oynadınız. Herkes eve topallayarak ama sırıtarak döndü.', false],
+];
+
+const HALISAHA_HURT: Pair[] = [
+  ['You pulled a muscle chasing a ball you were never going to reach.', 'Asla yetişemeyeceğin bir topun peşinden koşarken adalen çekti.'],
+  ['You went in for a slide tackle on artificial grass. The grass won.', 'Suni çimde kayarak topa girdin. Çim kazandı.'],
+  ['You twisted your ankle in the first five minutes and refereed the rest from the bench.', 'İlk beş dakikada bileğini burktun, maçın geri kalanını yedek kulübesinden yönettin.'],
+  ['A teammate\'s knee met your thigh at full speed. You walked like a cowboy for a week.', 'Bir takım arkadaşının dizi tam gaz uyluğuna girdi. Bir hafta kovboy gibi yürüdün.'],
+];
+
+/** Bayram as a child: pocket money (harçlık). The amount stands alone, never with a suffix. */
+const BAYRAM_KID: ((cash: string) => Pair)[] = [
+  (x) => [`You kissed eleven hands and touched each one to your forehead. You collected ${x} in pocket money (harçlık) and a pocketful of sticky candy.`, `On bir el öpüp alnına koydun. Toplam ${x} harçlık topladın, ceplerin de yapış yapış şekerle doldu.`],
+  (x) => [`A great-aunt pinched both your cheeks and slipped you money. By evening you had ${x} and a sugar rush.`, `Büyük teyzen iki yanağını birden sıkıp cebine harçlık sıkıştırdı. Akşama kadar toplam ${x} biriktirdin, bir de şeker sarhoşluğu.`],
+  (x) => [`You wore your new bayram clothes and stayed spotless until the third house. Pocket money total: ${x}.`, `Bayramlıklarını giydin ve üçüncü eve kadar tek leke yapmadın. Toplam harçlık: ${x}.`],
+  (x) => [`You counted your pocket money after every visit. Final tally: ${x}, plus one coin of unknown origin.`, `Her evden sonra harçlıklarını saydın. Son durum: ${x}, bir de nereden geldiği belli olmayan bir bozuk para.`],
+  (x) => [`An uncle made you recite a poem before he paid up. Worth it: ${x} in pocket money by the end of the day.`, `Bir amcan harçlığı vermeden önce sana şiir okuttu. Değdi: gün sonunda cebinde toplam ${x} vardı.`],
+  (x) => [`You and your cousins compared earnings in the stairwell like tiny bankers. Your share: ${x}.`, `Kuzenlerinle merdiven boşluğunda minik bankacılar gibi kazançlarınızı karşılaştırdınız. Senin payın: ${x}.`],
+  (x) => [`You ate so much baklava you had to lie down at the fourth house. You still collected ${x}.`, `O kadar baklava yedin ki dördüncü evde uzanmak zorunda kaldın. Yine de toplam ${x} harçlık topladın.`],
+  (x) => [`Grandpa handed you a crisp banknote and said "don't spend it all at once." You collected ${x} in total and spent it all at once.`, `Deden gıcır gıcır bir banknot verip "Hepsini birden harcama" dedi. Toplam ${x} topladın ve hepsini birden harcadın.`],
+];
+
+const bayramLines = (c: Ctx): Pair[] => [
+  ['Four homes, eight teas and a box of chocolates eaten one politely refused piece at a time.', 'Dört ev gezdin, sekiz çay içtin, bir kutu çikolatayı "Yok, almayayım" diye diye bitirdin.'],
+  ['Every aunt asked when you are getting married, when the baby is coming, or why you got so thin.', 'Her teyze ya "Ne zaman evleniyorsun?", ya "Bebek ne zaman?", ya da "Neden bu kadar zayıfladın?" diye sordu.'],
+  ['You splashed lemon cologne (kolonya) on every guest\'s hands like a pro.', 'Gelen her misafirin eline ustalıkla limon kolonyası döktün.'],
+  ["Your uncle told the same story he tells every bayram. You mouthed it along with him.", 'Amcan her bayram anlattığı hikâyeyi yine anlattı. Sen de dudaklarınla eşlik ettin.'],
+  c.age < 40
+    ? ['You kissed the hands of the elders and touched them to your forehead. Grandma still slipped you money, at your age.', 'Büyüklerin elini öpüp alnına koydun. Ninen bu yaşında bile cebine para sıkıştırdı.']
+    : ['The little ones kissed your hand and touched it to their foreheads. You slipped each of them money, just like your grandma used to.', 'Küçükler elini öpüp alınlarına koydu. Ninenin yaptığı gibi her birinin cebine para sıkıştırdın.'],
+  ['You toured relatives you see once a year. Every single one asked: "So, what are you up to these days?"', 'Senede bir gördüğün akrabaları gezdin. Hepsi aynı soruyu sordu: "Eee, neler yapıyorsun bakalım?"'],
+  ['You helped with the bayram breakfast: three kinds of cheese, two kinds of olives, one exhausted host.', 'Bayram sabahı kahvaltısına yardım ettin: üç çeşit peynir, iki çeşit zeytin, bir de bitkin ev sahibi.'],
+  ['Every house brought out the candy bowl. By the fifth you could not look at a lokum.', 'Her evde şeker kâsesi önüne geldi. Beşinci evde artık lokuma bakamıyordun.'],
+  ['You phoned the relatives you could not visit. Every call lasted forty minutes and ended with "come and see us."', 'Gidemediğin akrabaları telefonla aradın. Her konuşma kırk dakika sürdü ve "Bekleriz ama" diye bitti.'],
+  ['The whole family squeezed around one table for lunch. Someone had to sit on a stool. It was you.', 'Bütün aile öğle yemeğinde tek bir masanın etrafına sıkıştı. Birinin taburede oturması gerekti. O kişi sendin.'],
+];
+
 const activities: ActivityDef[] = [
   {
     id: 'tr_tea',
@@ -2013,18 +2155,11 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Happiness, gossip', '+Mutluluk, dedikodu'),
     group: 'Family',
     minAge: 14,
+    jailOk: false,
     available: inTR,
     run: (c) => {
       c.h.stat('happiness', 4);
-      return line(c, [
-        ['You drank five glasses of tea on the balcony and learned who in the building is getting divorced.', 'Balkonda beş bardak çay içtin ve apartmanda kimin boşandığını öğrendin.'],
-        coastal(c)
-          ? ['Tea and simit with the neighbors. A seagull stole your simit.', 'Komşularla çay simit keyfi. Bir martı simidini kapıp gitti.']
-          : ['Tea and simit with the neighbors. A pigeon stole your simit.', 'Komşularla çay simit keyfi. Bir güvercin simidini kapıp gitti.'],
-        ['The neighbor from upstairs read your fortune in your coffee cup (fal). She saw a journey, a letter and a dark-haired stranger.', 'Üst kattaki komşu kahve falına baktı. Yol göründü, bir haber var, bir de esmer biri.'],
-        ['You asked for "just half a glass." Your glass was refilled seven times. Nobody listens to "just half."', '"Yarım bardak" dedin. Bardağın yedi kez doldu. "Yarım bardak" diyeni kimse dinlemez.'],
-        ['The neighbors compared electricity bills, grandchildren and blood pressure, in that order.', 'Komşular sırasıyla elektrik faturalarını, torunları ve tansiyonlarını karşılaştırdı.'],
-      ]);
+      return say(c, 'tr_tea', teaLines(c));
     },
   },
   {
@@ -2033,19 +2168,11 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Happiness, feed the gulls', '+Mutluluk, martılara simit'),
     group: 'Mind & Body',
     minAge: 6,
+    jailOk: false,
     available: (c) => inTR(c) && (isIstanbul(c) || isIzmir(c)),
     run: (c) => {
       c.h.stat('happiness', 5);
-      if (isIzmir(c)) {
-        return c.t(
-          'You crossed the bay to Karşıyaka by ferry, drank tea from a thin tulip glass and threw simit to the gulls. Perfect.',
-          'Körfez vapuruyla karşıya geçtin, ince belli bardakta çayını yudumladın, martılara simit attın. Daha ne olsun.',
-        );
-      }
-      return c.t(
-        'You crossed the Bosphorus from Europe to Asia by ferry, drank tea from a thin tulip glass and threw simit to the gulls. Perfect.',
-        'Boğaz vapuruyla Avrupa yakasından Anadolu yakasına geçtin, ince belli bardakta çayını yudumladın, martılara simit attın. Daha ne olsun.',
-      );
+      return isIzmir(c) ? say(c, 'tr_ferry.izmir', FERRY_IZMIR) : say(c, 'tr_ferry', FERRY_IST);
     },
   },
   {
@@ -2054,19 +2181,13 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Happiness, okey and chat', '+Mutluluk, okey ve muhabbet'),
     group: 'Mind & Body',
     minAge: 18,
+    jailOk: false,
     available: (c) => inTR(c) && c.p.jailYears === 0,
     run: (c) => {
       c.h.stat('happiness', 3);
-      const i = c.rng.int(0, 4);
-      if (i === 3) c.h.money(-wage(c, 3));
-      const rows: [string, string][] = [
-        ['You played okey (a tile game) for three hours and won exactly one hand. You talked about that hand for three more.', 'Üç saat okey oynadın, tek bir el kazandın. Sonraki üç saat o eli anlattın.'],
-        ['The man at the next table explained how to fix the national football team. Everyone agreed, then everyone disagreed.', 'Yan masadaki amca milli takımın nasıl düzeleceğini anlattı. Önce herkes katıldı, sonra herkes itiraz etti.'],
-        ['You read three newspapers for the price of one tea. The crossword in the third was already done.', 'Bir çay parasına üç gazete okudun. Üçüncüsünün bulmacasını biri çoktan çözmüştü.'],
-        ['You lost at batak (a card game), so the whole table\'s tea is on you. Loser pays.', 'Batakta kaybettin, bütün masanın çayı senden. Kaybeden öder.'],
-        ['You stood behind the okey players giving advice nobody asked for. They call you "the consultant" now.', 'Okey oynayanların arkasında durup kimsenin istemediği akıllar verdin. Artık sana "danışman" diyorlar.'],
-      ];
-      return c.t(rows[i][0], rows[i][1]);
+      const [en, tr, pays] = KAHVEHANE[pickIndex(c, 'tr_kahvehane', KAHVEHANE.length)];
+      if (pays) c.h.money(-wage(c, 3));
+      return c.t(en, tr);
     },
   },
   {
@@ -2076,17 +2197,12 @@ const activities: ActivityDef[] = [
     group: 'Mind & Body',
     minAge: 10,
     maxAge: 59,
+    jailOk: false,
     available: inTR,
     run: (c) => {
       c.h.stat('smarts', 1);
       c.h.stat('happiness', 2);
-      return line(c, [
-        ['You rolled double sixes (düşeş) three times in a row and slammed the board shut. Küt.', 'Üst üste üç düşeş attın ve tavlayı küt diye kapattın.'],
-        ['Your opponent rolled double ones (hep yek) and still beat you. Humiliating.', 'Rakibin hep yek attı ve yine de seni yendi. Rezalet.'],
-        ['You lost by a double game (mars). This topic is now closed.', 'Mars oldun. Bu konu kapanmıştır.'],
-        ['You played until the tea went cold and the score was "who\'s counting?"', 'Çay soğuyana kadar oynadınız. Skor mu? "Sayan mı var?"'],
-        ['You moved your checkers so fast your opponent asked you to "count out loud, please."', 'Pulları o kadar hızlı oynadın ki rakibin "Yüksek sesle say lütfen" dedi.'],
-      ]);
+      return say(c, 'tr_tavla', TAVLA);
     },
   },
   {
@@ -2095,24 +2211,13 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Health, cheap tomatoes', '+Sağlık, ucuz domates'),
     group: 'Mind & Body',
     minAge: 14,
+    jailOk: false,
     available: (c) => inTR(c) && c.p.jailYears === 0,
     run: (c) => {
       c.h.money(-wage(c, 10));
       c.h.stat('health', 2);
       c.h.stat('happiness', 2);
-      const i = c.rng.int(0, 4);
-      const sib = c.p.gender === 'female' ? 'abla' : 'abi';
-      const rows: [string, string][] = [
-        [
-          '"Taste it, taste it!" A stallholder pushed a slice of melon into your hand. You left with three kilos of peaches.',
-          `"Tadına bak ${sib}, tadına bak!" Bir pazarcı eline bir dilim kavun tutuşturdu. Üç kilo şeftaliyle döndün.`,
-        ],
-        ['You went at closing time and got a whole crate of tomatoes for the price of a tea.', 'Pazar sonuna gittin, bir kasa domatesi bir çay parasına aldın.'],
-        ['You dragged your shopping trolley through the crowd and ran over three toes, one of them yours.', 'Pazar arabanı kalabalıkta sürükledin, üç ayak ezdin; biri kendininki.'],
-        ['A stallholder sang a whole song about his cucumbers. You bought some out of respect.', 'Bir pazarcı salatalıkları için koca bir şarkı uydurmuştu. Saygından bir kilo aldın.'],
-        ['You picked every tomato one by one. The stallholder sighed: "They\'re all the same, all beautiful."', 'Domatesleri tek tek seçtin. Pazarcı iç geçirdi: "Hepsi aynı, hepsi güzel."'],
-      ];
-      return c.t(rows[i][0], rows[i][1]);
+      return say(c, 'tr_pazar', pazarLines(c.p.gender === 'female' ? 'abla' : 'abi'));
     },
   },
   {
@@ -2122,23 +2227,18 @@ const activities: ActivityDef[] = [
     group: 'Mind & Body',
     minAge: 14,
     maxAge: 55,
+    jailOk: false,
     available: (c) => inTR(c) && c.p.jailYears === 0,
     run: (c) => {
       if (c.rng.chance(c.age >= 35 ? 0.2 : 0.08)) {
         c.h.stat('health', -4);
-        return c.t('You pulled a muscle chasing a ball you were never going to reach.', 'Asla yetişemeyeceğin bir topun peşinden koşarken adalen çekti.');
+        return say(c, 'tr_halisaha.hurt', HALISAHA_HURT);
       }
       c.h.stat('health', 3);
       c.h.stat('happiness', 3);
-      const i = c.rng.int(0, 3);
-      if (i === 1) c.h.money(-wage(c, 5));
-      const rows: [string, string][] = [
-        ['One goal, four open misses. In the group chat, only the goal exists.', 'Bir gol attın, dört net pozisyon kaçırdın. Mesaj grubunda sadece gol konuşuluyor.'],
-        ['You went in goal because nobody else would and let in eleven. The losing side pays for the pitch.', 'Kimse geçmeyince kaleye sen geçtin, on bir gol yedin. Saha parası kaybedenden.'],
-        ['The match ended fourteen–thirteen. Both teams claim they won.', 'Maç on dört on üç bitti. İki takım da kazandığını iddia ediyor.'],
-        ['You played a whole hour at full speed, then spent the next hour lying on the artificial grass.', 'Bir saat bütün hızınla oynadın, sonraki bir saati suni çimin üstünde yatarak geçirdin.'],
-      ];
-      return c.t(rows[i][0], rows[i][1]);
+      const [en, tr, pays] = HALISAHA[pickIndex(c, 'tr_halisaha', HALISAHA.length)];
+      if (pays) c.h.money(-wage(c, 5));
+      return c.t(en, tr);
     },
   },
   {
@@ -2147,6 +2247,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Family closeness, too much tea', '+Aile bağları, fazla çay'),
     group: 'Family',
     minAge: 5,
+    jailOk: false,
     available: (c) => inTR(c) && c.p.jailYears === 0 && family(c).length > 0,
     run: (c) => {
       family(c).forEach((r) => c.h.closeness(r.person.id, 3));
@@ -2154,20 +2255,9 @@ const activities: ActivityDef[] = [
       if (c.age < 15) {
         const cash = wage(c, c.rng.int(5, 20));
         c.h.money(cash);
-        return c.t(
-          `You kissed eleven hands and touched each one to your forehead. You collected ${c.h.fmt(cash)} in pocket money (harçlık) and a pocketful of sticky candy.`,
-          `On bir el öpüp alnına koydun. Toplam ${c.h.fmt(cash)} harçlık topladın, ceplerin de yapış yapış şekerle doldu.`,
-        );
+        return sayWith(c, 'tr_bayram.kid', BAYRAM_KID, c.h.fmt(cash));
       }
-      return line(c, [
-        ['Four homes, eight teas and a box of chocolates eaten one politely refused piece at a time.', 'Dört ev gezdin, sekiz çay içtin, bir kutu çikolatayı "Yok, almayayım" diye diye bitirdin.'],
-        ['Every aunt asked when you are getting married, when the baby is coming, or why you got so thin.', 'Her teyze ya "Ne zaman evleniyorsun?", ya "Bebek ne zaman?", ya da "Neden bu kadar zayıfladın?" diye sordu.'],
-        ['You splashed lemon cologne (kolonya) on every guest\'s hands like a pro.', 'Gelen her misafirin eline ustalıkla limon kolonyası döktün.'],
-        ["Your uncle told the same story he tells every bayram. You mouthed it along with him.", 'Amcan her bayram anlattığı hikâyeyi yine anlattı. Sen de dudaklarınla eşlik ettin.'],
-        c.age < 40
-          ? ['You kissed the hands of the elders and touched them to your forehead. Grandma still slipped you money, at your age.', 'Büyüklerin elini öpüp alnına koydun. Ninen bu yaşında bile cebine para sıkıştırdı.']
-          : ['The little ones kissed your hand and touched it to their foreheads. You slipped each of them money, just like your grandma used to.', 'Küçükler elini öpüp alınlarına koydu. Ninenin yaptığı gibi her birinin cebine para sıkıştırdın.'],
-      ]);
+      return say(c, 'tr_bayram', bayramLines(c));
     },
   },
 ];

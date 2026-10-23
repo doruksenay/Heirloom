@@ -4,6 +4,7 @@ import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
 import { INDUSTRIES, SALE_RANGE, STAGE_NAMES, bossState, stageName, companyOf, genOf, peekBoss, saleShare, valuate, type Company, type Industry } from './state';
 import { afterYear, moraleGrowth, moreActivities, moreEvents } from './extra';
+import { sayWith, type Pair } from '../base/lines';
 
 // "Boss" expansion: start a company, grow it, raise money, sell it, take it public, or lose everything.
 export const BOSS_ENTITLEMENT = 'pack.boss';
@@ -481,6 +482,61 @@ const events: EventDef[] = [
   },
 ];
 
+// ------------------------------------------------------------------ activity lines
+// Repeatable company activities pick a line with `sayWith` (base/lines.ts): one rng call, and a line
+// does not come back until most of its list has been seen. Amounts stand alone, never with a suffix.
+
+type NameAmount = { name: string; x: string };
+
+const GRIND: ((name: string) => Pair)[] = [
+  (n) => [`You worked until 3 a.m. on ${n} all month. Revenue is up.`, `Bütün ay ${n} için gece üçe kadar çalıştın. Ciro yükseldi.`],
+  (n) => [`You lived on cold coffee and spreadsheets for a month. ${n} is selling more; you are sleeping less.`, `Bir ay boyunca soğuk kahve ve tablolarla yaşadın. ${n} daha çok satıyor, sen daha az uyuyorsun.`],
+  (n) => [`You answered customer emails at 2 a.m. in your pajamas. Revenue at ${n} went up; your posture went down.`, `Gece ikide pijamayla müşteri e-postalarını yanıtladın. ${n} cirosu arttı, duruşun bozuldu.`],
+  (n) => [`The cleaner found you asleep on the office sofa three mornings in a row. ${n} had its best month yet.`, `Temizlikçi üç sabah üst üste seni ofis kanepesinde uyurken buldu. ${n} en iyi ayını geçirdi.`],
+  (n) => [`You personally called every client of ${n}, some of them twice. Sales are up and your voice is gone.`, `${n} müşterilerinin hepsini tek tek aradın, bazılarını iki kez. Satışlar arttı, sesin kısıldı.`],
+  (n) => [`Weekends? You vaguely remember them. ${n} grew a little more this month.`, `Hafta sonu mu? Hayal meyal hatırlıyorsun. ${n} bu ay biraz daha büyüdü.`],
+  (n) => [`You fixed a problem at ${n} at 4 a.m. and celebrated alone with a cold toastie. Revenue is up.`, `Sabaha karşı dörtte ${n} şirketindeki bir sorunu çözdün ve soğumuş tostla tek başına kutladın. Ciro yükseldi.`],
+  (n) => [`Your family has started setting a plate aside "in case you come home." You didn't. ${n} sold more than ever.`, `Ailen "Belki gelir" diye sana tabak ayırmaya başladı. Gelmedin. ${n} hiç olmadığı kadar sattı.`],
+  (n) => [`You redid the prices, the shop window and every process in one sleepless month. ${n} is up; your eyelids are down.`, `Uykusuz bir ayda fiyatları, vitrini ve bütün süreçleri baştan yaptın. ${n} yükselişte, göz kapakların düşüşte.`],
+  (n) => [`You took a supplier's call in the dentist's chair, mouth wide open. Still a good month for ${n}.`, `Dişçi koltuğunda, ağzın açıkken bir tedarikçinin telefonunu açtın. Yine de ${n} için iyi bir ay oldu.`],
+  (n) => [`The coffee machine at ${n} now knows you by name. Revenue had a strong month too.`, `${n} ofisindeki kahve makinesi artık seni adınla tanıyor. Ciro da güçlü bir ay geçirdi.`],
+];
+
+const MARKETING_HIT: ((v: NameAmount) => Pair)[] = [
+  ({ name, x }) => [`Your campaign for ${name} was everywhere. ${x} well spent.`, `${name} kampanyası her yerdeydi. ${x} yerini buldu.`],
+  ({ name, x }) => [`The ${name} jingle got stuck in everyone's head. The ${x} was worth every bit.`, `${name} reklam müziği herkesin dilinde. Harcanan ${x} helal olsun.`],
+  ({ name, x }) => [`A giant ${name} billboard went up on the busiest road in town. People took selfies with it. Cost: ${x}.`, `Şehrin en işlek yoluna ${name} için dev bir afiş astırdın. İnsanlar önünde fotoğraf çektirdi. Maliyeti: ${x}.`],
+  ({ name, x }) => [`The ${name} ad went viral. Even your dentist sent it to you. ${x} well spent.`, `${name} reklamı patladı. Dişçin bile sana gönderdi. Harcanan ${x} boşa gitmedi.`],
+  ({ name, x }) => [`You spent ${x} on a campaign and ${name} was the talk of the town for three days.`, `Kampanyaya ${x} harcadın, ${name} üç gün boyunca gündemden düşmedi.`],
+  ({ name, x }) => [`A famous comedian joked about the ${name} ad on TV. Free publicity on top of the ${x} you paid.`, `Ünlü bir komedyen televizyonda ${name} reklamıyla dalga geçti. Ödediğin ${x} üstüne bir de bedava reklam.`],
+  ({ name, x }) => [`Strangers on the bus quoted the ${name} slogan at you. ${x} bought a catchphrase.`, `Otobüste yabancılar sana ${name} sloganını tekrarladı. Harcanan ${x} sayesinde slogan dillere pelesenk oldu.`],
+  ({ name, x }) => [`The ${name} campaign won a small advertising award. Suddenly the ${x} budget looks cheap.`, `${name} kampanyası küçük bir reklam ödülü kazandı. Harcanan ${x} birden ucuz göründü.`],
+];
+
+const MARKETING_MEH: ((v: NameAmount) => Pair)[] = [
+  ({ name, x }) => [`You spent ${x} on ads for ${name}. Some people noticed.`, `${name} reklamlarına ${x} harcadın. Birkaç kişi fark etti.`],
+  ({ name, x }) => [`You paid ${x} for a ${name} billboard. It is mostly seen by pigeons.`, `${name} için bir afişe ${x} ödedin. Afişi en çok güvercinler görüyor.`],
+  ({ name, x }) => [`The ${name} radio ad aired at 3 a.m. Cost: ${x}. Audience: insomniacs.`, `${name} radyo reklamı gece üçte yayınlandı. Maliyeti ${x}, dinleyicisi uykusuzlar.`],
+  ({ name, x }) => [`You printed ${name} flyers for ${x} and handed them out on a corner. Most are in the recycling now.`, `Sokak köşesinde ${name} broşürü dağıttın. Basımına ${x} gitti; çoğu şimdi geri dönüşüm kutusunda.`],
+  ({ name, x }) => [`You paid an influencer ${x}. Their post about ${name} got fewer likes than their breakfast.`, `Bir fenomene ${x} ödedin. ${name} paylaşımı, kahvaltı fotoğrafından az beğeni aldı.`],
+  ({ name, x }) => [`The ${name} campaign cost ${x}. A cousin says she saw it. Nobody else has confirmed.`, `${name} kampanyası ${x} tuttu. Bir kuzenin gördüğünü söylüyor; doğrulayan başka kimse yok.`],
+  ({ name, x }) => [`You spent ${x} on online ads for ${name}. Most of the clicks were you, checking the ads.`, `${name} için internet reklamlarına ${x} harcadın. Tıklamaların çoğu reklamı kontrol eden sendin.`],
+  ({ name, x }) => [`${x} on a ${name} campaign bought a little buzz. A very little buzz.`, `${name} kampanyasına ${x} harcadın; biraz ses getirdi. Çok az bir ses.`],
+];
+
+const INVEST: ((v: NameAmount) => Pair)[] = [
+  ({ name, x }) => [`You moved ${x} of your savings into ${name}.`, `Kendi birikiminden ${name} şirketinin kasasına ${x} aktardın.`],
+  ({ name, x }) => [`You put half your savings into ${name}: ${x} in all. Your banking app asked if you were sure.`, `Birikiminin yarısını ${name} kasasına koydun: tam ${x}. Banka uygulaman "Emin misin?" diye sordu.`],
+  ({ name, x }) => [`${x} of your own money went into ${name}. It feels like lending money to your own child.`, `${name} için cebinden ${x} çıktı. Kendi çocuğuna borç vermek gibi bir his.`],
+  ({ name, x }) => [`You sent ${x} to ${name} and told yourself it was "an investment, not a bottomless pit."`, `${name} hesabına ${x} gönderdin ve kendine "Bu bir yatırım, dipsiz kuyu değil" dedin.`],
+  ({ name, x }) => [`Your accountant raised an eyebrow, then moved ${x} from your account into ${name}.`, `Muhasebecin bir kaşını kaldırdı, sonra senin hesabından ${name} kasasına ${x} aktardı.`],
+  ({ name, x }) => [`You set aside ${x} of your savings for ${name}. Holidays can wait; payroll cannot.`, `Birikiminden ${x} ayırıp ${name} şirketine koydun. Tatil bekleyebilir, maaşlar bekleyemez.`],
+  ({ name, x }) => [`You backed ${name} with ${x} from your own pocket. Your wallet is lighter, your mind is at ease.`, `${name} şirketine kendi cebinden ${x} destek verdin. Cüzdanın hafifledi ama için rahat.`],
+  ({ name, x }) => [`You signed the transfer for ${x} with a flourish. ${name} can breathe for a while.`, `Tutarı ${x} olan havaleyi kocaman bir imzayla onayladın. ${name} bir süre nefes alabilir.`],
+  ({ name, x }) => [`You moved ${x} into ${name}, then opened the company account four times that evening just to look at it.`, `${name} kasasına ${x} aktardın, sonra o akşam sırf bakmak için şirket hesabını dört kez açtın.`],
+  ({ name, x }) => [`Half your savings, ${x}, now lives at ${name}. Your piggy bank feels betrayed.`, `Birikiminin yarısı, yani ${x}, artık ${name} kasasında. Kumbaran ihanete uğramış gibi.`],
+];
+
 // ------------------------------------------------------------------ activities
 const activities: ActivityDef[] = [
   {
@@ -508,7 +564,7 @@ const activities: ActivityDef[] = [
       comp.revenue = Math.round(comp.revenue * (1 + (0.04 + c.p.stats.smarts / 2000) * room));
       comp.hype = Math.min(100, comp.hype + 3);
       c.h.stat('health', -3);
-      return c.t(`You worked until 3 a.m. on ${comp.name} all month. Revenue is up.`, `Bütün ay ${comp.name} için gece üçe kadar çalıştın. Ciro yükseldi.`);
+      return sayWith(c, 'boss_grind', GRIND, comp.name);
     },
   },
   {
@@ -559,9 +615,8 @@ const activities: ActivityDef[] = [
       comp.cash -= spend;
       const gain = c.rng.int(8, 25);
       comp.hype = Math.min(100, comp.hype + gain);
-      return gain > 18
-        ? c.t(`Your campaign for ${comp.name} was everywhere. ${c.h.fmt(spend)} well spent.`, `${comp.name} kampanyası her yerdeydi. ${c.h.fmt(spend)} yerini buldu.`)
-        : c.t(`You spent ${c.h.fmt(spend)} on ads for ${comp.name}. Some people noticed.`, `${comp.name} reklamlarına ${c.h.fmt(spend)} harcadın. Birkaç kişi fark etti.`);
+      const v = { name: comp.name, x: c.h.fmt(spend) };
+      return gain > 18 ? sayWith(c, 'boss_marketing.hit', MARKETING_HIT, v) : sayWith(c, 'boss_marketing', MARKETING_MEH, v);
     },
   },
   {
@@ -591,7 +646,7 @@ const activities: ActivityDef[] = [
       const amt = Math.round(c.p.money * 0.5);
       c.h.money(-amt);
       comp.cash += amt;
-      return c.t(`You moved ${c.h.fmt(amt)} of your savings into ${comp.name}.`, `Kendi birikiminden ${comp.name} şirketinin kasasına ${c.h.fmt(amt)} aktardın.`);
+      return sayWith(c, 'boss_invest', INVEST, { name: comp.name, x: c.h.fmt(amt) });
     },
   },
   {

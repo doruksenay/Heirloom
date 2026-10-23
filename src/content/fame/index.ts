@@ -5,6 +5,7 @@ import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans,
 import { compact, fameOf, free, hasPath } from './util';
 import { moreFameEvents } from './events-more';
 import { moreFameActivities } from './activities-more';
+import { sayWith, type Pair } from '../base/lines';
 
 // "Fame" expansion: music, social media and acting careers, the single-player side of Popmundo.
 export const FAME_ENTITLEMENT = 'pack.fame';
@@ -797,14 +798,31 @@ const activities: ActivityDef[] = [
     run: (c) => {
       const f = fameState(c.p);
       // a title in the middle of a sentence is a common noun: "as an extra", "bir figüran olarak"
-      const title = c.lang === 'tr' ? fameTitle(f, 'tr').toLocaleLowerCase('tr') : fameTitle(f, 'en').toLowerCase();
+      const title = { en: aOrAn(fameTitle(f, 'en').toLowerCase()), tr: fameTitle(f, 'tr').toLocaleLowerCase('tr') };
       f.lastPath = f.path ?? undefined;
       f.path = null;
       c.h.flag('fame_quit');
       c.h.stat('happiness', 3);
-      return c.t(`You retired from the spotlight as ${aOrAn(title)}. Your fans will remember.`, `Spot ışıklarına bir ${title} olarak veda ettin. Hayranların seni unutmayacak.`);
+      return sayWith(c, 'fame_quit', QUIT_LINES, title);
     },
   },
+];
+
+/**
+ * Farewell lines for fame_quit, picked with `sayWith` (one rng call, no line back until most were seen).
+ * `en` is the title with its article ("an extra"); every Turkish line says "bir <title> olarak".
+ */
+const QUIT_LINES: ((t: { en: string; tr: string }) => Pair)[] = [
+  (t) => [`You retired from the spotlight as ${t.en}. Your fans will remember.`, `Spot ışıklarına bir ${t.tr} olarak veda ettin. Hayranların seni unutmayacak.`],
+  (t) => [`You announced your farewell as ${t.en}. The comment section is still in tears.`, `Vedanı bir ${t.tr} olarak duyurdun. Yorumlar hâlâ gözyaşı içinde.`],
+  (t) => [`You took one last bow as ${t.en} and walked off. Someone at the back shouted "one more!"`, `Son kez bir ${t.tr} olarak eğilip selam verdin ve çekildin. Arkalardan biri "Bir tane daha!" diye bağırdı.`],
+  (t) => [`You switched off the spotlight for good, retiring as ${t.en}. Your phone finally stopped ringing.`, `Spot ışıklarını bir ${t.tr} olarak son kez kapattın. Telefonun nihayet sustu.`],
+  (t) => [`You quit the fame business as ${t.en}. By Tuesday the paparazzi had moved on to someone younger.`, `Şöhret dünyasından bir ${t.tr} olarak çekildin. Paparazziler salıya kadar daha gencine geçmişti bile.`],
+  (t) => [`You left the stage as ${t.en} and slept for fourteen hours straight.`, `Sahneyi bir ${t.tr} olarak bıraktın ve tam on dört saat uyudun.`],
+  (t) => [`You said goodbye to the cameras as ${t.en} and bought a houseplant. It never asks for autographs.`, `Kameralara bir ${t.tr} olarak veda ettin ve bir saksı çiçeği aldın. O hiç imza istemiyor.`],
+  (t) => [`You stepped out of the limelight as ${t.en}. Fan mail still arrives, addressed to "the legend."`, `Işıklardan bir ${t.tr} olarak çekildin. Hayran mektupları hâlâ geliyor, üstlerinde "Efsaneye" yazıyor.`],
+  (t) => [`You announced your retirement as ${t.en}. Your manager cried more than you did.`, `Emekliliğini bir ${t.tr} olarak ilan ettin. Menajerin senden çok ağladı.`],
+  (t) => [`You gave one final interview as ${t.en}, answered every question with "no comment" and went home.`, `Son röportajını bir ${t.tr} olarak verdin, her soruya "Yorum yok" dedin ve evine gittin.`],
 ];
 
 // ------------------------------------------------------------------ yearly tick

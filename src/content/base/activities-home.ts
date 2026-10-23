@@ -444,15 +444,27 @@ export function listingOptions(c: Ctx): { tier: HomeTier; mode: 'rent' | 'buy'; 
   return out;
 }
 
+/**
+ * After "Just looking" at the shelter, the visit rests for the next year, so the same faces (and the same
+ * goodbye) do not come round every single year. The flag holds the year; old saves simply lack it.
+ */
+export const ADOPT_DECLINED = 'pet_adopt_declined';
+const SHELTER_REST_YEARS = 2;
+const shelterResting = (c: Ctx) => {
+  const y = c.p.flags[ADOPT_DECLINED];
+  return typeof y === 'number' && c.s.year - y < SHELTER_REST_YEARS;
+};
+
 export const homeActivities: ActivityDef[] = [
   // ------------------------------------------------ Pets
   {
     id: 'pet_adopt',
     label: (c) => c.t('Adopt a pet', 'Evcil hayvan sahiplen'),
-    description: (c) => c.t('A dog, a cat, a fish...', 'Köpek, kedi, balık...'),
+    description: (c) =>
+      shelterResting(c) ? c.t('You were just there. Give it a year.', 'Daha yeni gittin. Bir yıl ara ver.') : c.t('A dog, a cat, a fish...', 'Köpek, kedi, balık...'),
     group: 'Pets',
     minAge: 18,
-    available: (c) => c.p.jailYears === 0 && petsAlive(c).length < MAX_PETS,
+    available: (c) => c.p.jailYears === 0 && petsAlive(c).length < MAX_PETS && !shelterResting(c),
     run: () => ({ event: 'base.pet_adopt' }),
   },
   {

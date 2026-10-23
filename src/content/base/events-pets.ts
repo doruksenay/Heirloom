@@ -3,7 +3,9 @@ import { MAX_PETS, addPet, displayName, findPet, nextNum, petAge, petDies, petKi
 import { currentTier, homeTier, type HomeTier } from '../../engine/home';
 import { acc, cap, dat, gen, wage, wth } from './util';
 import { coastal } from './events-flavour';
+import { say as sayLine, type Pair } from './lines';
 import {
+  ADOPT_DECLINED,
   adoptableKinds,
   hasPet,
   listingOptions,
@@ -66,6 +68,20 @@ const ADOPT_LINES: Record<PetKind, [string, string]> = {
   turtle: ['You adopted {n}, a tortoise of {x}. With luck, {n} will meet your grandchildren.', '{x} yaşında bir kaplumbağa olan {acc} sahiplendin. Şansın yaver giderse torunlarınla da tanışacak.'],
   horse: ['{n} arrived in a trailer and looked over the field like a landlord.', '{n} bir römorkla geldi ve tarlaya ev sahibi edasıyla baktı.'],
 };
+
+/** "Just looking" at the shelter. Exported for the playtest scripts. */
+export const ADOPT_DECLINE: Pair[] = [
+  ['You left empty-handed. One face will follow you around for weeks.', 'Eli boş çıktın. O suratlardan biri haftalarca aklından çıkmayacak.'],
+  ['You said you would "think about it." The volunteer has heard that one before. So has the dog.', '"Bir düşüneyim" dedin. Gönüllü bu lafı çok duymuştu. Köpek de.'],
+  ['You only came to look, and you only looked. Your heart did not get the message.', 'Sadece bakmaya gelmiştin ve sadece baktın. Kalbinin bundan haberi yoktu.'],
+  ['You walked out with no pet, three shelter leaflets and a large helping of guilt.', 'Hayvansız ama üç barınak broşürü ve koca bir vicdan azabıyla çıktın.'],
+  ['A cat reached a paw through the bars as you left. You will be thinking about that paw for a while.', 'Çıkarken bir kedi patisini parmaklıkların arasından uzattı. O pati bir süre aklından çıkmayacak.'],
+  ['You told yourself the timing is not right. The puppies disagreed, loudly.', 'Kendine "Şimdi zamanı değil" dedin. Yavrular yüksek sesle itiraz etti.'],
+  ['You went home alone and scrolled through shelter photos on your phone until midnight.', 'Eve tek başına döndün ve gece yarısına kadar telefonda barınak fotoğraflarına baktın.'],
+  ["You promised to come back at the weekend. For a shelter dog, a weekend is a very long time.", 'Hafta sonu yine geleceğine söz verdin. Barınaktaki bir köpek için hafta sonu çok uzun bir zaman.'],
+  ['Not today. On the way out you signed up for the shelter newsletter, which is how it always starts.', 'Bugün değil. Çıkarken barınağın bültenine kaydoldun; her şey hep böyle başlar.'],
+  ['You stood in front of the rabbit hutch for twenty minutes, then left. The rabbit did not even blink.', 'Tavşan kafesinin önünde yirmi dakika durdun, sonra çıktın. Tavşan gözünü bile kırpmadı.'],
+];
 
 /** Name for a new pet of this kind: the family's last pet of that kind lends its name, otherwise a fresh one. */
 function pickName(c: Ctx, kind: PetKind): string {
@@ -136,7 +152,10 @@ const petEventsOnly: EventDef[] = [
       {
         id: 'none',
         label: (c) => c.t('Just looking', 'Sadece bakıyorum'),
-        resolve: (c) => c.t('You left empty-handed. One face will follow you around for weeks.', 'Eli boş çıktın. O suratlardan biri haftalarca aklından çıkmayacak.'),
+        resolve: (c) => {
+          c.h.flag(ADOPT_DECLINED); // the shelter visit rests for a year (see pet_adopt in activities-home)
+          return sayLine(c, 'pet_adopt.none', ADOPT_DECLINE);
+        },
       },
     ],
   },
@@ -776,6 +795,20 @@ function listingChoice(i: number) {
   };
 }
 
+/** "Stay where you are" after the listings. Exported for the playtest scripts. */
+export const LISTINGS_STAY: Pair[] = [
+  ['You closed the listings. Your home suddenly looks cozier.', 'İlanları kapattın. Evin birden daha sıcak göründü.'],
+  ['You read "spacious" and "close to transport" and decided to stay put. You know what those words mean.', '"Ferah" ve "ulaşıma yakın" yazılarını okuyup yerinde kalmaya karar verdin. O kelimelerin ne demek olduğunu biliyorsun.'],
+  ['You looked at the prices and made yourself a cup of tea in your perfectly fine kitchen.', 'Fiyatlara baktın ve gayet iyi olan mutfağında kendine bir çay demledin.'],
+  ['The agent called twice more. You let it ring and moved the sofa around instead.', 'Emlakçı iki kez daha aradı. Açmadın, onun yerine kanepenin yerini değiştirdin.'],
+  ['Moving means boxes. You thought about the boxes and stayed.', 'Taşınmak koli demek. Kolileri düşündün ve kaldın.'],
+  ['Every listing had a flaw: too far, too dark, too orange. Your place won by default.', 'Her ilanın bir kusuru vardı: fazla uzak, fazla karanlık, fazla turuncu. Evin hükmen galip geldi.'],
+  ['The new places were tempting. Then you remembered your boiler actually works. You stayed.', 'Yeni evler cazipti. Sonra kombinin sorunsuz çalıştığını hatırladın. Kaldın.'],
+  ['You viewed one flat, heard the neighbor through the wall and went home grateful.', 'Bir daireye bakmaya gittin, duvarın öbür yanındaki komşuyu duydun ve evine şükrederek döndün.'],
+  ['You saved three listings "for later." Later never comes. Neither does the moving van.', 'Üç ilanı "Sonra bakarım" diye kaydettin. O sonra hiç gelmez. Nakliye kamyonu da.'],
+  ['Your neighbor heard you were looking and brought börek "so you will miss us." It worked.', 'Komşun ev baktığını duyunca "Gidersen bizi özlersin" diye börek getirdi. İşe yaradı.'],
+];
+
 const homeEvents: EventDef[] = [
   {
     id: 'base.home_listings',
@@ -809,7 +842,7 @@ const homeEvents: EventDef[] = [
       {
         id: 'stay',
         label: (c) => c.t('Stay where you are', 'Olduğun yerde kal'),
-        resolve: (c) => c.t('You closed the listings. Your home suddenly looks cozier.', 'İlanları kapattın. Evin birden daha sıcak göründü.'),
+        resolve: (c) => sayLine(c, 'home_listings.stay', LISTINGS_STAY),
       },
     ],
   },
