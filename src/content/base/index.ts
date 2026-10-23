@@ -7,6 +7,12 @@ import { baseActivities } from './activities';
 import { midlifeEvents } from './events-midlife';
 import { elderEvents } from './events-elder';
 import { elderActivities } from './activities-elder';
+import { childEvents } from './events-child';
+import { teenEvents } from './events-teen';
+import { careerEvents } from './events-careers';
+import { careerActivities, careerOnYear } from './activities-careers';
+import { petEvents } from './events-pets';
+import { homeActivities, homeOnInherit, homeOnYear, homeTiles } from './activities-home';
 
 export const basePack: ContentPack = {
   id: 'base',
@@ -14,6 +20,23 @@ export const basePack: ContentPack = {
   description: 'The base game.',
   rating: 'all',
   entitlement: null,
-  events: [...youngEvents, ...adultEvents, ...moreEvents, ...midlifeEvents, ...elderEvents, ...scheduledEvents],
-  activities: [...baseActivities, ...elderActivities],
+  events: [
+    ...youngEvents,
+    ...childEvents,
+    ...teenEvents,
+    ...adultEvents,
+    ...moreEvents,
+    ...midlifeEvents,
+    ...elderEvents,
+    ...careerEvents,
+    ...petEvents,
+    ...scheduledEvents,
+  ],
+  activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities],
+  onYear: (c) => {
+    careerOnYear(c);
+    homeOnYear(c);
+  },
+  onInherit: (prev, next, s) => homeOnInherit(prev, next, s),
+  lifeTiles: (s) => homeTiles(s),
 };
