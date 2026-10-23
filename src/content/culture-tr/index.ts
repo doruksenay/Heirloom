@@ -1,4 +1,5 @@
 import type { ActivityDef, ContentPack, Ctx, EventDef } from '../types';
+import { canMarryGrandkid, marryGrandkid } from '../base/events-elder';
 import type { GameState } from '../../engine/types';
 import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
@@ -1949,9 +1950,15 @@ const later: EventDef[] = [
     minAge: 60,
     once: true,
     weight: 30,
-    // a grandchild of marrying age; older saves only know a count, so a child of 50+ with kids stands in
-    when: (c) => inTR(c) && (knowsGrandkids(c) ? grandkidsAged(c, 22, 40).length > 0 : hasGrandkids(c, 50)),
-    title: (c) => c.t('Your grandchild is getting married!', 'Torunun evleniyor!'),
+    // the same real grandchildren as the base elder events; marryGrandkid marks the wedding so nobody marries twice
+    when: (c) => inTR(c) && canMarryGrandkid(c, 22, 40),
+    setup: (c) => {
+      c.vars.gkName = marryGrandkid(c, 22, 40)?.n ?? '';
+    },
+    title: (c) =>
+      c.vars.gkName
+        ? c.t(`Your grandchild ${c.vars.gkName} is getting married!`, `Torunun ${c.vars.gkName} evleniyor!`)
+        : c.t('Your grandchild is getting married!', 'Torunun evleniyor!'),
     text: (c) => c.t('At the gold-pinning (takı), everyone is waiting to see what the grandparent pins on.', 'Takı merasiminde herkes senin ne takacağını merak ediyor.'),
     choices: [
       {
