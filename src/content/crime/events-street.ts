@@ -151,15 +151,15 @@ export const streetEvents: EventDef[] = [
     choices: [
       {
         id: 'bags',
-        label: (c) => c.t('Prado handbags', 'Prado çantalar'),
+        label: (c) => c.t('"Velmont" handbags', '"Velmont" çantalar'),
         resolve: (c) => {
           if (c.rng.chance(0.7)) {
             const take = wage(c, c.rng.int(1500, 5000));
             c.h.money(take);
             gotAway(c, 'counterfeit', take, 8);
             return c.t(
-              `You sold every Prado bag by Sunday and cleared ${c.h.fmt(take)}. One customer asked if it was "the real Prado". You said yes.`,
-              `Pazar akşamına kadar bütün Prado çantaları sattın, cebine ${c.h.fmt(take)} girdi. Bir müşteri "hakiki Prado mu?" diye sordu. "Hakiki" dedin.`,
+              `You sold every Velmont bag by Sunday and cleared ${c.h.fmt(take)}. One customer asked if it was "the real Velmont". You said yes.`,
+              `Pazar akşamına kadar bütün Velmont çantaları sattın, cebine ${c.h.fmt(take)} girdi. Bir müşteri "hakiki Velmont mu?" diye sordu. "Hakiki" dedin.`,
             );
           }
           if (c.rng.chance(0.35)) return c.t('The police raided the market on day one. ', 'Polis ilk gün pazara baskın yaptı. ') + arrest(c, 'counterfeit');
@@ -169,7 +169,7 @@ export const streetEvents: EventDef[] = [
       },
       {
         id: 'watches',
-        label: (c) => c.t('Rolecks watches', 'Rolecks saatler'),
+        label: (c) => c.t('"Kronhaus" watches', '"Kronhaus" saatler'),
         badge: 'Risky',
         resolve: (c) => {
           if (c.rng.chance(0.55)) {
@@ -177,8 +177,8 @@ export const streetEvents: EventDef[] = [
             c.h.money(take);
             gotAway(c, 'counterfeit', take, 12);
             return c.t(
-              `The Rolecks watches sold out and you made ${c.h.fmt(take)}. Most of them stopped before the buyers got home.`,
-              `Rolecks saatler kapış kapış gitti, ${c.h.fmt(take)} kazandın. Çoğu, alıcılar eve varmadan durdu.`,
+              `The Kronhaus watches sold out and you made ${c.h.fmt(take)}. Most of them stopped before the buyers got home.`,
+              `Kronhaus saatler kapış kapış gitti, ${c.h.fmt(take)} kazandın. Çoğu, alıcılar eve varmadan durdu.`,
             );
           }
           if (c.rng.chance(0.5)) return c.t('A buyer turned out to be an undercover officer with a real watch. ', 'Alıcılardan biri, kolunda hakiki saat olan sivil bir polis çıktı. ') + arrest(c, 'counterfeit');
@@ -188,7 +188,7 @@ export const streetEvents: EventDef[] = [
       },
       {
         id: 'tracksuits',
-        label: (c) => c.t('Abibas tracksuits', 'Abibas eşofmanlar'),
+        label: (c) => c.t('"Runvik" tracksuits', '"Runvik" eşofmanlar'),
         badge: 'Safe',
         resolve: (c) => {
           if (c.rng.chance(0.85)) {
@@ -196,8 +196,8 @@ export const streetEvents: EventDef[] = [
             c.h.money(take);
             petty(c, 4);
             return c.t(
-              `Half the neighborhood now wears Abibas. You made a modest, four-striped ${c.h.fmt(take)}.`,
-              `Mahallenin yarısı artık Abibas giyiyor. Dört çizgili, mütevazı bir kâr: ${c.h.fmt(take)}.`,
+              `Half the neighborhood now wears Runvik, spelled three different ways. You made a modest ${c.h.fmt(take)}.`,
+              `Mahallenin yarısı artık Runvik giyiyor; logosu üç farklı şekilde yazılmış. Mütevazı bir kâr: ${c.h.fmt(take)}.`,
             );
           }
           c.h.money(-wage(c, 200));

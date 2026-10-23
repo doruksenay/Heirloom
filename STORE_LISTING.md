@@ -39,7 +39,10 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Fame: form a band, write songs, release albums, go on tour from 5 cities to 50, go viral, survive scandals.
 > • Boss: start a café, a tea brand, a tech startup or a game studio. Raise money, IPO, or go bust. Pass the family business down.
 > • Türkiye: the university exam, military service, henna nights, bayram visits and the neighbor auntie.
-> • Crime World (18+): gangs, heists, trials and prison life.
+> • Campus: pick a major, chase a 4.0, join clubs, land internships, study abroad, go all the way to a PhD.
+> • Crime World (18+): street hustles, heists, trials, prison, and the long road back.
+>
+> Play in English or Turkish.
 >
 > THEMES
 > Switch the whole look of the game, from the warm Evening Album to the gold-on-black Coal & Gold.
@@ -68,25 +71,28 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > Heirloom, sen öldüğünde bitmeyen bir hayat simülasyonu. Doğ, büyü, âşık ol, bir kariyerin peşine düş, iyi ve kötü kararlar ver. Hayatın bitince çocuğunla devam et; evi, parayı, aile şirketini ve aileni aile yapan yadigârları devral.
 >
 > YIL YIL BİR HAYAT
-> "Age Up"a dokun, hayat yıl yıl açılsın. Yüzlerce an senden seçim ister: emeğini çalan müdürü herkesin önünde mi ifşa edeceksin, kapıdaki beyaz kediyi alacak mısın, kirayı ödemek için dedenin saatini satacak mısın?
+> "Yaşlan"a dokun, hayat yıl yıl açılsın. Yüzlerce an senden seçim ister: emeğini çalan müdürü herkesin önünde mi ifşa edeceksin, kapıdaki beyaz kediyi alacak mısın, kirayı ödemek için dedenin saatini satacak mısın?
 >
 > HİKÂYESİ OLAN YADİGÂRLAR
 > Dedenin cep saati her hayatta bir anı geri sarar. Babaannenin yüzüğü düğününü güzelleştirir. Çocuklarına piyano al, bir tablo yap, bir kupa kazan; hepsi nesilden nesile kendi hikâyesiyle geçsin.
 >
 > GENİŞLEMELER
-> • Fame: grup kur, şarkı yaz, albüm çıkar, 5 şehirden 50 şehre turneye çık.
-> • Boss: kafe, çay markası, teknoloji girişimi ya da oyun stüdyosu kur; halka arz et ya da batır. Aile şirketini çocuğuna bırak.
+> • Şöhret: grup kur, şarkı yaz, albüm çıkar, 5 şehirden 50 şehre turneye çık.
+> • Patron: kafe, çay markası, teknoloji girişimi ya da oyun stüdyosu kur; halka arz et ya da batır. Aile şirketini çocuğuna bırak.
 > • Türkiye: YKS, askerlik, kına gecesi, bayram ziyaretleri ve komşu teyze.
-> • Crime World (18+): çeteler, soygunlar, mahkemeler ve hapishane hayatı.
+> • Kampüs: bölümünü seç, 4,00 ortalamanın peşine düş, kulüplere katıl, staj bul, Erasmus'a git, doktoraya kadar uzan.
+> • Suç Dünyası (18+): sokak işleri, soygunlar, mahkemeler, cezaevi ve düze çıkmanın uzun yolu.
+>
+> Oyun baştan sona Türkçe: isim ekleri bile doğru.
 >
 > Hesap yok. İnternet gerekmez. Reklam yalnızca sen izlemek istersen.
 
 ## Kategori ve derecelendirme
 
 - **Kategori:** Simulation (iOS: Games → Simulation; Play: Simulation)
-- **Yaş:** Crime World nedeniyle yaklaşık 16+/17+. Anketlerde: suç ve şiddet temaları (metin, grafik yok), uyuşturucu yok, gerçek kumar yok, kullanıcı etkileşimi yok, uygulama içi satın alma var, reklam var.
+- **Yaş:** Suç Dünyası nedeniyle App Store'da büyük ihtimalle 17+, Google Play'de PEGI 16 / Mature 17+ (BitLife da 17+). Anketlerde: suç ve şiddet temaları (yalnızca metin, grafik yok), uyuşturucu yok, gerçek kumar yok, **simüle kumar: seyrek/hafif** (oyun içi parayla piyango bileti), kullanıcı etkileşimi yok, uygulama içi satın alma var, reklam var.
 - **Gizlilik politikası:** `public/privacy.html` sayfasını bir web adresinde yayınla (ör. GitHub Pages) ve linkini iki mağazaya gir. Köşeli parantezli alanları doldur.
 
 ## Ekran görüntüleri
 
-`store-screenshots/` klasöründe 6,7 inç iPhone boyutunda (1290×2796) başlıklı görseller var. Play Store aynı görselleri kabul eder.
+`store-screenshots/en` ve `store-screenshots/tr` klasörlerinde 6,7 inç iPhone boyutunda (1290×2796), başlıklı 6'şar görsel var: İngilizce sayfa için `en`, Türkçe sayfa için `tr`. Play Store aynı görselleri kabul eder.

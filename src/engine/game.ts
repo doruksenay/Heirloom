@@ -4,7 +4,7 @@ import { makeCtx, ageOf, clamp } from './context';
 import { createRng, randomSeed } from './rng';
 import { getCountry, firstNames } from './world';
 import { BASE_JOBS, EDUCATION_RANK, salaryFor, titleFor } from './careers';
-import { abl, acc, gen, loc } from '../i18n/tr-grammar';
+import { abl, acc, dat, gen, loc } from '../i18n/tr-grammar';
 import { furniture } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
@@ -640,13 +640,18 @@ export function continueAsChild(s: GameState, childId: string): void {
   // the heirlooms go to whoever carries on, whatever the will said
   const lastLife = s.dynasty.lives[s.dynasty.lives.length - 1];
   if (lastLife && s.dynasty.heirlooms.length) {
-    lastLife.heirloomNote = `${s.dynasty.heirlooms[0].name} to ${child.firstName}`;
+    lastLife.heirloomNote =
+      s.lang === 'tr' ? `${s.dynasty.heirlooms[0].name}, ${dat(child.firstName)}` : `${s.dynasty.heirlooms[0].name} to ${child.firstName}`;
     lastLife.heirloomItem = s.dynasty.heirlooms[0].name;
     lastLife.heirName = child.firstName;
   }
   for (const item of s.dynasty.heirlooms) {
     item.generations++;
-    item.story.push(`Passed from ${prev.firstName} to ${child.firstName} in ${s.year}.`);
+    item.story.push(
+      s.lang === 'tr'
+        ? `${prev.firstName}, ${s.year} yılında onu ${dat(child.firstName)} bıraktı.`
+        : `Passed from ${prev.firstName} to ${child.firstName} in ${s.year}.`,
+    );
   }
   s.dynasty.generation++;
   s.dead = null;

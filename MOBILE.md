@@ -31,7 +31,7 @@ Mağaza için: Build → Generate Signed Bundle → **Android App Bundle (.aab)*
 | Yükleme | .aab dosyası | Xcode Archive |
 | Gerekenler | Gizlilik politikası linki, Veri güvenliği formu, İçerik derecelendirme anketi | Gizlilik politikası linki, App Privacy formu, Yaş derecelendirmesi |
 
-**Yaş derecelendirmesi:** Crime World (suç, şiddet) ve rastgele paket olmadığı için anketlerde "suç/şiddet temaları: var, gerçek kumar: yok, kullanıcılar arası iletişim: yok" cevaplarını ver. Beklenen sonuç yaklaşık 16+/17+.
+**Yaş derecelendirmesi:** Crime World (suç, şiddet) ve rastgele paket olmadığı için anketlerde "suç/şiddet temaları: var, gerçek kumar: yok, simüle kumar: seyrek/hafif (oyun içi piyango), kullanıcılar arası iletişim: yok" cevaplarını ver. Beklenen sonuç App Store'da 17+, Google Play'de PEGI 16.
 
 ## 4. Satın almalar (RevenueCat)
 
@@ -74,8 +74,8 @@ Oyun ilk açılışta oyuncuya sorar. "Evet" diyenlerden anonim kullanım verisi
 - [ ] RevenueCat anahtarları ve ürünler hazır, gerçek satın alma test edildi (sandbox hesabıyla)
 - [ ] AdMob kimlikleri gerçek, `testing: false`
 - [ ] `public/privacy.html` içindeki köşeli parantezli alanlar dolduruldu ve sayfa bir web adresinde yayında (ör. GitHub Pages); link iki mağazaya girildi
-- [ ] Mağaza metinleri `STORE_LISTING.md` dosyasından, görseller `store-screenshots/` klasöründen yüklendi
+- [ ] Mağaza metinleri `STORE_LISTING.md` dosyasından, görseller `store-screenshots/en` (İngilizce mağaza sayfası) ve `store-screenshots/tr` (Türkçe mağaza sayfası) klasörlerinden yüklendi
 - [ ] RevenueCat'te `premium.no_ads` (Heirloom+) ürünü de oluşturuldu
-- [ ] Yaş derecelendirme anketi: oyun içi parayla oynanan piyango bileti olduğu için **"Simulated Gambling: Infrequent/Mild"**. Gerçek parayla kumar yok; ödül her zaman oyun içi para. Suç Dünyası için "Infrequent/Mild Mature/Suggestive Themes", "Cartoon or Fantasy Violence" ve "Alcohol, Tobacco, or Drug Use or References: Infrequent/Mild" işaretlenir. Beklenen sonuç: App Store 12+, Google Play PEGI 12 / Teen.
+- [ ] Yaş derecelendirme anketi `STORE_LISTING.md` → "Kategori ve derecelendirme" bölümüne göre doldurulur. Oyun içi parayla oynanan piyango bileti olduğu için "Simulated Gambling: Infrequent/Mild" işaretlenir; gerçek parayla kumar yok. Suç Dünyası'ndaki suç ve şiddet temaları nedeniyle beklenen derece App Store'da 17+.
 - [ ] PostHog anahtarı ve Sentry DSN girildi, telefonda "Evet" deyip bir olayın PostHog'a düştüğü görüldü
 - [ ] Önce Play Console'da **kapalı test** (closed testing) ile 12+ kişiye dağıt; yeni kişisel hesaplarda Google bunu istiyor

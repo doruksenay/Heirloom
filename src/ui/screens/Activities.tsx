@@ -18,7 +18,9 @@ export function Activities({ app }: { app: AppApi }) {
   const left = activityUsesLeft(s);
   // availability is evaluated on a throwaway copy so checks never mutate the save
   const probe = makeCtx(JSON.parse(JSON.stringify(s)));
-  const acts = activitiesFor(s.enabledPacks).filter((a) => age >= a.minAge && (a.maxAge === undefined || age <= a.maxAge));
+  const acts = activitiesFor(s.enabledPacks).filter(
+    (a) => age >= a.minAge && (a.maxAge === undefined || age <= a.maxAge) && !(a.hideWhenUnavailable && a.available && !a.available(probe)),
+  );
 
   const txt = (x: Txt | undefined) => (typeof x === 'function' ? x(probe) : (x ?? ''));
 

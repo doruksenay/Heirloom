@@ -2,7 +2,19 @@
 
 Nesiller boyu süren bir hayat simülasyonu. Bir hayat yaşarsın, sonra çocuğunla devam edersin; ev, aile yadigârları ve seçimlerin bir sonraki nesle geçer.
 
-Sürüm: **v0.5 (test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+Sürüm: **v0.6 (çıkış adayı, test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+
+### v0.6'da neler var (ilk çıkış adayı)
+- **Ana oyuna 72 yeni olay ve 7 aktivite:**
+  - **Orta yaş (25–64)** `events-midlife.ts`: zehirli patron, yan iş, kariyer değişikliği, çocuğun karnesi, boş yuva, aile WhatsApp grubu, ev kredisi, kripto, dolandırıcı araması, kefillik, okul buluşması, apartman toplantısı… (38 olay)
+  - **Yaşlılık (60+)** `events-elder.ts`, `activities-elder.ts`: torunlar, torun bakmak, akıllı telefon öğrenmek, kalça ameliyatı, emekli maaşı, tavla rakibi, evi kime bırakacağın, 50. yıl, anı kitabı… (34 olay, 7 aktivite)
+  - Sık yapılan 10 aktiviteye 3–7'şer farklı sonuç cümlesi (tekrar hissi azaldı).
+- **Suç Dünyası büyüdü** (`src/content/crime/`): 26 olay, 8 aktivite, 3 rozet, 2 hedef. Gözaltı → kefalet → mahkeme, peşini bırakmayan dedektif, firari olmak, zaman aşımı, ekip soygunu, zimmet, cezaevi isyanı ve atölyesi, sabıkayla iş aramak, çocuğun geçmişini öğrenmesi, düze çıkma. Ceza üst sınırı 12 yıl (toplam 15).
+- **Giriş akışı:** ilk açılışta 3 sayfalık anlatım, ilk hayatta sırayla çıkan tek seferlik ipuçları (`src/ui/Tip.tsx`, `src/ui/screens/Intro.tsx`). Ekran çökerse "Ailen güvende" kurtarma kartı.
+- **Analitik ve çökme raporları** (`src/platform/analytics.ts`): PostHog + Sentry, sadece oyuncu izin verirse; anahtarlar `config.ts`'de, kurulum `MOBILE.md` → 6.
+- **Mağaza görselleri** `store-screenshots/en` ve `store-screenshots/tr`.
+- Türkçe: yabancı isimler okunuşa göre ek alıyor (Alice'i, George'un), ince l'li isimler (Alp'le, Kemal'e), anneanne/babaanne ayrımı, yadigâr devir cümleleri Türkçe.
+- Testler: `tests/crime.test.ts`, `tests/analytics.test.ts` (toplam 28 test).
 
 ### v0.5'te neler var
 - **Türkçe dil desteği:** arayüz, olaylar, aktiviteler, meslekler, rozetler, hedefler, yadigârlar ve mağaza tamamen Türkçe. Ayarlar'dan English / Türkçe seçilir; ilk açılışta telefonun dili kullanılır. İsim ekleri otomatik (`Ayşe'yle`, `Zonguldak'ta`, `Alp'le`, `Kemal'e`). Türkçede para `₺957.440` biçiminde yazılır. Aynı tohum iki dilde aynı hayatı üretir (testle doğrulanıyor).

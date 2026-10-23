@@ -45,6 +45,7 @@ const OVERLAPS: string[][] = [
   ['parent', 'three_kids'],
   ['boss_founder', 'boss_exit', 'boss_ipo'],
   ['fame_star', 'fame_world_tour'],
+  ['crime_heist', 'crime_reformed'],
 ];
 
 export function assignGoals(s: GameState, rng: Rng): void {

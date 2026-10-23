@@ -107,6 +107,8 @@ export interface ActivityDef {
   maxAge?: number;
   perYear?: number; // default 1
   available?: (c: Ctx) => boolean;
+  /** Hide the activity (instead of greying it out) while `available` is false, e.g. prison-only activities. */
+  hideWhenUnavailable?: boolean;
   /** Returns a log line, or { event } to open an event with choices. */
   run: (c: Ctx) => string | { event: string };
 }

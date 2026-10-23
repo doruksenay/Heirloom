@@ -128,6 +128,7 @@ export const crimeActivities: ActivityDef[] = [
     group: 'Mind & Body',
     minAge: 16,
     available: inside,
+    hideWhenUnavailable: true,
     run: (c) => {
       const st = crimeState(c.p);
       st.trade++;
