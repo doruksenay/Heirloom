@@ -147,3 +147,34 @@ describe('Crime World expansion', () => {
   });
 });
 
+
+describe('crime round-2 playtest fixes', () => {
+  it('names the partner who leaves: "Sevgilin Ben", never a bare "Ben seni terk etti"', async () => {
+    const { convict } = await import('../src/content/crime/state');
+    let left = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const married of [false, true]) {
+        const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'de', city: 'Berlin', seed }, crimeProfile('tr'));
+        s.year += 30;
+        const c = makeCtx(s);
+        const ben = c.h.newPerson({ gender: 'male', age: 30 });
+        ben.firstName = 'Ben';
+        c.h.addRelation(ben, married ? 'spouse' : 'partner', 70);
+        const line = convict(c, 2, 'theft', 'Hırsızlık');
+        expect(line).not.toMatch(/\. Ben seni/);
+        if (/Ben (seni terk etti|boşanma)/.test(line)) {
+          left++;
+          expect(line).toMatch(married ? /Kocan Ben boşanma davası açtı\./ : /Sevgilin Ben seni terk etti\./);
+        }
+      }
+    }
+    expect(left).toBeGreaterThan(5);
+  });
+
+  it('keeps lentil soup and poğaça to lives in Türkiye', () => {
+    const def = crimePack.events.find((e) => e.id === 'crime.riot')!;
+    const s = newGame({ firstName: 'Ada', lastName: 'Silva', gender: 'female', countryId: 'br', city: 'Curitiba', seed: 3 }, crimeProfile('tr'));
+    const text = typeof def.text === 'function' ? def.text(makeCtx(s)) : def.text;
+    expect(text).not.toMatch(/mercimek/i);
+  });
+});

@@ -101,7 +101,8 @@ function playFameLife(seed: number, lang: Lang, st: Stats): GameState {
 }
 
 const EN = new Set(['you', 'your', 'the', 'and', 'with', 'was', 'were', 'got', 'have', 'has', 'into', 'from', 'fans', 'new', 'of', 'to', 'is', 'it', 'they', 'their']);
-const english = (t: string) => (t.replace(/"[^"]*"/g, '').toLowerCase().match(/[\p{L}]+/gu) ?? []).some((w) => EN.has(w));
+// city names are proper nouns in both languages ("New York'a taşınırken")
+const english = (t: string) => (t.replace(/"[^"]*"/g, '').replace(/New York/g, '').toLowerCase().match(/[\p{L}]+/gu) ?? []).some((w) => EN.has(w));
 
 describe('fame expansion v0.7', () => {
   const st: Stats = { fired: new Set(), acts: new Set(), maxFans: 0, maxMoneyUsd: 0, minMoneyUsd: 0, lines: [] };

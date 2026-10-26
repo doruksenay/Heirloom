@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
 import { Avatar } from '../Avatar';
 import { Icon } from '../icons';
+import { Scene, Wordmark } from '../brand/Brand';
 import { T } from '../../i18n/ui';
 import { configureAnalytics, track } from '../../platform/analytics';
 
@@ -61,9 +62,7 @@ export function Intro({ app }: { app: AppApi }) {
   return (
     <div class="screen fill intro">
       <div class="row between">
-        <div class="eyebrow" lang="en">
-          Heirloom
-        </div>
+        <Wordmark size={24} />
         {!last && (
           <button type="button" class="btn small ghost" onClick={() => setPage(pages.length)}>
             {T('Skip')}
@@ -73,7 +72,9 @@ export function Intro({ app }: { app: AppApi }) {
 
       {!last ? (
         <>
-          <div class="intro-art">{cur.art}</div>
+          <Scene height={250} id={`in${page}`}>
+            {cur.art}
+          </Scene>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <h1 class="title-xl">{cur.title}</h1>
             <p class="muted" style={{ margin: 0, lineHeight: 1.55, fontSize: '17px' }}>

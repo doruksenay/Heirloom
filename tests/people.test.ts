@@ -310,8 +310,43 @@ describe('promotions', () => {
     expect(c.h.promote()).toBe(true);
     expect(c.h.promote()).toBe(false);
     expect(s.player.jobLevel).toBe(1);
+    // and only after a few years at the new level (see MIN_YEARS_PER_LEVEL)
     s.year++;
+    expect(makeCtx(s).h.promote()).toBe(false);
+    s.year += 2;
     expect(makeCtx(s).h.promote()).toBe(true);
+    expect(makeCtx(s).h.promote()).toBe(false);
     expect(s.player.jobLevel).toBe(2);
+  });
+});
+
+describe('round 2 people fixes', () => {
+  it('talks to an emigrated child by video call and sends parcels, never "came over"', () => {
+    for (const lang of ['en', 'tr'] as Lang[]) {
+      const s = start(7, lang, false);
+      s.player.birthYear = s.year - 60;
+      s.player.money = 100_000;
+      const c = makeCtx(s);
+      const kid = c.h.newPerson({ age: 32, lastName: s.player.lastName });
+      c.h.addRelation(kid, 'child', 70);
+      c.h.flag(`abroad:${kid.id}`);
+      (s.player.ext ??= {}).abroad = { [kid.id]: 2 }; // Melbourne
+      for (let y = 0; y < 6; y++) {
+        s.year++;
+        s.player.birthYear++;
+        s.player.actionsThisYear = {};
+        for (const id of ['time', 'gift']) {
+          const before = s.player.log.length;
+          interact(s, kid.id, id);
+          const line = s.player.log.slice(before).map((l) => l.text).join(' ');
+          expect(line, `${lang} ${id}`).toMatch(lang === 'en' ? /Melbourne|call|post|parcel|deliver|voice|film/ : /Melbourne|konuştun|aradın|koli|postayla|teslimat|sesli|film/);
+          expect(line).not.toMatch(/came over|dropped by|uğradı|geldi\b/);
+        }
+      }
+    }
+  });
+
+  it('offers no "Ben" in any name pool (it reads as "I" in Turkish)', () => {
+    for (const c of COUNTRIES) expect([...c.names.male, ...c.names.female]).not.toContain('Ben');
   });
 });

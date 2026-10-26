@@ -128,7 +128,7 @@ export function Family({ app }: { app: AppApi }) {
                   <div class="item-title">
                     {person.firstName} {person.lastName}
                   </div>
-                  <span class="item-sub">{T(KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {ageOf(s, person)}</span>
+                  <span class="item-sub">{T(rel.step ? (person.gender === 'female' ? 'Stepmother' : 'Stepfather') : KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {ageOf(s, person)}</span>
                 </div>
                 <div class="bar" role="meter" aria-label={T('Closeness with {name}', { name: person.firstName })} aria-valuenow={rel.closeness} aria-valuemin={0} aria-valuemax={100}>
                   <div style={{ width: `${rel.closeness}%`, background: 'var(--stat-looks)' }} />
@@ -188,7 +188,7 @@ function PersonSheet({ app, personId, onClose }: { app: AppApi; personId: string
               {person.firstName} {person.lastName}
             </h2>
             <div class="muted">
-              {T(KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {age}
+              {T(rel.step ? (person.gender === 'female' ? 'Stepmother' : 'Stepfather') : KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {age}
               {person.jobTitle && age >= 18 ? ` · ${person.jobTitle}` : ''}
             </div>
           </div>

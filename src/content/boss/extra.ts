@@ -3,13 +3,16 @@ import { acc, cap, dat, gen, kin, kinWord, nm, wage, wth } from '../base/util';
 import { getCountry } from '../../engine/world';
 import { cityName } from '../../engine/places';
 import { fameLevel, peekFame } from '../fame/state';
+import { pickIndex, say, sayWith, type Pair } from '../base/lines';
 import {
   INDUSTRIES,
   SALE_RANGE,
   addMark,
+  an,
   bossState,
   companyAge,
   companyOf,
+  endCompany,
   genOf,
   hasMark,
   moraleOf,
@@ -49,7 +52,7 @@ const pp = (c: Ctx) => c.h.person(String(c.vars.pid));
 const him = (c: Ctx) => (pp(c)?.gender === 'female' ? 'her' : 'him');
 const his = (c: Ctx) => c.h.his(pp(c));
 /** "a"/"an" before a city name, including İstanbul and İzmir. */
-const article = (w: string) => (/^[AEIOUİ]/.test(w) ? 'an' : 'a');
+const article = (w: string) => an(w).split(" ")[0];
 const inTR = (c: Ctx) => c.p.countryId === 'tr';
 /** Adult siblings who have not had their fight over the family company yet. */
 const feudSibs = (c: Ctx) => c.h.relatives('sibling').filter((k) => c.h.ageOf(k.person) >= 18 && !c.h.has(`boss_feud:${k.person.id}`));
@@ -60,7 +63,7 @@ function sellOut(c: Ctx, price: number): number {
   const comp = b.company!;
   const payout = saleShare(price, comp.ownership);
   c.h.money(payout);
-  b.company = null;
+  endCompany(c.p, c.s.year);
   b.exits++;
   c.h.achieve('exit');
   if (!c.p.jobId) c.p.jobTitle = c.t(`Former owner of ${comp.name}`, `${comp.name} Eski Sahibi`);
@@ -98,14 +101,146 @@ const RECALL: Record<string, [string, string]> = {
   fashion: ['A whole line of jackets loses its zips in the rain.', 'Bir seri montun fermuarı yağmurda kendiliğinden açılıyor.'],
   food: ['Customers say the new lunch boxes melt in the microwave.', 'Müşteriler yeni yemek kaplarının mikrodalgada eridiğini söylüyor.'],
 };
-const LINES: Record<Industry, [string, string]> = {
-  cafe: ['a full breakfast menu', 'serpme kahvaltı menüsü'],
-  tea: ['a line of fruit teas', 'meyve çayı serisi'],
-  fashion: ['a sneaker line', 'spor ayakkabı serisi'],
-  food: ['a late-night dessert menu', 'gece yarısı tatlı menüsü'],
-  app: ['a premium plan', 'premium abonelik paketi'],
-  games: ['a puzzle spin-off', 'bulmaca yan oyunu'],
+/**
+ * New product lines per industry, launched in order (comp.lines counts them), so a company's second launch is
+ * a different product from its first. [English noun phrase, Turkish verb phrase after the company name].
+ */
+const PRODUCTS: Record<Industry, Pair[]> = {
+  cafe: [
+    ['a full breakfast menu', 'kahvaltı menüsüne başladı'],
+    ['its own roasted beans in paper bags', 'kendi kavurduğu çekirdek kahveyi paketleyip satışa çıkardı'],
+    ['a cake of the month', '"ayın pastası" uygulamasını başlattı'],
+    ['an iced drinks menu for the summer', 'yaz için soğuk içecek menüsü çıkardı'],
+    ['a loyalty card', 'sadakat kartı çıkardı'],
+  ],
+  tea: [
+    ['a line of fruit teas', 'meyve çayı serisi çıkardı'],
+    ['a herbal blend for sleep', 'uyku için bitki çayı harmanı çıkardı'],
+    ['tea in pyramid bags', 'piramit poşet çay serisi çıkardı'],
+    ['a gift box for the new year', 'yeni yıl için hediye kutusu hazırladı'],
+    ['iced tea in a can', 'kutu soğuk çay çıkardı'],
+  ],
+  fashion: [
+    ['a sneaker line', 'spor ayakkabı serisi çıkardı'],
+    ['a raincoat collection', 'yağmurluk koleksiyonu çıkardı'],
+    ['a range for kids', 'çocuk koleksiyonu çıkardı'],
+    ['a line of bags', 'çanta serisi çıkardı'],
+    ['a capsule collection with a famous designer', 'ünlü bir tasarımcıyla kapsül koleksiyon çıkardı'],
+  ],
+  food: [
+    ['a late-night dessert menu', 'gece yarısı tatlı menüsü başlattı'],
+    ['breakfast delivery', 'kahvaltı teslimatına başladı'],
+    ['grocery delivery', 'market teslimatına başladı'],
+    ['family-size boxes', 'aile boyu menüler çıkardı'],
+    ['office lunch subscriptions', 'ofislere abonelikli öğle yemeği başlattı'],
+  ],
+  app: [
+    ['a premium plan', 'premium abonelik paketi çıkardı'],
+    ['a dark mode', 'karanlık modu yayınladı'],
+    ['a smartwatch version', 'akıllı saat sürümünü çıkardı'],
+    ['a business edition', 'kurumsal sürümü çıkardı'],
+    ['an AI assistant', 'uygulamaya yapay zekâ asistanı ekledi'],
+  ],
+  games: [
+    ['a puzzle spin-off', 'bulmaca yan oyunu çıkardı'],
+    ['a sequel', 'devam oyununu çıkardı'],
+    ['a board-game version', 'oyunun kutu oyunu versiyonunu çıkardı'],
+    ['a winter event', 'kış etkinliği başlattı'],
+    ['a light version for old phones', 'eski telefonlar için hafif sürüm çıkardı'],
+  ],
 };
+const LAUNCH_HIT: Pair[] = [
+  ['It sold out in a week.', 'Bir haftada tükendi.'],
+  ['Customers queued round the block on day one.', 'İlk gün kuyruk köşeyi döndü.'],
+  ['The first batch was gone before lunch.', 'İlk parti öğlene kadar bitti.'],
+  ['A popular blogger called it "the only reason to get out of bed."', 'Ünlü bir blog yazarı "Sabah yataktan çıkmak için tek sebep" dedi.'],
+  ['Rivals copied it within a month. That is how you know it worked.', 'Rakipler bir ay içinde kopyaladı. İşe yaradığı buradan belli.'],
+  ['Sales beat the forecast by a third. Your accountant smiled, which is rare.', 'Satışlar tahmini üçte bir aştı. Muhasebecin gülümsedi; pek görülmüş şey değil.'],
+];
+const LAUNCH_MEH: Pair[] = [
+  ['Your relatives bought most of it.', 'Çoğunu akrabaların aldı.'],
+  ['It sold slowly. The leftovers are now "staff perks."', 'Yavaş sattı. Kalanlar artık "çalışanlara jest".'],
+  ['Nobody hated it. Nobody bought it either.', 'Kimse nefret etmedi. Kimse almadı da.'],
+  ['The launch party had more balloons than customers.', 'Lansman partisinde müşteriden çok balon vardı.'],
+  ['One customer loved it so much she wrote you a letter. She was the only customer.', 'Bir müşteri öyle sevdi ki sana mektup yazdı. Tek müşteri de oydu.'],
+  ['Your mother says it is the best thing you have ever made. Sales disagree.', 'Annen bunun yaptığın en güzel şey olduğunu söylüyor. Satışlar aynı fikirde değil.'],
+];
+
+/** Taking time off. `tr` is a life in Türkiye: the island ferry and the yayla belong there. */
+const VACATION: ((tr: boolean) => Pair)[] = [
+  (tr) =>
+    tr
+      ? ['You took the night ferry to an island and ate grilled fish every day. Nobody there had heard of your company.', 'Gece vapuruyla bir adaya geçtin, her gün ızgara balık yedin. Orada kimse şirketinin adını duymamıştı.']
+      : ['You took a night train to the coast and ate grilled fish every day. Nobody there had heard of your company.', 'Gece treniyle sahile gittin, her gün ızgara balık yedin. Orada kimse şirketinin adını duymamıştı.'],
+  () => ['You went to a thermal spa with a book you had been "about to read" for six years. You finished it.', 'Altı yıldır "okuyacağım" dediğin kitabı alıp kaplıcaya gittin. Bitirdin de.'],
+  () => ['You spent a week in a village with no signal. You came back to 1,400 unread emails.', 'Sinyal çekmeyen bir köyde bir hafta kafa dinledin. Döndüğünde seni 1.400 okunmamış e-posta bekliyordu.'],
+  () => ['You lay on a beach for ten days. You only thought about work on nine of them.', 'On gün boyunca bir sahilde yattın. Sadece dokuz gününde işi düşündün.'],
+  (tr) =>
+    tr
+      ? ['You went up to a mountain yayla and turned your phone off. It was the best week of the year.', 'Yaylaya çıktın ve telefonunu kapattın. Yılın en güzel haftasıydı.']
+      : ['You went to the mountains and turned your phone off. It was the best week of the year.', 'Dağlara çıktın ve telefonunu kapattın. Yılın en güzel haftasıydı.'],
+  () => ['You rented a cabin by a lake and learned to fish. You caught one fish and named it after your accountant.', 'Göl kenarında bir kulübe kiralayıp balık tutmayı öğrendin. Tek bir balık yakaladın, ona muhasebecinin adını verdin.'],
+  () => ['You went on a cooking course abroad and came back with a knife set and strong opinions about olive oil.', 'Yurt dışında bir yemek kursuna gittin. Bir bıçak setiyle ve zeytinyağı hakkında kesin fikirlerle döndün.'],
+  () => ['You took the family on a road trip. Nobody mentioned the company for a week, because you made them promise.', 'Aileni alıp yola düştün. Bir hafta boyunca kimse şirketin adını anmadı, çünkü söz verdirmiştin.'],
+  () => ['You tried a silent retreat. You lasted three days before you whispered "quarterly numbers."', 'Sessizlik kampına katıldın. Üç gün dayanabildin, sonra "çeyrek rakamları" diye fısıldadın.'],
+  () => ['You walked a city you had always wanted to see until your feet hurt. Your out-of-office reply did the rest.', 'Hep görmek istediğin bir şehri ayakların ağrıyana kadar gezdin. Gerisini otomatik "izindeyim" yanıtın halletti.'],
+  () => ['Your team sent you a postcard: "Everything is fine. Stay away." You stayed two more days.', 'Ekibin sana kartpostal yolladı: "Her şey yolunda. Sakın dönme." İki gün daha kaldın.'],
+];
+
+/** What a charity project did. The money line comes first, so the amount never takes a suffix. */
+const CHARITY: ((name: string) => Pair)[] = [
+  (n) => [`${n} planted 5,000 saplings. A little sign in the forest carries your logo.`, `${n} beş bin fidan dikti. Ormandaki küçük bir tabelada senin logon var.`],
+  (n) => [`${n} filled a village school library with new books. The kids sent you a drawing of yourself with a very big head.`, `${n}, bir köy okulunun kütüphanesini baştan donattı. Çocuklar sana kocaman kafalı bir resmini yolladı.`],
+  (n) => [`${n} sponsored the neighborhood football team. They lost every game in your shirts, proudly.`, `${n} mahallenin futbol takımına sponsor oldu. Takım, senin formalarınla bütün maçları gururla kaybetti.`],
+  (n) => [`${n} fed the street cats of the whole district for a year. They now meow at your logo.`, `${n} bütün ilçenin sokak kedilerini bir yıl boyunca besledi. Kediler artık logonu görünce miyavlıyor.`],
+  (n) => [`${n} paid for a new roof on the animal shelter. The dogs did not say thank you, but they wagged.`, `${n} hayvan barınağının çatısını yaptırdı. Köpekler teşekkür etmedi ama kuyruk salladı.`],
+  (n) => [`${n} gave scholarships to five students. One wants to work for you; one wants your job.`, `${n} beş öğrenciye burs verdi. Biri senin yanında çalışmak istiyor, biri senin koltuğunda oturmak.`],
+  (n) => [`${n} rebuilt a playground. You tested the slide yourself, for safety reasons.`, `${n} bir çocuk parkını baştan yaptırdı. Kaydırağı güvenlik gereği bizzat sen denedin.`],
+  (n) => [`${n} paid a care home's heating bills for the winter. The residents knitted you a scarf that is mostly holes.`, `${n} bir huzurevinin kışlık yakıt parasını ödedi. Sakinler sana çoğu delikten oluşan bir atkı ördü.`],
+  (n) => [`${n} sent the whole team to volunteer at a food bank. They came back closer, and very good at stacking tins.`, `${n} bütün ekibi bir günlüğüne gıda bankasında gönüllü çalışmaya yolladı. Ekip birbirine kenetlenmiş, konserve dizmede de ustalaşmış döndü.`],
+  (n) => [`${n} bought instruments for a school band. The concert was loud, proud and in no particular key.`, `${n} bir okul bandosuna enstrüman aldı. Konser gürültülü ve gururluydu; doğru notayı tutturmak başka bahara kaldı.`],
+  (n) => [`${n} matched every donation the staff made this year. The accountant made a face; the staff made a banner.`, `${n}, çalışanların bu yılki bütün bağışlarına aynı miktarı ekledi. Muhasebeci surat astı, çalışanlar pankart yaptı.`],
+];
+
+const FAIR_GOOD: Pair[] = [
+  ['Your booth had free samples. You met two distributors and one man who only wanted the samples.', 'Standında bedava numune vardı. İki distribütörle tanıştın, bir de sadece numune için gelen bir amcayla.'],
+  ['A buyer from a big chain stopped at your booth for forty minutes. Your business cards ran out by noon.', 'Büyük bir zincirin satın almacısı standında kırk dakika oyalandı. Kartvizitlerin öğlene kadar bitti.'],
+  ['A distributor from abroad took a sample home in his suitcase. He emailed the next morning.', 'Yurt dışından gelen bir distribütör numuneyi bavuluna koyup götürdü. Ertesi sabah e-posta attı.'],
+  ['You gave the same pitch two hundred times. By the end you were very good at it, and three shops placed orders.', 'Aynı tanıtımı iki yüz kez yaptın. Sonlara doğru iyice ustalaştın, üç dükkân da sipariş verdi.'],
+  ['Your booth won "best stand" in a small hall. The trophy is plastic; the orders are real.', 'Standın küçük salonda "en iyi stant" seçildi. Kupa plastik ama siparişler gerçek.'],
+  ['A journalist gave your booth two lines in the fair report. Two very good lines.', 'Bir gazeteci fuar haberinde standına iki satır ayırdı. İki çok güzel satır.'],
+];
+const FAIR_MEH: Pair[] = [
+  ['You stood at the booth for three days. Your feet will never forgive you.', 'Üç gün boyunca standın başında dikildin. Ayakların seni asla affetmeyecek.'],
+  ['Your booth was next to the coffee machine. Everyone came for the coffee, nobody for you.', 'Standın kahve makinesinin yanına düştü. Herkes kahveye geldi, sana gelen olmadı.'],
+  ['You collected a hundred business cards and remember none of the faces.', 'Yüz kartvizit topladın, hiçbir yüzü hatırlamıyorsun.'],
+  ['Your banner fell on a visitor on the first morning. He was very nice about it. He bought nothing.', 'İlk sabah afişin bir ziyaretçinin üstüne düştü. Adam çok anlayışlıydı. Hiçbir şey almadı.'],
+  ['The fair was mostly other people trying to sell things to you.', 'Fuarda sana bir şey satmaya çalışanlar, senden bir şey almak isteyenlerden fazlaydı.'],
+  ['You spent three days next to a stand selling massage chairs and tried every one. No orders, but no back pain either.', 'Üç gün masaj koltuğu satan bir standın yanında durdun ve hepsini denedin. Sipariş yok ama bel ağrısı da yok.'],
+];
+
+/** All-hands meetings: [morale change, English, Turkish]. */
+const ALLHANDS: [number, string, string][] = [
+  [12, 'You gave a speech about the mission. Two people took notes, one person took a nap.', 'Şirketin misyonu üzerine bir konuşma yaptın. İki kişi not aldı, biri kestirdi.'],
+  [8, 'You answered every question honestly, even the one about the parking spaces.', 'Bütün soruları dürüstçe cevapladın; otopark sorusunu bile.'],
+  [-4, 'You said "synergy" eleven times. Morale quietly left the room.', '"Sinerji" kelimesini on bir kere kullandın. Moral sessizce salonu terk etti.'],
+  [15, 'You announced free lunch on Fridays. The applause was louder than for the yearly results.', 'Cuma günleri öğle yemeğinin şirketten olduğunu açıkladın. Alkış, yıllık sonuçlardan daha gür çıktı.'],
+  [6, 'You brought cake and answered questions for an hour. The cake did most of the work.', 'Pasta getirip bir saat soru cevapladın. İşin çoğunu pasta yaptı.'],
+  [10, 'You thanked every team by name. Someone in the back row got a little teary.', 'Her ekibe tek tek adıyla teşekkür ettin. Arka sıralarda biri duygulandı.'],
+  [-2, 'You showed 47 slides. Slide 31 was just the word "FOCUS" in capital letters.', 'Kırk yedi slayt gösterdin. Otuz birincisinde büyük harflerle sadece "ODAK" yazıyordu.'],
+  [4, 'The microphone died, so you shouted the whole thing. People seemed to like it better that way.', 'Mikrofon bozuldu, her şeyi bağırarak anlattın. Nedense herkes böylesini daha çok sevdi.'],
+  [9, 'You let the newest hire run the meeting. It was shorter and better than yours.', 'Toplantıyı en yeni çalışana yönettirdin. Seninkilerden daha kısa ve daha iyi geçti.'],
+  [-6, 'You announced a "small restructuring." Nobody heard a word after "restructuring."', '"Küçük bir yeniden yapılanma" duyurdun. "Yeniden yapılanma" lafından sonra kimse tek kelime duymadı.'],
+  [7, 'You shared the real numbers, good and bad. People trusted you more for it.', 'Gerçek rakamları iyisiyle kötüsüyle paylaştın. İnsanlar sana daha çok güvendi.'],
+];
+
+/** A living child of the player named heir (in this company's plan, or by a flag from an older save or a will). */
+const heirNamed = (c: Ctx) => {
+  const comp = co(c);
+  return c.h.relatives('child').some((k) => k.person.deathYear === undefined && (comp?.heirId === k.person.id || `heir:${k.person.id}` in c.p.flags));
+};
+/** Years before the board asks again after "not yet". */
+const SUCCESSOR_ASK_GAP = 10;
 
 // ------------------------------------------------------------------ events
 export const moreEvents: EventDef[] = [
@@ -138,7 +273,9 @@ export const moreEvents: EventDef[] = [
             morale(comp, 3);
             return c.t(
               'You found a small family firm across town. Cheaper, friendlier, and they send sweets on holidays.',
-              'Şehrin öbür ucunda küçük bir aile firması buldun. Daha ucuz, daha güler yüzlü, bayramda da baklava yolluyorlar.',
+              inTR(c)
+                ? 'Şehrin öbür ucunda küçük bir aile firması buldun. Daha ucuz, daha güler yüzlü, bayramda da baklava yolluyorlar.'
+                : 'Şehrin öbür ucunda küçük bir aile firması buldun. Daha ucuz, daha güler yüzlü, yılbaşında da kurabiye yolluyorlar.',
             );
           }
           shrink(comp, 0.94);
@@ -602,7 +739,7 @@ export const moreEvents: EventDef[] = [
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: Math.max(25, c.age - c.rng.int(-5, 15)) }).id;
     },
-    title: (c) => c.t(`${nm(c)} wants to open ${article(co(c)!.name)} ${co(c)!.name} franchise.`, `${nm(c)}, ${co(c)!.name} bayiliği almak istiyor.`),
+    title: (c) => c.t(`${nm(c)} wants to open ${an(co(c)!.name)} franchise.`, `${nm(c)}, ${co(c)!.name} bayiliği almak istiyor.`),
     text: (c) => c.t('A fee up front, a cut of every sale. You just have to trust a stranger with your name.', 'Peşin bir giriş ücreti, üstüne her satıştan pay. Tek şart: adını bir yabancıya emanet edeceksin.'),
     choices: [
       {
@@ -614,7 +751,7 @@ export const moreEvents: EventDef[] = [
           if (c.rng.chance(0.8)) {
             comp.franchises = (comp.franchises ?? 0) + 1;
             hype(comp, 5);
-            return c.t(`${nm(c)} opened ${article(comp.name)} ${comp.name} franchise. It is cleaner than yours.`, `${nm(c)} bir ${comp.name} bayisi açtı. Seninkinden daha temiz.`);
+            return c.t(`${nm(c)} opened ${an(comp.name)} franchise. It is cleaner than yours.`, `${nm(c)} bir ${comp.name} bayisi açtı. Seninkinden daha temiz.`);
           }
           hype(comp, -10);
           return c.t(
@@ -960,7 +1097,7 @@ export const moreEvents: EventDef[] = [
           comp.cash -= wage(c, 1500);
           hype(comp, 8);
           morale(comp, 8);
-          return c.t('Your baristas now draw swans in the foam. One drew your face and it went viral.', 'Baristaların artık köpüğe kuğu çiziyor. Biri senin yüzünü çizdi, görüntü viral oldu.');
+          return c.t('Your baristas now draw swans in the foam. One drew your face and it went viral.', 'Baristaların artık köpüğe kuğu çiziyorlar. Biri senin yüzünü çizdi, görüntü viral oldu.');
         },
       },
     ],
@@ -1296,7 +1433,7 @@ export const moreEvents: EventDef[] = [
         resolve: (c) => {
           co(c)!.cash -= spend(c, 5000, 0.02);
           c.h.closeness(String(c.vars.pid), -12);
-          return c.t(`You cancelled it and paid the penalty. ${nm(c)} did not speak to you until the next holiday.`, `Anlaşmayı iptal ettin, cezasını da ödedin. ${nm(c)} bir sonraki bayrama kadar seninle konuşmadı.`);
+          return c.t(`You cancelled it and paid the penalty. ${nm(c)} did not speak to you until the next holiday.`, `Anlaşmayı iptal ettin, cezasını da ödedin. ${nm(c)} ${inTR(c) ? 'bir sonraki bayrama' : 'yılbaşına'} kadar seninle konuşmadı.`);
         },
       },
     ],
@@ -1372,7 +1509,7 @@ export const moreEvents: EventDef[] = [
           c.h.closeness(String(c.vars.pid), -20);
           if (c.rng.chance(0.4)) {
             co(c)!.cash -= spend(c, 10000, 0.03);
-            return c.t(`${nm(c)} sued you. You won, but holiday dinners now happen at two separate tables.`, `${nm(c)} sana dava açtı. Davayı sen kazandın ama bayram sofrası artık iki ayrı masada kuruluyor.`);
+            return c.t(`${nm(c)} sued you. You won, but holiday dinners now happen at two separate tables.`, `${nm(c)} sana dava açtı. Davayı sen kazandın ama ${inTR(c) ? 'bayram sofrası' : 'aile sofrası'} artık iki ayrı masada kuruluyor.`);
           }
           return c.t(`${nm(c)} stopped calling. The relatives now pick sides at weddings.`, `${nm(c)} seni aramayı bıraktı. Akrabalar artık düğünlerde taraf tutuyor.`);
         },
@@ -1500,10 +1637,9 @@ export const moreEvents: EventDef[] = [
     setup: (c) => {
       const kids = c.h
         .relatives('child')
-        .filter((k) => c.h.ageOf(k.person) >= 18)
+        .filter((k) => k.person.deathYear === undefined && c.h.ageOf(k.person) >= 18)
         .sort((a, b) => b.rel.closeness - a.rel.closeness);
-      const pick = kids.find((k) => !(`heir:${k.person.id}` in c.p.flags)) ?? kids[0];
-      c.vars.pid = pick.person.id;
+      c.vars.pid = kids[0].person.id;
     },
     title: (c) => {
       const k = c.h.person(String(c.vars.pid));
@@ -1517,6 +1653,7 @@ export const moreEvents: EventDef[] = [
         resolve: (c) => {
           for (const f of Object.keys(c.p.flags)) if (f.startsWith('heir:')) c.h.unflag(f);
           c.h.flag(`heir:${c.vars.pid}`);
+          co(c)!.heirId = String(c.vars.pid);
           c.h.closeness(String(c.vars.pid), 8);
           return c.t(
             `You told the board: when the time comes, ${nm(c)} runs ${co(c)!.name}. ${nm(c)} pretended not to be thrilled.`,
@@ -1528,7 +1665,14 @@ export const moreEvents: EventDef[] = [
       {
         id: 'later',
         label: (c) => c.t('Not yet', 'Henüz değil'),
-        resolve: (c) => c.t('You said you would think about it. Your lawyer put the pen away, a little offended.', 'Düşüneceğini söyledin. Avukatın biraz alınarak kalemini cebine koydu.'),
+        resolve: (c) => {
+          co(c)!.heirAsked = c.s.year;
+          return say(c, 'boss.successor.later', [
+            ['You said you would think about it. Your lawyer put the pen away, a little offended.', 'Düşüneceğini söyledin. Avukatın biraz alınarak kalemini cebine koydu.'],
+            ['"Not yet," you said. The board wrote "not yet" in the minutes, underlined twice.', '"Henüz değil" dedin. Yönetim kurulu tutanağa "henüz değil" yazdı, altını iki kez çizdi.'],
+            ['You told the board the company still has a captain. The board looked at your birth year and said nothing.', 'Yönetim kuruluna şirketin hâlâ bir kaptanı olduğunu söyledin. Kurul doğum yılına baktı ve bir şey demedi.'],
+          ]);
+        },
       },
     ],
   },
@@ -1545,15 +1689,9 @@ export const moreActivities: ActivityDef[] = [
     available: (c) => !!co(c) && co(c)!.employees >= 2 && c.p.jailYears === 0,
     run: (c) => {
       const comp = co(c)!;
-      const i = c.rng.int(0, 3);
-      const out: [number, string, string][] = [
-        [12, 'You gave a speech about the mission. Two people took notes, one person took a nap.', 'Şirketin misyonu üzerine bir konuşma yaptın. İki kişi not aldı, biri kestirdi.'],
-        [8, 'You answered every question honestly, even the one about the parking spaces.', 'Bütün soruları dürüstçe cevapladın; otopark sorusunu bile.'],
-        [-4, 'You said "synergy" eleven times. Morale quietly left the room.', '"Sinerji" kelimesini on bir kere kullandın. Moral sessizce salonu terk etti.'],
-        [15, 'You announced free lunch on Fridays. The applause was louder than for the yearly results.', 'Cuma günleri öğle yemeğinin şirketten olduğunu açıkladın. Alkış, yıllık sonuçlardan daha gür çıktı.'],
-      ];
-      morale(comp, out[i][0]);
-      return c.t(out[i][1], out[i][2]);
+      const [d, en, tr] = ALLHANDS[pickIndex(c, 'boss_allhands', ALLHANDS.length)];
+      morale(comp, d);
+      return c.t(en, tr);
     },
   },
   {
@@ -1565,17 +1703,23 @@ export const moreActivities: ActivityDef[] = [
     available: (c) => !!co(c) && c.p.jailYears === 0,
     run: (c) => {
       const comp = co(c)!;
-      const [en, tr] = LINES[comp.industry];
+      // each launch is the next product in the industry's list, so a company never launches the same thing twice in a row
+      const list = PRODUCTS[comp.industry];
+      const [en, tr] = list[(comp.lines ?? 0) % list.length];
       comp.cash -= spend(c, 5000, 0.12);
       comp.lines = (comp.lines ?? 0) + 1;
+      const head =
+        comp.lines > list.length
+          ? c.t(`${comp.name} relaunched ${en} with a new twist.`, `${comp.name}, yeni bir yorumla ${tr}.`)
+          : c.t(`${comp.name} launched ${en}.`, `${comp.name} ${tr}.`);
       if (c.rng.chance(0.35 + c.p.stats.smarts / 500 + comp.hype / 500)) {
         const room = Math.max(0, 1 - comp.revenue / wage(c, INDUSTRIES[comp.industry].market));
         grow(c, comp, 1 + 0.1 * room);
         hype(comp, 10);
-        return c.t(`${comp.name} launched ${en}. It sold out in a week.`, `${comp.name} ${tr} çıkardı. Bir haftada tükendi.`);
+        return `${head} ${say(c, 'boss_new_line.hit', LAUNCH_HIT)}`;
       }
       hype(comp, 2);
-      return c.t(`${comp.name} launched ${en}. Your relatives bought most of it.`, `${comp.name} ${tr} çıkardı. Çoğunu akrabaların aldı.`);
+      return `${head} ${say(c, 'boss_new_line', LAUNCH_MEH)}`;
     },
   },
   {
@@ -1592,14 +1736,7 @@ export const moreActivities: ActivityDef[] = [
       hype(comp, 6);
       morale(comp, 5);
       c.h.stat('happiness', 6);
-      const i = c.rng.int(0, 3);
-      const lines: [string, string][] = [
-        [`${comp.name} planted 5,000 saplings. A little sign in the forest carries your logo.`, `${comp.name} beş bin fidan dikti. Ormandaki küçük bir tabelada senin logon var.`],
-        [`${comp.name} filled a village school library with new books. The kids sent you a drawing with a very big head.`, `${comp.name}, bir köy okulunun kütüphanesini baştan donattı. Çocuklar sana kocaman kafalı bir resmini yolladı.`],
-        [`${comp.name} sponsored the neighborhood football team. They lost every game in your shirts, proudly.`, `${comp.name} mahallenin futbol takımına sponsor oldu. Takım, senin formalarınla bütün maçları gururla kaybetti.`],
-        [`${comp.name} fed the street cats of the whole district for a year. They now meow at your logo.`, `${comp.name} bütün ilçenin sokak kedilerini bir yıl boyunca besledi. Kediler artık logonu görünce miyavlıyor.`],
-      ];
-      return c.t(`You gave ${c.h.fmt(cost)} of company money to a good cause. ${lines[i][0]}`, `Şirket kasasından iyi bir amaç için ${c.h.fmt(cost)} ayırdın. ${lines[i][1]}`);
+      return `${c.t(`You gave ${c.h.fmt(cost)} of company money to a good cause.`, `Şirket kasasından iyi bir amaç için ${c.h.fmt(cost)} ayırdın.`)} ${sayWith(c, 'boss_charity', CHARITY, comp.name)}`;
     },
   },
   {
@@ -1617,17 +1754,7 @@ export const moreActivities: ActivityDef[] = [
       const good = r < 0.6;
       hype(comp, good ? 8 : 3);
       if (good) grow(c, comp, 1.03);
-      const i = c.rng.int(0, 1);
-      const lines: [string, string][] = good
-        ? [
-            ['Your booth had free samples. You met two distributors and one man who only wanted the samples.', 'Standında bedava numune vardı. İki distribütörle tanıştın, bir de sadece numune için gelen bir amcayla.'],
-            ['A buyer from a big chain stopped at your booth for forty minutes. Your business cards ran out by noon.', 'Büyük bir zincirin satın almacısı standında kırk dakika oyalandı. Kartvizitlerin öğlene kadar bitti.'],
-          ]
-        : [
-            ['You stood at the booth for three days. Your feet will never forgive you.', 'Üç gün boyunca standın başında dikildin. Ayakların seni asla affetmeyecek.'],
-            ['Your booth was next to the coffee machine. Everyone came for the coffee, nobody for you.', 'Standın kahve makinesinin yanına düştü. Herkes kahveye geldi, sana gelen olmadı.'],
-          ];
-      return c.t(lines[i][0], lines[i][1]);
+      return good ? say(c, 'boss_trade_fair.good', FAIR_GOOD) : say(c, 'boss_trade_fair', FAIR_MEH);
     },
   },
   {
@@ -1642,15 +1769,7 @@ export const moreActivities: ActivityDef[] = [
       c.h.stat('health', 5);
       c.h.stat('happiness', 8);
       hype(co(c)!, -4);
-      const i = c.rng.int(0, 4);
-      const lines: [string, string][] = [
-        ['You took the night ferry to an island and ate grilled fish every day. Nobody there had heard of your company.', 'Gece vapuruyla bir adaya geçtin, her gün ızgara balık yedin. Orada kimse şirketinin adını duymamıştı.'],
-        ['You went to a thermal spa with a book you had been "about to read" for six years. You finished it.', 'Altı yıldır "okuyacağım" dediğin kitabı alıp kaplıcaya gittin. Bitirdin de.'],
-        ['You spent a week in a village with no signal. You came back to 1,400 unread emails.', 'Sinyal çekmeyen bir köyde bir hafta kafa dinledin. Döndüğünde seni 1.400 okunmamış e-posta bekliyordu.'],
-        ['You lay on a beach for ten days. You only thought about work for nine of them.', 'On gün boyunca bir sahilde yattın. Sadece dokuz gününde işi düşündün.'],
-        ['You went to the mountains and turned your phone off. It was the best week of the year.', 'Yaylaya çıktın ve telefonunu kapattın. Yılın en güzel haftasıydı.'],
-      ];
-      return c.t(lines[i][0], lines[i][1]);
+      return sayWith(c, 'boss_vacation', VACATION, inTR(c));
     },
   },
   {
@@ -1659,7 +1778,13 @@ export const moreActivities: ActivityDef[] = [
     description: (c) => c.t('Choose which child takes over the company', 'Şirketin başına hangi çocuğunun geçeceğini seç'),
     group: 'Business',
     minAge: 30,
-    available: (c) => !!co(c) && c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 18) && c.p.jailYears === 0,
+    // once per company: gone once a living child is named; after "not yet" the board waits a few years to ask again
+    available: (c) => {
+      const comp = co(c);
+      if (!comp || c.p.jailYears > 0 || heirNamed(c)) return false;
+      if (comp.heirAsked !== undefined && c.s.year - comp.heirAsked < SUCCESSOR_ASK_GAP) return false;
+      return c.h.relatives('child').some((k) => k.person.deathYear === undefined && c.h.ageOf(k.person) >= 18);
+    },
     run: () => ({ event: 'boss.successor' }),
   },
 ];

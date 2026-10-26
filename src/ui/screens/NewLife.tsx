@@ -3,7 +3,7 @@ import type { AppApi } from '../app-state';
 import type { Gender } from '../../engine/types';
 import { COUNTRIES, getCountry, firstNames } from '../../engine/world';
 import { newGame } from '../../engine/game';
-import { Avatar } from '../Avatar';
+import { Logo, Scene, Wordmark } from '../brand/Brand';
 import { T } from '../../i18n/ui';
 
 export function NewLife({ app }: { app: AppApi }) {
@@ -31,28 +31,42 @@ export function NewLife({ app }: { app: AppApi }) {
     app.start(newGame({ firstName, lastName, gender, countryId, city }, app.profile));
   };
 
-  const sano = () =>
+  /** One tap to a fresh random family: the quickest way into the game. */
+  const quickStart = () => {
+    const g: Gender = Math.random() < 0.5 ? 'female' : 'male';
+    const c = app.lang === 'tr' && Math.random() < 0.6 ? getCountry('tr') : COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
+    const fn = firstNames(c.id, g);
     app.start(
-      newGame({ firstName: 'Sano', lastName: 'Baba', gender: 'female', countryId: 'tr', city: 'Zonguldak', scenario: 'sano' }, app.profile),
+      newGame(
+        {
+          firstName: fn[Math.floor(Math.random() * fn.length)],
+          lastName: c.names.last[Math.floor(Math.random() * c.names.last.length)],
+          gender: g,
+          countryId: c.id,
+          city: c.cities[Math.floor(Math.random() * c.cities.length)],
+        },
+        app.profile,
+      ),
     );
+  };
 
   return (
     <div class="screen">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '12px' }}>
-        <div class="eyebrow" lang="en">Heirloom: Life Simulator</div>
+      <Scene height={290} id="nl">
+        <Logo size={92} />
+        <Wordmark size={44} />
+        <div class="tagline">{T('Live a life. Leave a legacy.')}</div>
+      </Scene>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <h1 class="title-xl">{T('Begin a new family')}</h1>
         <p class="muted" style={{ margin: 0, lineHeight: 1.5 }}>
           {T('Live one life, then continue as your child. Your home, your heirlooms and your choices carry on.')}
         </p>
       </div>
 
-      <button type="button" class="item" onClick={sano} style={{ border: '1px solid var(--accent)' }}>
-        <Avatar id="p0Sano" gender="female" age={20} size={52} label="Sano Baba" />
-        <div class="grow">
-          <div class="item-title">Sano Baba</div>
-          <div class="item-sub">{T('Test life · Zonguldak, Türkiye · 2 family heirlooms')}</div>
-        </div>
-        <span class="chip accent">{T('Play')}</span>
+      <button type="button" class="btn primary" onClick={quickStart} style={{ minHeight: '56px' }}>
+        {T('Start a random life')}
       </button>
 
       <div class="card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

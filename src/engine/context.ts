@@ -96,6 +96,23 @@ export function freshFirstNames(s: GameState, gender: Gender): string[] {
 interface PeopleExt {
   /** Calendar year of the last promotion: at most one per year. */
   promotedYear?: number;
+  /** Calendar year the player reached the current job level (set on hire and on every promotion). */
+  levelYear?: number;
+  /** Calendar year of the last hire: a new employer may take you on one rung up that same year. */
+  hiredYear?: number;
+}
+
+/**
+ * Minimum years at the current level before an ordinary promotion (playtest 2: careers climbed from the
+ * entry title to the top in about five years). Ranked jobs (soldier, officer) climb by years of service
+ * in their own logic; `promoteAnyway` skips this for structural jumps.
+ */
+export const MIN_YEARS_PER_LEVEL = 3;
+
+/** Years the player has held the current job level. Old saves without the record fall back to years in the job. */
+export function yearsAtLevel(s: GameState): number {
+  const ext = s.player.ext as PeopleExt | undefined;
+  return ext?.levelYear !== undefined ? s.year - ext.levelYear : s.player.jobYears;
 }
 const extOf = (p: GameState['player']) => (p.ext ??= {}) as PeopleExt;
 
@@ -125,9 +142,12 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
     },
     relatives(kinds) {
       const ks = Array.isArray(kinds) ? kinds : [kinds];
-      return p.relations
-        .filter((r) => ks.includes(r.kind) && s.people[r.personId] && s.people[r.personId].deathYear === undefined)
-        .map((rel) => ({ person: s.people[rel.personId], rel }));
+      // step-parents are not "your mom" or "your dad" to content events while a real parent lives; with nobody
+      // else left they still count (so an event that saw a living parent in p.relations always finds one).
+      // The family screen and the yearly relative logic read p.relations directly and always see them.
+      const living = p.relations.filter((r) => ks.includes(r.kind) && s.people[r.personId] && s.people[r.personId].deathYear === undefined);
+      const real = living.filter((r) => !r.step);
+      return (real.length ? real : living).map((rel) => ({ person: s.people[rel.personId], rel }));
     },
     partner() {
       return h.relatives(['spouse', 'partner'])[0];
@@ -187,7 +207,11 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       p.jobYears = 0;
       p.jobTitle = jobId ? h.jobTitle() : undefined;
       // a new employer may hire you a step up (setJob + promote); that is not a second promotion this year
-      if (p.ext) delete (p.ext as PeopleExt).promotedYear;
+      const ext = extOf(p);
+      delete ext.promotedYear;
+      ext.levelYear = s.year;
+      if (jobId) ext.hiredYear = s.year;
+      else delete ext.hiredYear;
     },
     promote() {
       const j = h.job();
@@ -195,7 +219,11 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       // at most one promotion per calendar year, however many events, activities and yearly rolls ask
       const ext = extOf(p);
       if (ext.promotedYear === s.year) return false;
+      // a few years at each level first; the year of a hire may still start you one rung up
+      const hireStep = ext.hiredYear === s.year && p.jobLevel === 0;
+      if (!j.ranked && !hireStep && yearsAtLevel(s) < MIN_YEARS_PER_LEVEL) return false;
       ext.promotedYear = s.year;
+      ext.levelYear = s.year;
       p.jobLevel++;
       p.jobTitle = h.jobTitle();
       if (p.jobLevel === j.titles.length - 1) h.achieve('top_job');
@@ -231,9 +259,19 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
 /**
  * Promotes even if the player was already promoted this year. Only for structural jumps that are not a
  * "promotion" in the ladder sense (opening your own clinic, a general's star, a masterpiece that makes you
- * a famous artist). Ordinary promotions use c.h.promote(), which allows one per calendar year.
+ * a famous artist). Ordinary promotions use c.h.promote(), which allows one per calendar year and only after
+ * MIN_YEARS_PER_LEVEL years at the current level.
  */
 export function promoteAnyway(c: Ctx): boolean {
-  if (c.p.ext) delete (c.p.ext as PeopleExt).promotedYear;
-  return c.h.promote();
+  const ext = extOf(c.p);
+  delete ext.promotedYear;
+  // skips the minimum time at the level too: these jumps are not ladder promotions
+  const since = ext.levelYear;
+  ext.levelYear = c.s.year - MIN_YEARS_PER_LEVEL;
+  const ok = c.h.promote();
+  if (!ok) {
+    if (since === undefined) delete ext.levelYear;
+    else ext.levelYear = since;
+  }
+  return ok;
 }

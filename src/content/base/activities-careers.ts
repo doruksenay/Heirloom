@@ -1,6 +1,6 @@
 import type { ActivityDef, Ctx } from '../types';
-import { wage, wth } from './util';
-import { say } from './lines';
+import { PART_TIME_JOBS, wage, wth } from './util';
+import { say, sayWith } from './lines';
 import { promoteAnyway } from '../../engine/context';
 import { isCoastal, seaName } from '../../engine/places';
 
@@ -25,11 +25,23 @@ export function demote(c: Ctx): boolean {
 const working = (c: Ctx) => !!c.p.jobId && !c.p.retired && c.p.jailYears === 0;
 export const isJob = (c: Ctx, id: string) => c.p.jobId === id && working(c);
 
-/** Age and health window for football trials and scouts. */
-export const canTryOut = (c: Ctx) =>
-  c.age >= 16 && c.age <= 22 && c.p.stats.health >= 70 && c.p.jailYears === 0 && c.p.jobId !== 'athlete' && !c.h.has('ex_athlete');
+/** Already in a career: any job except an after-school one (a barista can still try out; a surgeon is not scouted). */
+export const inCareer = (c: Ctx) => !!c.p.jobId && !PART_TIME_JOBS.has(c.p.jobId);
 
-/** Who the recruitment office will take. */
+/**
+ * Age and health window for football trials and scouts. Not for someone already in a career, and not
+ * alongside a full-time university course: a pro footballer does not also attend lectures.
+ */
+export const canTryOut = (c: Ctx) =>
+  c.age >= 16 &&
+  c.age <= 22 &&
+  c.p.stats.health >= 70 &&
+  c.p.jailYears === 0 &&
+  !inCareer(c) &&
+  c.p.school !== 'university' &&
+  !c.h.has('ex_athlete');
+
+/** Who the recruitment office will take: not someone who already has a career (a national-team striker does not join as a private). */
 export const canEnlist = (c: Ctx) =>
   c.age >= 18 &&
   c.age <= 32 &&
@@ -37,8 +49,19 @@ export const canEnlist = (c: Ctx) =>
   c.p.jailYears === 0 &&
   c.p.criminalRecord === 0 &&
   (c.p.education === 'highschool' || c.p.education === 'university') &&
-  c.p.jobId !== 'soldier' &&
-  c.p.jobId !== 'officer';
+  !inCareer(c);
+
+/** A new friend made at an industry event (each line once before any comes back). */
+const NETWORK_FRIEND: ((n: string) => readonly [string, string])[] = [
+  (n) => [`You and ${n} hid by the buffet and mocked the keynote. A friendship was born.`, `${wth(n)} büfenin yanına saklanıp açılış konuşmasıyla dalga geçtiniz. Bir dostluk doğdu.`],
+  (n) => [`You and ${n} were the only two who laughed at the speaker's joke. You have been laughing together since.`, `Konuşmacının esprisine bir tek sen ve ${n} güldünüz. O günden beri birlikte gülüyorsunuz.`],
+  (n) => [`${n} rescued you from a man selling software. You owe ${n} a dinner, and a friendship.`, `${n} seni yazılım satmaya çalışan bir adamın elinden kurtardı. Ona bir akşam yemeği ve bir dostluk borçlusun.`],
+  (n) => [`You and ${n} both reached for the last pastry. You split it. Now you meet for lunch every month.`, `${wth(n)} son poğaçaya aynı anda uzandınız. Yarı yarıya böldünüz. Artık her ay öğle yemeğinde buluşuyorsunuz.`],
+  (n) => [`You and ${n} swapped name tags as a joke and kept it going all afternoon. Nobody noticed. Friends for life.`, `${wth(n)} şakasına yaka kartlarınızı değiştirdiniz ve bütün öğleden sonra öyle dolaştınız. Kimse fark etmedi. Artık can dostsunuz.`],
+  (n) => [`You and ${n} skipped the afternoon panels for a long walk and a longer coffee.`, `${wth(n)} öğleden sonraki panelleri ekip uzun bir yürüyüşe ve daha da uzun bir kahveye çıktınız.`],
+  (n) => [`${n} sat next to you at the panel and whispered better answers than the panellists. You swapped numbers.`, `${n} panelde yanına oturdu ve konuşmacılardan daha iyi cevapları kulağına fısıldadı. Numaralarınızı değiştiniz.`],
+  (n) => [`You and ${n} got stuck in the lift between floors for twenty minutes. You came out friends.`, `${wth(n)} katlar arasında asansörde yirmi dakika mahsur kaldınız. Dost olarak çıktınız.`],
+];
 
 export const careerActivities: ActivityDef[] = [
   {
@@ -68,7 +91,7 @@ export const careerActivities: ActivityDef[] = [
         ],
         [
           'You nutmegged a defender and tripped over the ball. No contract.',
-          'Bir defansın bacak arasından topu geçirdin, sonra topa takılıp düştün. Sözleşme yok.',
+          'Bir defans oyuncusuna tünel attın, sonra topa takılıp düştün. Sözleşme yok.',
         ],
         [
           'Two hundred kids, eleven places. You were not one of them this time.',
@@ -182,10 +205,7 @@ export const careerActivities: ActivityDef[] = [
         const friend = c.h.newPerson({ age: Math.max(20, c.age + c.rng.int(-6, 6)) });
         c.h.addRelation(friend, 'friend', c.rng.int(40, 60));
         c.h.stat('happiness', 3);
-        return c.t(
-          `You and ${friend.firstName} hid by the buffet and mocked the keynote. A friendship was born.`,
-          `${wth(friend.firstName)} büfenin yanına saklanıp açılış konuşmasıyla dalga geçtiniz. Bir dostluk doğdu.`,
-        );
+        return sayWith(c, 'career_network.friend', NETWORK_FRIEND, friend.firstName);
       }
       c.h.stat('happiness', -1);
       return say(c, 'career_network', [

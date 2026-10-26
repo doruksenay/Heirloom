@@ -4,6 +4,8 @@ import { abl, acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, offi
 import { byCountry, him, he, type ByCountry } from './events-flavour';
 import { promoteAnyway } from '../../engine/context';
 import { catName, syncFlagCat } from '../../engine/pets';
+import { divorceTerms, divorcedLine, yearsWith } from './relationships';
+import { isOwnHeirloom, nameOrOwn } from './heirloom-words';
 
 const TOPICS_EN = ['the dishes', 'your phone screen time', 'whose family to visit for the holidays', 'money', 'the thermostat'];
 const TOPICS_TR = ['bulaşıklar', 'telefona gömülmen', 'bayramda kimin ailesine gidileceği', 'para', 'kombinin derecesi'];
@@ -45,11 +47,25 @@ const FLU: { upTo: number; lines: [string, string][] }[] = [
 const SNACK: ByCountry<[string, string]> = {
   tr: ['simit', 'simit'],
   us: ['hot dog', 'sosisli sandviç'],
-  uk: ['sausage roll', 'sosisli börek'],
+  uk: ['sausage roll', 'sosisli milföy'],
   de: ['pretzel', 'pretzel'],
   br: ['cheese bread', 'peynirli ekmek'],
   other: ['sandwich', 'sandviç'],
 };
+
+/** Where a sold heirloom used to be, by type: [English, Turkish]. Each English line is followed by "So do family dinners." */
+const EMPTY_PLACE: Record<string, [string, string]> = {
+  clock: ['The drawer it lived in looks empty.', 'Durduğu çekmece bomboş kaldı.'],
+  ring: ['The little box looks empty.', 'Küçük kutusu bomboş kaldı.'],
+  piano: ['The corner where it stood looks empty.', 'Durduğu köşe bomboş kaldı.'],
+  quilt: ['The bed looks bare.', 'Yatağın üstü bomboş kaldı.'],
+  recipes: ['The kitchen shelf looks empty.', 'Mutfak rafı bomboş kaldı.'],
+  trophy: ['The shelf looks empty.', 'Raf bomboş kaldı.'],
+  painting: ['Its place on the wall looks empty.', 'Duvardaki yeri bomboş kaldı.'],
+};
+
+/** The partner in vars.pid is a spouse (an ending is a divorce, not a break-up). */
+const married = (c: Ctx) => c.p.relations.some((r) => r.personId === String(c.vars.pid) && r.kind === 'spouse');
 
 // Love, family, work, health, money and old age.
 export const adultEvents: EventDef[] = [
@@ -89,11 +105,16 @@ export const adultEvents: EventDef[] = [
       },
       {
         id: 'leave',
-        label: (c) => c.t('End the relationship', 'İlişkiyi bitir'),
+        label: (c) => (married(c) ? c.t('File for divorce', 'Boşanma davası aç') : c.t('End the relationship', 'İlişkiyi bitir')),
         badge: 'Big change',
         resolve: (c) => {
-          c.h.setKind(String(c.vars.pid), 'ex');
+          const pid = String(c.vars.pid);
           c.h.stat('happiness', -10);
+          if (married(c)) {
+            const head = divorcedLine(c, pid);
+            return `${head} ${divorceTerms(c, pid)}`.trim();
+          }
+          c.h.setKind(pid, 'ex');
           return c.t(`You broke up with ${nm(c)}.`, `${wth(nm(c))} ayrıldın.`);
         },
         tone: 'big',
@@ -140,8 +161,18 @@ export const adultEvents: EventDef[] = [
         badge: 'Risky',
         resolve: (c) => {
           if (c.rng.chance(0.45)) {
-            c.h.setKind(String(c.vars.pid), 'ex');
+            const pid = String(c.vars.pid);
             c.h.stat('happiness', -12);
+            if (married(c)) {
+              // a marriage does not end in four words: the fight, the lawyers, the split, the children
+              const y = yearsWith(c, pid);
+              const head = c.t(
+                `${nm(c)} found the messages. There was no shouting, which was worse. By spring you were divorced${y >= 2 ? `, after ${y} years of marriage` : ''}.`,
+                `${nm(c)} mesajları buldu. Hiç bağırmadı; bu daha kötüydü. Bahar geldiğinde boşanmıştınız${y >= 2 ? `; ${y} yıllık evlilik bitti` : ''}.`,
+              );
+              return `${head} ${divorceTerms(c, pid)}`.trim();
+            }
+            c.h.setKind(pid, 'ex');
             return c.t(`${nm(c)} found the messages. The relationship is over.`, `${nm(c)} mesajları buldu. İlişki bitti.`);
           }
           c.h.stat('happiness', 2);
@@ -311,6 +342,12 @@ export const adultEvents: EventDef[] = [
       c.h.relatives(['mother', 'father', 'sibling', 'child', 'spouse']).forEach((r) => c.h.closeness(r.person.id, 6));
       c.h.stat('happiness', 5);
       const book = c.s.dynasty.heirlooms.find((x) => x.defId === 'recipes')!;
+      // the book may carry your own name: then it is "your own recipe book", not "Esra's" while you are Esra
+      if (isOwnHeirloom(c, book))
+        return c.t(
+          'You cooked a feast from your own recipe book. The whole family came, and nobody argued. A miracle.',
+          'Kendi tarif defterinden koca bir sofra kurdun. Bütün aile geldi ve kimse kavga etmedi. Mucize.',
+        );
       return c.t(
         `You cooked a feast from ${book.name}. The whole family came, and nobody argued. A miracle.`,
         `Aile tarif defterinden (${book.name}) koca bir sofra kurdun. Bütün aile geldi ve kimse kavga etmedi. Mucize.`,
@@ -437,7 +474,7 @@ export const adultEvents: EventDef[] = [
     title: (c) =>
       c.t(
         `A headhunter offers you the role of ${c.vars.title}.`,
-        `Bir kelle avcısı seni ${String(c.vars.titleTr ?? c.vars.title)} pozisyonu için arıyor.`,
+        `Bir işe alım uzmanı seni ${String(c.vars.titleTr ?? c.vars.title)} pozisyonu için arıyor.`,
       ),
     text: (c) => c.t('The pay is better, the commute is worse.', 'Maaş daha iyi, yol daha uzun.'),
     choices: [
@@ -559,6 +596,8 @@ export const adultEvents: EventDef[] = [
       {
         id: 'best',
         label: (c) => c.t('The expensive private clinic', 'Pahalı özel klinik'),
+        requires: (c) => c.p.money >= wage(c, 40000),
+        requiresLabel: 'Not enough savings',
         resolve: (c) => {
           c.h.money(-wage(c, 40000));
           c.h.stat('health', 15);
@@ -591,6 +630,8 @@ export const adultEvents: EventDef[] = [
       {
         id: 'car',
         label: (c) => c.t('Buy a sports car', 'Spor araba al'),
+        requires: (c) => c.p.money >= wage(c, 45000),
+        requiresLabel: 'Not enough money',
         resolve: (c) => {
           c.h.money(-wage(c, 45000));
           c.h.stat('happiness', 10);
@@ -710,8 +751,8 @@ export const adultEvents: EventDef[] = [
       const watch = c.s.dynasty.heirlooms.find((x) => x.defId === 'clock')!;
       c.h.stat('happiness', -1);
       return c.t(
-        `${catName(c.p, c.lang)} knocked ${watch.name} off the shelf. It survived. Barely.`,
-        `${catName(c.p, c.lang)} yadigâr saati rafından aşağı itti: ${watch.name}. Kurtuldu. Kıl payı.`,
+        `${catName(c.p, c.lang)} knocked ${nameOrOwn(c, watch)} off the shelf. It survived. Barely.`,
+        `${catName(c.p, c.lang)} yadigâr saati rafından aşağı itti: ${nameOrOwn(c, watch)}. Kurtuldu. Kıl payı.`,
       );
     },
   },
@@ -756,8 +797,8 @@ export const adultEvents: EventDef[] = [
     title: (c) => {
       const item = c.s.dynasty.heirlooms.find((x) => x.uid === c.vars.uid)!;
       return c.t(
-        `An antique dealer offers ${c.h.fmt(Number(c.vars.amt))} for ${item.name}.`,
-        `Bir antikacı şu yadigâr için ${c.h.fmt(Number(c.vars.amt))} teklif ediyor: ${item.name}.`,
+        `An antique dealer offers ${c.h.fmt(Number(c.vars.amt))} for ${nameOrOwn(c, item)}.`,
+        `Bir antikacı şu yadigâr için ${c.h.fmt(Number(c.vars.amt))} teklif ediyor: ${nameOrOwn(c, item)}.`,
       );
     },
     text: (c) =>
@@ -773,10 +814,8 @@ export const adultEvents: EventDef[] = [
           c.h.money(Number(c.vars.amt));
           c.h.stat('happiness', -6);
           c.s.dynasty.legacyScore = Math.max(0, c.s.dynasty.legacyScore - 200);
-          return c.t(
-            `You sold ${item.name}. The shelf looks empty. So do family dinners.`,
-            `Yadigârı sattın: ${item.name}. Raf bomboş kaldı. Aile sofraları da.`,
-          );
+          const [en, tr] = EMPTY_PLACE[item.defId] ?? EMPTY_PLACE.clock;
+          return c.t(`You sold ${nameOrOwn(c, item)}. ${en} So do family dinners.`, `Yadigârı sattın: ${nameOrOwn(c, item)}. ${tr} Aile sofraları da.`);
         },
         tone: 'bad',
       },
@@ -800,8 +839,8 @@ export const adultEvents: EventDef[] = [
       const item = c.s.dynasty.heirlooms[0];
       return item
         ? c.t(
-            `Your grandchildren sat around you while you told them the story of ${item.name}.`,
-            `Torunların etrafına toplandı, sen de onlara aile yadigârının hikâyesini anlattın: ${item.name}.`,
+            `Your grandchildren sat around you while you told them the story of ${nameOrOwn(c, item)}.`,
+            `Torunların etrafına toplandı, sen de onlara aile yadigârının hikâyesini anlattın: ${nameOrOwn(c, item)}.`,
           )
         : c.t('Your grandchildren visited and ate all your biscuits.', 'Torunların ziyarete geldi ve bütün bisküvilerini silip süpürdü.');
     },

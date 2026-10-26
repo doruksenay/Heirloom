@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { abl, acc, dat, gen, loc, wth, PRONOUNCED } from '../src/i18n/tr-grammar';
 import { COUNTRIES } from '../src/engine/world';
 import { cityName } from '../src/engine/places';
+import { PET_KINDS, TURKISH_PET_NAMES, petNames } from '../src/engine/pets';
+import { lowerFirst } from '../src/engine/goals';
 
 describe('turkish suffixes', () => {
   it('follows vowel harmony and softening', () => {
@@ -105,6 +107,45 @@ describe('turkish suffixes', () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+
+  it('treats â, î and û as vowels (playtest 2: "Rüzgâr\'ün")', () => {
+    expect(gen('Rüzgâr')).toBe("Rüzgâr'ın");
+    expect(dat('Rüzgâr')).toBe("Rüzgâr'a");
+    expect(wth('Rüzgâr')).toBe("Rüzgâr'la");
+    expect(gen('Kâmil')).toBe("Kâmil'in");
+    expect(acc('Nurî')).toBe("Nurî'yi");
+    expect(gen('Hulûsi')).toBe("Hulûsi'nin");
+  });
+
+  it('has a pronunciation for every non-Turkish pet name', () => {
+    const missing: string[] = [];
+    for (const k of PET_KINDS) for (const n of k.names) if (!TURKISH_PET_NAMES.has(n) && !PRONOUNCED[n.split(/\s+/).pop()!]) missing.push(n);
+    expect(missing).toEqual([]);
+    expect(acc('Bubbles')).toBe("Bubbles'ı");
+    expect(dat('Clover')).toBe("Clover'a");
+    expect(gen('Thumper')).toBe("Thumper'ın");
+    expect(dat('Whiskers')).toBe("Whiskers'a");
+  });
+
+  it('gives a Türkiye family Turkish pet names (and a few shared ones only)', () => {
+    for (const k of PET_KINDS) {
+      const tr = petNames(k.kind, 'tr');
+      expect(tr.length, k.kind).toBeGreaterThanOrEqual(4);
+      expect(tr.filter((n) => !TURKISH_PET_NAMES.has(n)).length, k.kind).toBeLessThanOrEqual(3);
+      expect(tr.filter((n) => TURKISH_PET_NAMES.has(n)).length / tr.length, k.kind).toBeGreaterThanOrEqual(0.6);
+      expect(tr).not.toContain('Biscuit');
+      expect(tr).not.toContain('Whiskers');
+      expect(tr).not.toContain('Thumper');
+      expect(petNames(k.kind, 'us').some((n) => TURKISH_PET_NAMES.has(n)), k.kind).toBe(false);
+    }
+  });
+
+  it('keeps the currency symbol of a goal amount as written', () => {
+    expect(lowerFirst('R$550 binlik servete ulaş', 'tr')).toBe('R$550 binlik servete ulaş');
+    expect(lowerFirst('₺4,5 milyonluk servete ulaş', 'tr')).toBe('₺4,5 milyonluk servete ulaş');
+    expect(lowerFirst('Zekân 100 olsun', 'tr')).toBe('zekân 100 olsun');
+    expect(lowerFirst('İlk evini al', 'tr')).toBe('ilk evini al');
   });
 });
 

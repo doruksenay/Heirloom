@@ -4,9 +4,10 @@
  * Vowel harmony and consonant softening rules are handled here so content can stay readable.
  */
 
-const VOWELS = 'aeıioöuüAEIİOÖUÜ';
-const BACK = 'aıouAIOU';
-const ROUNDED = 'oöuüOÖUÜ';
+// â and û are back vowels, î a front one (Rüzgâr'ın, Kâmil'in, Nurî'nin)
+const VOWELS = 'aeıioöuüâîûAEIİOÖUÜÂÎÛ';
+const BACK = 'aıouâûAIOUÂÛ';
+const ROUNDED = 'oöuüûOÖUÜÛ';
 const HARD = 'fstkçşhpFSTKÇŞHP'; // fıstıkçı şahap
 
 /**
@@ -87,6 +88,12 @@ export const PRONOUNCED: Record<string, string> = {
   Valentina: 'Valentina', Victoria: 'Viktorya', Vincent: 'Vinsent', Vinícius: 'Vinisyus', Violet: 'Vayılıt',
   Vitor: 'Vitor', Vitória: 'Vitorya', William: 'Vilyım', Willow: 'Vilo', Wyatt: 'Vayıt', Yasmin: 'Yasmin',
   Zoe: 'Zoi',
+  // pet names (src/engine/pets.ts) that are not already above
+  Atlas: 'Atlas', Bailey: 'Beyli', Biscuit: 'Biskit', Bubbles: 'Babılz', Buddy: 'Badi', Bunny: 'Bani', Cleo: 'Kliyo',
+  Clover: 'Klovır', Coco: 'Koko', Dory: 'Dori', Franklin: 'Frenklin', Goldie: 'Goldi', Kiwi: 'Kivi', Mango: 'Mengo',
+  Maple: 'Meypıl', Milo: 'Maylo', Nemo: 'Nimo', Ninja: 'Ninca', Pip: 'Pip', Rocky: 'Roki', Sheldon: 'Şeldın',
+  Simba: 'Simba', Snowball: 'Snobol', Spirit: 'Spirit', Storm: 'Storm', Sunny: 'Sani', Thumper: 'Tampır',
+  Whiskers: 'Viskırs',
   // cities
   Austin: 'Ostin', Berlin: 'Berlin', Boston: 'Bostın', Brighton: 'Braytın', Bristol: 'Bristıl', Cardiff: 'Kardif',
   Chicago: 'Şikago', Cologne: 'Kolon', Curitiba: 'Kuriçiba', Denver: 'Denvır', Edinburgh: 'Edinburg',

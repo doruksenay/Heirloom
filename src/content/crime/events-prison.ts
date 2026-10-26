@@ -1,11 +1,62 @@
 import type { EventDef } from '../types';
 import { cap, kin, nm } from '../base/util';
 import { addJail, crimeState, inside, release } from './state';
+import { say, type Pair } from '../base/lines';
+import { inTr } from '../base/events-flavour';
 import type { RelationKind } from '../../engine/types';
 
 // Life on the inside. Only crime-category events fire while you are in prison, so these carry those years.
 
 const LETTER_KINDS: RelationKind[] = ['mother', 'father', 'spouse', 'partner', 'child', 'sibling'];
+
+// Prison years come in runs, so the repeatable outcomes draw from pools (one rng call each, see base/lines.ts).
+const FIGHT_WON: Pair[] = [
+  ['You stood your ground. Nobody touches your dessert now.', 'Geri adım atmadın. Artık kimse tatlına dokunamıyor.'],
+  ['You said no, loudly, in front of everyone. He laughed, then left you alone for good.', 'Herkesin önünde, yüksek sesle hayır dedin. Güldü, sonra seni bir daha rahatsız etmedi.'],
+  ['One shove each, then a guard walked past and you both pretended to be discussing the weather. The dessert stayed yours.', 'Birer itiş, sonra bir gardiyan geçti ve ikiniz de hava durumunu konuşuyormuş gibi yaptınız. Tatlı sende kaldı.'],
+  ['You ate the dessert in one bite while staring at him. The block talked about it for a week.', 'Ona bakarak tatlıyı tek lokmada yedin. Koğuş bir hafta bundan bahsetti.'],
+];
+const FIGHT_LOST: Pair[] = [
+  ['The fight went badly and the guards added a year to your sentence.', 'Kavga kötü bitti, gardiyanlar cezana bir yıl ekletti.'],
+  ['You threw the first punch and missed. The guards did not. One more year.', 'İlk yumruğu sen attın ve ıskaladın. Gardiyanlar ıskalamadı. Bir yıl daha.'],
+  ['You won the fight and lost a year. The disciplinary board does not care who started it.', 'Kavgayı kazandın, bir yılı kaybettin. Disiplin kurulu kimin başlattığıyla ilgilenmiyor.'],
+  ['A tray, a bench and three guards later, you had a black eye and an extra year.', 'Bir tepsi, bir bank ve üç gardiyan sonra elinde morarmış bir göz ve fazladan bir yıl kaldı.'],
+];
+const FIGHT_GIVE: Pair[] = [
+  ['You handed it over. You have not tasted pudding in months.', 'Tatlıyı verdin. Aylardır ağzına tatlı koymadın.'],
+  ['You slid the tray across without a word. Peace has a price, and it is semolina.', 'Tepsiyi tek kelime etmeden uzattın. Huzurun bir bedeli var; o da irmik tatlısı.'],
+  ['You gave him the dessert. A week later he gave you half an orange. Prison diplomacy.', 'Tatlıyı ona verdin. Bir hafta sonra o sana yarım portakal verdi. Cezaevi diplomasisi.'],
+  ['You gave it up and told yourself you were on a diet anyway.', 'Tatlıdan vazgeçtin ve kendine zaten diyette olduğunu söyledin.'],
+];
+const CLASS_DONE: Pair[] = [
+  ['You took a literature class and wrote a poem the warden pinned on his wall.', 'Edebiyat dersine girdin ve müdürün duvarına astığı bir şiir yazdın.'],
+  ['You took a history class and now correct the guards on dates.', 'Tarih dersine girdin. Artık gardiyanların tarihlerini düzeltiyorsun.'],
+  ['You learned basic accounting. Your cellmate now pays you in biscuits to do his canteen sums.', 'Temel muhasebe öğrendin. Koğuş arkadaşın kantin hesabını yapman için sana bisküviyle ödeme yapıyor.'],
+  ['You finished a language course. You can now order coffee and apologise in a new language.', 'Bir dil kursunu bitirdin. Artık yeni bir dilde kahve isteyip özür dileyebiliyorsun.'],
+  ['You took a philosophy class. The teacher asked what freedom is, and the whole room laughed.', 'Felsefe dersine girdin. Hoca özgürlüğün ne olduğunu sordu, bütün sınıf güldü.'],
+  ['You studied for a certificate in computer basics on a machine older than you.', 'Senden yaşlı bir bilgisayarda temel bilgisayar sertifikası için çalıştın.'],
+];
+const CLASS_SKIP: Pair[] = [
+  ['You did push-ups in the yard instead.', 'Onun yerine havalandırmada şınav çektin.'],
+  ['You walked laps of the yard and counted the bricks again. Still 4,112.', 'Havalandırmada tur atıp tuğlaları yeniden saydın. Hâlâ 4.112 tane.'],
+  ['You played cards in the yard. You lost three weeks of dessert.', 'Havalandırmada kâğıt oynadın. Üç haftalık tatlını kaybettin.'],
+  ['You sat in the sun with your eyes closed and pretended to be somewhere else.', 'Gözlerin kapalı güneşte oturup başka bir yerdeymiş gibi yaptın.'],
+];
+const LETTER_WRITE: Pair[] = [
+  ["You wrote back four pages. You crossed out 'sorry' six times and left it in on the seventh.", "Dört sayfalık bir cevap yazdın. 'Özür dilerim' cümlesini altı kez karaladın, yedincide bıraktın."],
+  ['You wrote back the same night, by the light from the corridor. You did not mention the food.', 'Aynı gece koridordan gelen ışıkta cevap yazdın. Yemeklerden hiç bahsetmedin.'],
+  ['You wrote back and drew a little picture of your cell, with a window it does not have.', 'Cevap yazdın ve koğuşunun küçük bir resmini çizdin; olmayan bir pencereyle.'],
+  ['You wrote back about the books you are reading. It was the first letter you ever wrote without lying.', 'Okuduğun kitapları anlatan bir cevap yazdın. Hayatında yalansız yazdığın ilk mektuptu.'],
+  ['Your reply was short: "Thank you. Write again." You meant every word.', 'Cevabın kısaydı: "Teşekkür ederim. Yine yaz." Her kelimesinde ciddiydin.'],
+  ['You wrote back and asked about everyone by name, even the neighbour you never liked.', 'Cevap yazdın ve herkesi tek tek adıyla sordun; hiç sevmediğin komşuyu bile.'],
+];
+const LETTER_IGNORE: Pair[] = [
+  ['You put the letter under your pillow and never answered. It is still there.', 'Mektubu yastığının altına koydun ve hiç cevap vermedin. Hâlâ orada duruyor.'],
+  ['You read it twice and put it in a box with the others. You tell yourself you will answer them all at once.', 'İki kez okudun ve ötekilerle birlikte bir kutuya koydun. Hepsine birden cevap vereceğini söylüyorsun kendine.'],
+  ['You started a reply three times and tore it up three times.', 'Üç kez cevap yazmaya başladın, üçünü de yırttın.'],
+  ['You did not answer. Shame is heavier than a pen.', 'Cevap vermedin. Utanç, kalemden ağır geliyor.'],
+];
+
 
 export const prisonEvents: EventDef[] = [
   {
@@ -22,11 +73,11 @@ export const prisonEvents: EventDef[] = [
         resolve: (c) => {
           if (c.rng.chance(0.5)) {
             c.h.stat('happiness', 5);
-            return c.t('You stood your ground. Nobody touches your dessert now.', 'Geri adım atmadın. Artık kimse tatlına dokunamıyor.');
+            return say(c, 'crime.prison_fight.won', FIGHT_WON);
           }
           c.h.stat('health', -12);
           addJail(c, 1);
-          return c.t('The fight went badly and the guards added a year to your sentence.', 'Kavga kötü bitti, gardiyanlar cezana bir yıl ekletti.');
+          return say(c, 'crime.prison_fight.lost', FIGHT_LOST);
         },
       },
       {
@@ -34,7 +85,7 @@ export const prisonEvents: EventDef[] = [
         label: (c) => c.t('Hand it over', 'Ver gitsin'),
         resolve: (c) => {
           c.h.stat('happiness', -4);
-          return c.t('You handed it over. You have not tasted pudding in months.', 'Tatlıyı verdin. Aylardır ağzına sütlaç koymadın.');
+          return say(c, 'crime.prison_fight.give', FIGHT_GIVE);
         },
       },
     ],
@@ -56,14 +107,14 @@ export const prisonEvents: EventDef[] = [
             c.p.education = 'highschool';
             return c.t('You earned your high school diploma behind bars. The teacher cried.', 'Parmaklıklar ardında lise diplomanı aldın. Öğretmen ağladı.');
           }
-          return c.t('You took a literature class and wrote a poem the warden pinned on his wall.', 'Edebiyat dersine girdin ve müdürün duvarına astığı bir şiir yazdın.');
+          return say(c, 'crime.prison_class', CLASS_DONE);
         },
         tone: 'good',
       },
       {
         id: 'skip',
         label: (c) => c.t('Spend the time in the yard', 'Vaktini havalandırmada geçir'),
-        resolve: (c) => (c.h.stat('health', 2), c.t('You did push-ups in the yard instead.', 'Onun yerine havalandırmada şınav çektin.')),
+        resolve: (c) => (c.h.stat('health', 2), say(c, 'crime.prison_class.skip', CLASS_SKIP)),
       },
     ],
   },
@@ -159,7 +210,7 @@ export const prisonEvents: EventDef[] = [
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 10);
           c.h.stat('happiness', 5);
-          return c.t("You wrote back four pages. You crossed out 'sorry' six times and left it in on the seventh.", "Dört sayfalık bir cevap yazdın. 'Özür dilerim' cümlesini altı kez karaladın, yedincide bıraktın.");
+          return say(c, 'crime.letters', LETTER_WRITE);
         },
         tone: 'good',
       },
@@ -169,7 +220,7 @@ export const prisonEvents: EventDef[] = [
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), -8);
           c.h.stat('happiness', -3);
-          return c.t('You put the letter under your pillow and never answered. It is still there.', 'Mektubu yastığının altına koydun ve hiç cevap vermedin. Hâlâ orada duruyor.');
+          return say(c, 'crime.letters.ignore', LETTER_IGNORE);
         },
       },
     ],
@@ -181,7 +232,10 @@ export const prisonEvents: EventDef[] = [
     cooldown: 8,
     when: inside,
     title: (c) => c.t('A riot breaks out in the cafeteria.', 'Yemekhanede isyan çıktı.'),
-    text: (c) => c.t('It started over the lentil soup. It is no longer about the lentil soup.', 'Mercimek çorbası yüzünden başladı. Artık mesele mercimek çorbası değil.'),
+    text: (c) =>
+      inTr(c)
+        ? c.t('It started over the lentil soup. It is no longer about the lentil soup.', 'Mercimek çorbası yüzünden başladı. Artık mesele mercimek çorbası değil.')
+        : c.t('It started over the mashed potatoes. It is no longer about the mashed potatoes.', 'Patates püresi yüzünden başladı. Artık mesele patates püresi değil.'),
     choices: [
       {
         id: 'hide',

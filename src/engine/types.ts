@@ -21,6 +21,8 @@ export interface Person {
   childIds?: string[];
   /** Money this person leaves to the player when they die (a retired former player keeps part of their savings). */
   estate?: number;
+  /** For a child of the player: the other parent at birth, when known (older saves do not have it). */
+  coParentId?: string;
 }
 
 export interface Relation {
@@ -28,6 +30,8 @@ export interface Relation {
   kind: RelationKind;
   closeness: number; // 0..100
   sinceYear: number;
+  /** A step-parent (kind 'mother' or 'father'): a parent's later spouse, not the biological parent. Content helpers skip them. */
+  step?: boolean;
 }
 
 export interface LogEntry {

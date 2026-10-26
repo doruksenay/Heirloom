@@ -70,7 +70,7 @@ export const COUNTRIES: Country[] = [
         'Oliver', 'George', 'Harry', 'Arthur', 'Alfie', 'Freddie', 'Theo', 'Archie', 'Muhammad', 'Noah', 'Leo',
         'Oscar', 'Theodore', 'Henry', 'Charlie', 'Thomas', 'William', 'Jacob', 'Teddy', 'Finley', 'Arlo', 'Isaac',
         'Lucas', 'Edward', 'Reggie', 'Albert', 'Tommy', 'Rory', 'Louie', 'Hugo', 'Ronnie', 'Joshua', 'Max',
-        'Elliot', 'Samuel', 'Daniel', 'James', 'Ben', 'Callum', 'Ryan', 'Liam', 'Connor', 'Jamie', 'Harrison',
+        'Elliot', 'Samuel', 'Daniel', 'James', 'Benjamin', 'Callum', 'Ryan', 'Liam', 'Connor', 'Jamie', 'Harrison',
         'Kieran', 'Lewis', 'Owen', 'Ethan', 'Alexander', 'Toby', 'Dylan', 'Sebastian', 'Jack',
       ],
       last: [
@@ -98,7 +98,7 @@ export const COUNTRIES: Country[] = [
         'Franziska', 'Stefanie', 'Sabine', 'Nina', 'Jule',
       ],
       male: [
-        'Ben', 'Paul', 'Finn', 'Jonas', 'Elias', 'Felix', 'Moritz', 'Luis', 'Noah', 'Matteo', 'Leon', 'Henry',
+        'Benjamin', 'Paul', 'Finn', 'Jonas', 'Elias', 'Felix', 'Moritz', 'Luis', 'Noah', 'Matteo', 'Leon', 'Henry',
         'Luca', 'Emil', 'Theo', 'Louis', 'Anton', 'Lukas', 'Maximilian', 'Oskar', 'Liam', 'Jakob', 'David',
         'Julian', 'Niklas', 'Leo', 'Tim', 'Jan', 'Tobias', 'Florian', 'Sebastian', 'Alexander', 'Fabian',
         'Philipp', 'Simon', 'Max', 'Johannes', 'Jannik', 'Lars', 'Stefan', 'Markus', 'Andreas', 'Thomas',
@@ -122,7 +122,7 @@ export const COUNTRIES: Country[] = [
     currency: { code: 'TRY', locale: 'tr-TR', rate: 40 },
     names: {
       female: [
-        'Zeynep', 'Elif', 'Defne', 'Ecrin', 'Ayşe', 'Selin', 'Ada', 'Nehir', 'Sano', 'Duru', 'Melis', 'Asya',
+        'Zeynep', 'Elif', 'Defne', 'Ecrin', 'Ayşe', 'Selin', 'Ada', 'Nehir', 'Duru', 'Melis', 'Asya',
         'Eylül', 'Azra', 'Zehra', 'Meryem', 'Hira', 'Nisa', 'Ela', 'Lina', 'Mira', 'Ebrar', 'Ecem', 'İrem',
         'Büşra', 'Merve', 'Gizem', 'Cansu', 'Damla', 'Gamze', 'Tuğba', 'Esra', 'Seda', 'Derya', 'Ebru', 'Burcu',
         'Pınar', 'Özge', 'Didem', 'Fatma', 'Emine', 'Hatice', 'Nazlı', 'Begüm', 'İpek', 'Ceren', 'Ezgi', 'Aslı',

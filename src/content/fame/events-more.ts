@@ -1505,7 +1505,7 @@ export const moreFameEvents: EventDef[] = [
         resolve: (c) =>
           c.t(
             `You said no. It stays on the family shelf and gets dusted every ${inTR(c) ? 'bayram' : 'holiday'}.`,
-            'Hayır dedin. Ailenin vitrininde kalıyor; her bayram tozu alınıyor.',
+            `Hayır dedin. Ailenin vitrininde kalıyor; her ${inTR(c) ? 'bayram' : 'yılbaşı'} tozu alınıyor.`,
           ),
       },
     ],

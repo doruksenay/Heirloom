@@ -1,6 +1,8 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import { acc, cap, gen, nm, wage } from '../base/util';
 import { companyOf } from '../boss/state';
+import { say, sayWith, type Pair } from '../base/lines';
+import { inTr } from '../base/events-flavour';
 import { arrest, convict, convictFor, crimeState, free, gotAway, heatOf, peekCrime, petty, sentenceFor } from './state';
 
 // The crime ladder: from market-stall knockoffs to a crew heist, plus white-collar crime.
@@ -13,6 +15,106 @@ export const TARGETS = [
 ] as const;
 /** Accusative forms for "___ soymaya karar verdin". */
 const TARGETS_TR_ACC = ['çarşıdaki kuyumcuyu', 'kumarhanenin para sayım odasını', 'zenginlerle dolu bir yardım galasını'];
+
+// ------------------------------------------------------------ outcome lines
+// The ladder events come back every few years for a career criminal, so each outcome draws from a pool with
+// `say`/`sayWith` (one rng call; no line returns until most of its list has been seen). Amounts stand alone.
+
+const BURGLARY_OK: ((x: string) => Pair)[] = [
+  (x) => [`You got away with ${x} in valuables. You jump every time a car slows down outside.`, `${x} değerinde eşyayla sıvıştın. Dışarıda bir araba yavaşladığında yerinden zıplıyorsun.`],
+  (x) => [`In and out in eleven minutes, with ${x} in a laundry bag. You did not sleep for two nights.`, `On bir dakikada girip çıktın, çamaşır torbasında ${x} değerinde eşya vardı. İki gece uyuyamadın.`],
+  (x) => [`The back door really did not lock. You left with ${x} worth of things and the feeling someone saw you.`, `Arka kapı gerçekten kilitlenmiyormuş. ${x} değerinde eşyayla çıktın; biri seni görmüş gibi bir his de yanında.`],
+  (x) => [`You took ${x} in jewellery and electronics, and left the family photos exactly where they were.`, `${x} değerinde mücevher ve elektronik aldın; aile fotoğraflarına dokunmadın bile.`],
+  (x) => [`The fence gave you ${x} for the lot and a look that said "do not come back too often".`, `Çalıntı mal alan adam hepsi için ${x} verdi, bir de "Sık gelme" der gibi baktı.`],
+  (x) => [`You came home with ${x} in valuables and a dog's bark stuck in your head for a week.`, `Eve ${x} değerinde eşyayla döndün; bir köpeğin havlaması bir hafta kafanda çınladı.`],
+];
+const BURGLARY_CAUGHT: Pair[] = [
+  ['A neighbor walking a very alert dog saw everything. ', 'Çok uyanık bir köpeği gezdiren komşu her şeyi gördü. '],
+  ['The owners came home early. They had forgotten the cake. ', 'Ev sahipleri erken döndü. Pastayı unutmuşlar. '],
+  ['You tripped the doorbell camera and waved at it, out of habit. ', 'Kapı zilinin kamerasına yakalandın ve alışkanlıktan el salladın. '],
+  ['The back door did lock. The alarm did not need a key. ', 'Arka kapı kilitleniyormuş meğer. Alarmın da anahtara ihtiyacı yokmuş. '],
+  ['A grandmother across the street had been watching the house with binoculars for years. This was her big night. ', 'Karşıdaki yaşlı bir teyze yıllardır o evi dürbünle izliyormuş. Onun büyük gecesi bu geceymiş. '],
+  ['You dropped your bus card in the hallway. It had your photo on it. ', 'Toplu taşıma kartını koridorda düşürdün. Üstünde fotoğrafın vardı. '],
+];
+const BURGLARY_BACKOUT: Pair[] = [
+  ['You backed out at the last second. Your friend got caught that night.', 'Son saniyede caydın. Arkadaşın o gece enselendi.'],
+  ['You backed out and went for a late-night bite instead. Best decision of the year.', 'Vazgeçip onun yerine gece yarısı bir şeyler atıştırmaya gittin. Yılın en iyi kararı.'],
+  ['You backed out. The next morning the house had three police cars outside it.', 'Vazgeçtin. Ertesi sabah evin önünde üç polis arabası vardı.'],
+  ['You got as far as the garden gate, then thought of your mother. You went home.', 'Bahçe kapısına kadar gittin, sonra aklına annen geldi. Eve döndün.'],
+  ['You backed out. Your friend called you a coward, then asked to borrow money.', 'Vazgeçtin. Arkadaşın sana korkak dedi, sonra borç istedi.'],
+  ['You decided the house could stay empty without your help. You slept well for once.', 'O evin senin yardımın olmadan da boş kalabileceğine karar verdin. Bir kez olsun rahat uyudun.'],
+];
+
+/** A joyride; `pastry` is what the owner was choosing at the bakery, by country (Turkish only). */
+const JOYRIDE: ((pastry: string) => Pair)[] = [
+  (p) => ['You did one glorious lap of the city and parked it back outside the bakery. The owner was still choosing pastries.', `Şehirde muhteşem bir tur atıp arabayı fırının önüne geri bıraktın. Sahibi hâlâ ${p} seçiyordu.`],
+  () => ['You took the coast road with the roof down and the radio up. You left the car exactly where it was, with a little less fuel.', 'Üstü açık arabayla, radyo sonuna kadar açık, sahil yolunu bir tur attın. Arabayı aynı yere bıraktın; deposunda biraz daha az benzinle.'],
+  () => ['Zero to a hundred in four seconds; back to the bakery in nine minutes. Your heart is still doing a hundred.', 'Dört saniyede sıfırdan yüze çıktın, dokuz dakikada fırına döndün. Kalbin hâlâ yüzde gidiyor.'],
+  () => ['You drove one lap past your old school and honked twice. Nobody will ever believe you.', 'Eski okulunun önünden bir tur geçip iki kez korna çaldın. Buna kimse asla inanmayacak.'],
+  () => ['You parked it back with the engine still running, as you found it. The owner came out with a bag of bread and suspected nothing.', 'Arabayı bulduğun gibi, motoru çalışır hâlde geri bıraktın. Sahibi elinde ekmek poşetiyle çıktı ve hiçbir şeyden şüphelenmedi.'],
+];
+const CAR_SOLD: ((x: string) => Pair)[] = [
+  (x) => [`The guy who knows a guy paid ${x} in cash and asked no questions. Now you flinch at every sports car.`, `Birilerini tanıyan adam ${x} nakit verdi, hiç soru sormadı. Artık her spor arabada irkiliyorsun.`],
+  (x) => [`By midnight the car had new plates and you had ${x} in an envelope.`, `Gece yarısına kadar arabanın plakası değişmişti, senin cebinde de zarf içinde ${x} vardı.`],
+  (x) => [`A garage with no sign took the car and gave you ${x}. Somebody there was whistling the whole time.`, `Tabelası olmayan bir garaj arabayı aldı, sana ${x} verdi. İçeride biri baştan sona ıslık çalıyordu.`],
+  (x) => [`You sold it in a car park behind a supermarket for ${x}. The buyer counted the money twice; you counted it three times.`, `Bir süpermarketin arka otoparkında arabayı sattın, ${x} aldın. Alıcı parayı iki kez saydı, sen üç kez.`],
+];
+const CAR_LECTURE: ((x: string) => Pair)[] = [
+  (x) => [`You lectured the owner about leaving the engine running. Out of pure embarrassment, they tipped you ${x}.`, `Sahibine motoru çalışır bırakmanın tehlikeleri üzerine nutuk attın. Utancından eline ${x} sıkıştırdı.`],
+  (x) => [`You stood guard by the car until the owner came out, and told them off. They paid you ${x} to stop talking.`, `Sahibi çıkana kadar arabanın başında bekleyip onu azarladın. Susman için sana ${x} verdi.`],
+  (x) => [`"Anyone could have taken it," you said. The owner looked at you for a long moment, then handed you ${x}.`, `"Herhangi biri alıp gidebilirdi," dedin. Sahibi sana uzun uzun baktı, sonra eline ${x} tutuşturdu.`],
+];
+
+const BAGS_OK: ((x: string) => Pair)[] = [
+  (x) => [`You sold every Velmont bag by Sunday and cleared ${x}. One customer asked if it was "the real Velmont". You said yes.`, `Pazar akşamına kadar bütün Velmont çantaları sattın, cebine ${x} girdi. Bir müşteri "hakiki Velmont mu?" diye sordu. "Hakiki" dedin.`],
+  (x) => [`The Velmont bags went fast: ${x} in a weekend. The logo on one of them was upside down. It sold first.`, `Velmont çantalar bir hafta sonunda kapış kapış gitti, ${x} kazandın. Birinin logosu ters basılmıştı; ilk o satıldı.`],
+  (x) => [`You sold Velmont bags from a folding table and made ${x}. A real Velmont shop opened across the street the next year.`, `Katlanır masada Velmont çanta sattın ve ${x} kazandın. Ertesi yıl karşı sokağa hakiki bir Velmont mağazası açıldı.`],
+  (x) => [`${x} from fake Velmont bags. A customer came back to say the strap broke, then bought two more.`, `Sahte Velmont çantalardan ${x} kazandın. Bir müşteri askısı koptu diye geri geldi, sonra iki tane daha aldı.`],
+];
+const WATCHES_OK: ((x: string) => Pair)[] = [
+  (x) => [`The Kronhaus watches sold out and you made ${x}. Most of them stopped before the buyers got home.`, `Kronhaus saatler kapış kapış gitti, ${x} kazandın. Çoğu, alıcılar eve varmadan durdu.`],
+  (x) => [`You made ${x} on Kronhaus watches. Each one came with a "lifetime guarantee", meaning your lifetime at that corner.`, `Kronhaus saatlerden ${x} kazandın. Her birinin "ömür boyu garantisi" vardı; yani senin o köşede kalacağın süre boyunca.`],
+  (x) => [`The Kronhaus watches were heavy, shiny and ticked very loudly. Buyers loved them. You made ${x}.`, `Kronhaus saatler ağır ve parlaktı, çok da yüksek sesle tıkırdıyorlardı. Alıcılar bayıldı. ${x} kazandın.`],
+];
+const TRACKSUITS_OK: ((x: string) => Pair)[] = [
+  (x) => [`Half the neighborhood now wears Runvik, spelled three different ways. You made a modest ${x}.`, `Mahallenin yarısı artık Runvik giyiyor; logosu üç farklı şekilde yazılmış. Mütevazı bir kâr: ${x}.`],
+  (x) => [`The Runvik tracksuits sold to every dad in the park. You made ${x} and got one free.`, `Runvik eşofmanları parktaki bütün babalara sattın. ${x} kazandın, bir tane de sana kaldı.`],
+  (x) => [`The local football team ordered matching Runvik tracksuits. They lost, but they looked united. You made ${x}.`, `Mahallenin futbol takımı takım hâlinde Runvik eşofman sipariş etti. Maçı kaybettiler ama birlik görüntüsü verdiler. Kazancın: ${x}.`],
+  (x) => [`Runvik tracksuits, two for one. The stripes come off in the wash, the profit does not: ${x}.`, `Runvik eşofmanlar, bir alana bir bedava. Çizgileri yıkamada çıkıyor, kâr çıkmıyor: ${x}.`],
+];
+const KNOCKOFF_PASS: Pair[] = [
+  ['You walked past. The man winked at you anyway.', 'Yanından geçip gittin. Adam yine de sana göz kırptı.'],
+  ['You walked past. The man shouted a better price after you. You kept walking.', 'Yanından geçip gittin. Adam arkandan daha iyi bir fiyat bağırdı. Yürümeye devam ettin.'],
+  ['You said no thanks and bought tomatoes instead. Legal, and very good tomatoes.', '"Sağ ol" dedin ve onun yerine domates aldın. Yasal ve çok güzel domatesler.'],
+  ['You walked past. A week later the van and the man were in the local news.', 'Yanından geçip gittin. Bir hafta sonra minibüs de adam da yerel haberlerdeydi.'],
+];
+
+const SKIM_SMALL: ((x: string) => Pair)[] = [
+  (x) => [`You moved ${x} into "miscellaneous office supplies". The office has never had so many staplers on paper.`, `"Çeşitli kırtasiye giderleri" kalemine ${x} kaydırdın. Kâğıt üzerinde şirketin hiç bu kadar zımbası olmamıştı.`],
+  (x) => [`You filed ${x} under "team-building". The team has not been built, but your savings have.`, `"Ekip ruhu etkinlikleri" kalemine ${x} yazdın. Ekip ruhu oluşmadı ama birikimin oluştu.`],
+  (x) => [`${x} went out as "printer maintenance". The printer still does not work. Nobody is surprised.`, `"Yazıcı bakımı" adı altında ${x} çıktı. Yazıcı hâlâ çalışmıyor. Kimse şaşırmadı.`],
+  (x) => [`You claimed ${x} in taxi rides you never took. You walked home every night, feeling rich and guilty.`, `Hiç binmediğin taksiler için ${x} masraf gösterdin. Her akşam eve yürüdün; hem zengin hem suçlu hissederek.`],
+];
+const SKIM_BIG: ((x: string) => Pair)[] = [
+  (x) => [`You moved ${x} through a "consulting firm" that is really just your cousin's email address.`, `Aslında kuzeninin e-posta adresinden ibaret olan bir "danışmanlık firması" üzerinden ${x} çektin.`],
+  (x) => [`You invented a supplier called "Northwind Solutions" and paid it ${x}. It has a logo. You designed it.`, `"Kuzey Rüzgârı Çözümleri" adında bir tedarikçi uydurup ona ${x} ödedin. Logosu bile var. Sen tasarladın.`],
+  (x) => [`${x} left the company as an "advance for a project in progress". The project is your new kitchen.`, `Şirketten "süren proje avansı" adıyla ${x} çıktı. Proje senin yeni mutfağın.`],
+  (x) => [`You split ${x} into forty small payments so nobody would notice. Now you have forty small heart attacks a week.`, `${x} tutarını kimse fark etmesin diye kırk küçük ödemeye böldün. Artık haftada kırk küçük kalp krizi geçiriyorsun.`],
+];
+const SKIM_NO: Pair[] = [
+  ['You closed the spreadsheet and changed the password for them. Nobody said thank you.', 'Tabloyu kapattın ve onların yerine şifreyi değiştirdin. Kimse teşekkür etmedi.'],
+  ['You closed the file and went for a walk. Temptation is easier to beat outside.', 'Dosyayı kapatıp yürüyüşe çıktın. Dışarıda günaha direnmek daha kolay.'],
+  ['You emailed IT about the password. They replied "noted" and changed nothing.', 'Şifre için bilgi işleme e-posta attın. "Not alındı" dediler ve hiçbir şeyi değiştirmediler.'],
+  ['You looked at the numbers for a long time, then went back to honest work. It pays less but sleeps better.', 'Rakamlara uzun uzun baktın, sonra dürüst işine döndün. Daha az kazandırıyor ama daha rahat uyutuyor.'],
+];
+
+const HEIST_FORGET: Pair[] = [
+  ['You erased the whiteboard. Then you burned it anyway, just in case.', 'Yazı tahtasını sildin. Sonra her ihtimale karşı yine de yaktın.'],
+  ['You looked at the plan for a long time and put the marker down. Not this year.', 'Plana uzun uzun baktın ve kalemi bıraktın. Bu yıl değil.'],
+  ['You told the crew it was off. They looked relieved, which worried you more than the plan did.', 'Ekibe işin iptal olduğunu söyledin. Rahatlamış görünüyorlardı; bu seni plandan daha çok endişelendirdi.'],
+  ['You decided to keep your freedom and your fingerprints to yourself. You took the crew out for dinner instead.', 'Özgürlüğünü ve parmak izlerini kendine saklamaya karar verdin. Onun yerine ekibi yemeğe götürdün.'],
+  ['You drew a little house on the whiteboard instead of a vault and went home to it.', 'Yazı tahtasına kasa yerine küçük bir ev çizdin ve kendi evine döndün.'],
+];
 
 const OFFICE_FIELDS = ['office', 'tech', 'public'];
 export const deskJob = (c: Ctx) => OFFICE_FIELDS.includes(c.h.job()?.field ?? '');
@@ -54,16 +156,9 @@ export const streetEvents: EventDef[] = [
             c.h.money(take);
             c.h.stat('happiness', -2);
             gotAway(c, 'burglary', take, 20);
-            return c.t(
-              `You got away with ${c.h.fmt(take)} in valuables. You jump every time a car slows down outside.`,
-              `${c.h.fmt(take)} değerinde eşyayla sıvıştın. Dışarıda bir araba yavaşladığında yerinden zıplıyorsun.`,
-            );
+            return sayWith(c, 'crime.burglary.ok', BURGLARY_OK, c.h.fmt(take));
           }
-          const i = c.rng.int(0, 2);
-          return c.t(
-            ['A neighbor walking a very alert dog saw everything. ', 'The owners came home early. They had forgotten the cake. ', 'You tripped the doorbell camera and waved at it, out of habit. '][i],
-            ['Çok uyanık bir köpeği gezdiren komşu her şeyi gördü. ', 'Ev sahipleri erken döndü. Pastayı unutmuşlar. ', 'Kapı zilinin kamerasına yakalandın ve alışkanlıktan el salladın. '][i],
-          ) + arrest(c, 'burglary');
+          return say(c, 'crime.burglary.caught', BURGLARY_CAUGHT) + arrest(c, 'burglary');
         },
         tone: 'bad',
       },
@@ -72,11 +167,7 @@ export const streetEvents: EventDef[] = [
         label: (c) => c.t('Back out', 'Vazgeç'),
         resolve: (c) => {
           c.h.stat('happiness', 2);
-          const i = c.rng.int(0, 2);
-          return c.t(
-            ['You backed out at the last second. Your friend got caught that night.', 'You backed out and went for a kebab instead. Best decision of the year.', 'You backed out. The next morning the house had three police cars outside it.'][i],
-            ['Son saniyede caydın. Arkadaşın o gece enselendi.', 'Vazgeçip onun yerine dürüm yemeye gittin. Yılın en iyi kararı.', 'Vazgeçtin. Ertesi sabah evin önünde üç polis arabası vardı.'][i],
-          );
+          return say(c, 'crime.burglary.out', BURGLARY_BACKOUT);
         },
       },
     ],
@@ -159,10 +250,7 @@ export const streetEvents: EventDef[] = [
             const take = wage(c, c.rng.int(1500, 5000));
             c.h.money(take);
             gotAway(c, 'counterfeit', take, 8);
-            return c.t(
-              `You sold every Velmont bag by Sunday and cleared ${c.h.fmt(take)}. One customer asked if it was "the real Velmont". You said yes.`,
-              `Pazar akşamına kadar bütün Velmont çantaları sattın, cebine ${c.h.fmt(take)} girdi. Bir müşteri "hakiki Velmont mu?" diye sordu. "Hakiki" dedin.`,
-            );
+            return sayWith(c, 'crime.knockoffs.bags', BAGS_OK, c.h.fmt(take));
           }
           if (c.rng.chance(0.35)) return c.t('The police raided the market on day one. ', 'Polis ilk gün pazara baskın yaptı. ') + arrest(c, 'counterfeit');
           c.h.money(-wage(c, 800));
@@ -178,10 +266,7 @@ export const streetEvents: EventDef[] = [
             const take = wage(c, c.rng.int(3000, 8000));
             c.h.money(take);
             gotAway(c, 'counterfeit', take, 12);
-            return c.t(
-              `The Kronhaus watches sold out and you made ${c.h.fmt(take)}. Most of them stopped before the buyers got home.`,
-              `Kronhaus saatler kapış kapış gitti, ${c.h.fmt(take)} kazandın. Çoğu, alıcılar eve varmadan durdu.`,
-            );
+            return sayWith(c, 'crime.knockoffs.watches', WATCHES_OK, c.h.fmt(take));
           }
           if (c.rng.chance(0.5)) return c.t('A buyer turned out to be an undercover officer with a real watch. ', 'Alıcılardan biri, kolunda hakiki saat olan sivil bir polis çıktı. ') + arrest(c, 'counterfeit');
           c.h.money(-wage(c, 1500));
@@ -197,16 +282,13 @@ export const streetEvents: EventDef[] = [
             const take = wage(c, c.rng.int(500, 1500));
             c.h.money(take);
             petty(c, 4);
-            return c.t(
-              `Half the neighborhood now wears Runvik, spelled three different ways. You made a modest ${c.h.fmt(take)}.`,
-              `Mahallenin yarısı artık Runvik giyiyor; logosu üç farklı şekilde yazılmış. Mütevazı bir kâr: ${c.h.fmt(take)}.`,
-            );
+            return sayWith(c, 'crime.knockoffs.tracksuits', TRACKSUITS_OK, c.h.fmt(take));
           }
           c.h.money(-wage(c, 200));
           return c.t('You got a fine. The officer who wrote it was wearing one of your tracksuits.', 'Para cezası yedin. Cezayı yazan memurun üstünde senin eşofmanlardan biri vardı.');
         },
       },
-      { id: 'pass', label: (c) => c.t('Walk past', 'Geç git'), resolve: (c) => c.t('You walked past. The man winked at you anyway.', 'Yanından geçip gittin. Adam yine de sana göz kırptı.') },
+      { id: 'pass', label: (c) => c.t('Walk past', 'Geç git'), resolve: (c) => say(c, 'crime.knockoffs.pass', KNOCKOFF_PASS) },
     ],
   },
   {
@@ -224,10 +306,7 @@ export const streetEvents: EventDef[] = [
           if (c.rng.chance(0.7)) {
             c.h.stat('happiness', 10);
             petty(c, 10);
-            return c.t(
-              'You did one glorious lap of the city and parked it back outside the bakery. The owner was still choosing pastries.',
-              'Şehirde muhteşem bir tur atıp arabayı fırının önüne geri bıraktın. Sahibi hâlâ poğaça seçiyordu.',
-            );
+            return sayWith(c, 'crime.car_theft.ride', JOYRIDE, inTr(c) ? 'poğaça' : 'hamur işi');
           }
           return c.t('You ran a red light grinning straight at a traffic camera. ', 'Kırmızı ışıkta trafik kamerasına sırıtarak geçtin. ') + arrest(c, 'car_theft');
         },
@@ -241,10 +320,7 @@ export const streetEvents: EventDef[] = [
             const take = wage(c, c.rng.int(4000, 12000));
             c.h.money(take);
             gotAway(c, 'car_theft', take, 25);
-            return c.t(
-              `The guy who knows a guy paid ${c.h.fmt(take)} in cash and asked no questions. Now you flinch at every sports car.`,
-              `Birilerini tanıyan adam ${c.h.fmt(take)} nakit verdi, hiç soru sormadı. Artık her spor arabada irkiliyorsun.`,
-            );
+            return sayWith(c, 'crime.car_theft.sold', CAR_SOLD, c.h.fmt(take));
           }
           return c.t('The car had a tracker. The police were waiting at the garage. ', 'Arabada takip cihazı varmış. Polis seni garajda bekliyordu. ') + arrest(c, 'car_theft');
         },
@@ -257,10 +333,7 @@ export const streetEvents: EventDef[] = [
           const tip = wage(c, c.rng.int(50, 300));
           c.h.money(tip);
           c.h.stat('happiness', 4);
-          return c.t(
-            `You lectured the owner about leaving the engine running. Out of pure embarrassment, they tipped you ${c.h.fmt(tip)}.`,
-            `Sahibine motoru çalışır bırakmanın tehlikeleri üzerine nutuk attın. Utancından eline ${c.h.fmt(tip)} sıkıştırdı.`,
-          );
+          return sayWith(c, 'crime.car_theft.guard', CAR_LECTURE, c.h.fmt(tip));
         },
         tone: 'good',
       },
@@ -276,7 +349,7 @@ export const streetEvents: EventDef[] = [
       heistChoice(0, ['The jewelry store', 'Kuyumcu']),
       heistChoice(1, ["The casino's counting room", 'Kumarhanenin sayım odası'], 'Big money'),
       heistChoice(2, ['The charity gala', 'Yardım galası']),
-      { id: 'forget', label: (c) => c.t('Forget it', 'Boş ver'), resolve: (c) => c.t('You erased the whiteboard. Then you burned it anyway, just in case.', 'Yazı tahtasını sildin. Sonra her ihtimale karşı yine de yaktın.') },
+      { id: 'forget', label: (c) => c.t('Forget it', 'Boş ver'), resolve: (c) => say(c, 'crime.heist_plan.forget', HEIST_FORGET) },
     ],
   },
   {
@@ -354,10 +427,7 @@ export const streetEvents: EventDef[] = [
           c.h.money(take);
           st.embezzled += take;
           gotAway(c, 'embezzlement', take, 8);
-          return c.t(
-            `You moved ${c.h.fmt(take)} into "miscellaneous office supplies". The office has never had so many staplers on paper.`,
-            `"Çeşitli kırtasiye giderleri" kalemine ${c.h.fmt(take)} kaydırdın. Kâğıt üzerinde şirketin hiç bu kadar zımbası olmamıştı.`,
-          );
+          return sayWith(c, 'crime.embezzle.small', SKIM_SMALL, c.h.fmt(take));
         },
       },
       {
@@ -371,10 +441,7 @@ export const streetEvents: EventDef[] = [
           st.embezzled += take;
           gotAway(c, 'embezzlement', take, 25);
           c.h.stat('happiness', -3);
-          return c.t(
-            `You moved ${c.h.fmt(take)} through a "consulting firm" that is really just your cousin's email address.`,
-            `Aslında kuzeninin e-posta adresinden ibaret olan bir "danışmanlık firması" üzerinden ${c.h.fmt(take)} çektin.`,
-          );
+          return sayWith(c, 'crime.embezzle.big', SKIM_BIG, c.h.fmt(take));
         },
         tone: 'bad',
       },
@@ -383,7 +450,7 @@ export const streetEvents: EventDef[] = [
         label: (c) => c.t('Close the spreadsheet', 'Tabloyu kapat'),
         resolve: (c) => {
           c.h.stat('happiness', 2);
-          return c.t('You closed the spreadsheet and changed the password for them. Nobody said thank you.', 'Tabloyu kapattın ve onların yerine şifreyi değiştirdin. Kimse teşekkür etmedi.');
+          return say(c, 'crime.embezzle.no', SKIM_NO);
         },
         tone: 'good',
       },
@@ -509,7 +576,7 @@ export const streetEvents: EventDef[] = [
     weight: (c) => (c.h.has('gang') || c.p.criminalRecord > 0 ? 6 : 2),
     when: free,
     title: (c) => c.t('Police! A raid on the back-room card game.', 'Polis! Arka odadaki kâğıt oyununa baskın.'),
-    text: (c) => c.t('Your friend called it "a quiet card night". It is in the back of a closed restaurant, and you only came for the free tea.', 'Arkadaşın buna "sakin bir oyun gecesi" demişti. Kapalı bir lokantanın arka odası ve sen sadece bedava çay için gelmiştin.'),
+    text: (c) => c.t('Your friend called it "a quiet card night". It is in the back of a closed restaurant, and you only came for the free tea.', 'Arkadaşın buna "sakin bir oyun gecesi" demişti. Kapalı bir lokantanın arka odası ve sen sadece bedava ikram için gelmiştin.'),
     choices: [
       {
         id: 'hide',

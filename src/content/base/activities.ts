@@ -2,8 +2,9 @@ import type { ActivityDef } from '../types';
 import type { Ctx } from '../types';
 import type { Person } from '../../engine/types';
 import { cityName, isCoastal } from '../../engine/places';
-import { MAX_HIRE_AGE, abl, acc, cap, dat, gen, kin, officeJob, single, wage, wth } from './util';
+import { MAX_HIRE_AGE, abl, acc, cap, dat, gen, kin, loc, officeJob, single, wage, wth } from './util';
 import { inPrison, say, sayWith, type Pair } from './lines';
+import { ABROAD_CITIES, aNum, isAbroad } from './events-flavour';
 import { gkAge, grandkids } from './events-elder';
 
 // Every repeatable line here must fit every age (and place) it can fire at: lines are split into
@@ -261,7 +262,7 @@ const DOC_ELDER: Pair[] = [
   ['You had your hearing checked. You heard everything, unfortunately including the part about salt.', 'Kulaklarını kontrol ettirdin. Her şeyi duydun; ne yazık ki tuzla ilgili kısmı da.'],
   ['In the waiting room you compared prescriptions with a stranger and made a friend.', 'Bekleme salonunda bir yabancıyla reçetelerinizi karşılaştırdınız ve arkadaş oldunuz.'],
   ['Your blood pressure was fine. You told the doctor it was the herbal tea. The doctor let you have that one.', 'Tansiyonun normaldi. Doktora bunun bitki çayı sayesinde olduğunu söyledin. Doktor itiraz etmedi.'],
-  ['The doctor said you have the heart of a sixty-year-old. You chose to hear "sixteen".', 'Doktor altmış yaşında birinin kalbine sahip olduğunu söyledi. Sen "on altı" diye duymayı seçtin.'],
+  ['The doctor said you have the heart of a sixty-year-old. You chose to hear "sixteen".', 'Doktor kalbinin altmışlık bir kalp gibi olduğunu söyledi. Sen "on altılık" diye duymayı seçtin.'],
   ['New glasses. You can read the menu again, and the small print on letters from the bank.', 'Yeni bir gözlük. Menüyü yeniden okuyabiliyorsun; bankadan gelen mektupların küçük harflerini de.'],
   ['The doctor told you to keep walking every day. You walked straight to the pastry shop. It counts.', 'Doktor her gün yürümeye devam etmeni söyledi. Doğruca pastaneye yürüdün. Sayılır.'],
   ['A flu jab, a pneumonia jab and a lollipop you asked for on principle.', 'Bir grip aşısı, bir zatürre aşısı ve prensip gereği istediğin bir lolipop.'],
@@ -481,6 +482,8 @@ interface KidX {
   parentEn: string; // "Mama" / "Dad"
   parentTr: string; // "Anne" / "Baba"
   g: string; // a grandchild's name (grand bucket only)
+  awayEn: string; // the city an emigrated child lives in (abroad lines only)
+  awayTr: string;
 }
 
 /** Youngest child 0–4. */
@@ -507,7 +510,7 @@ const KIDS_SCHOOL: ((x: KidX) => Pair)[] = [
   ({ n }) => [`You and ${n} baked cookies. Half the dough never made it to the oven.`, `${wth(n)} kurabiye yaptınız. Hamurun yarısı fırına hiç ulaşamadı.`],
   ({ n }) => [`${n} asked why the sky is blue. You said "science", then looked it up together.`, `${n} gökyüzünün neden mavi olduğunu sordu. "Bilim" dedin, sonra birlikte araştırdınız.`],
   ({ n }) => [`You took ${n} to the park. ${n} ended up in the fountain. You were not far behind.`, `${acc(n)} parka götürdün. ${n} kendini fıskiyeli havuzun içinde buldu. Sen de hemen arkasından.`],
-  ({ n, age }) => [`You and ${n} played football in the yard. You lost on penalties to a ${age}-year-old.`, `${wth(n)} bahçede top oynadınız. ${age} yaşında birine penaltılarla yenildin.`],
+  ({ n, age }) => [`You and ${n} played football in the yard. You lost on penalties to ${aNum(age)}-year-old.`, `${wth(n)} bahçede top oynadınız. ${age} yaşında birine penaltılarla yenildin.`],
   ({ n }) => [`You and ${n} made a volcano for the science fair. It erupted early, on the bus.`, `${wth(n)} bilim fuarı için yanardağ yaptınız. Erken patladı, otobüste.`],
   ({ n, coastal }) =>
     coastal
@@ -561,7 +564,29 @@ const KIDS_GRAND: ((x: KidX) => Pair)[] = [
   ({ n, g }) => [`You bought ice cream for ${n} and ${g}. ${n} still orders the same flavor as at six.`, `${wth(n)} ${dat(g)} dondurma ısmarladın. ${n} hâlâ altı yaşındaki gibi aynı çeşidi söylüyor.`],
 ];
 
+/** A grown child who lives abroad (base.child_abroad): calls, parcels and flights, never "came over". */
+const KIDS_ABROAD: ((x: KidX) => Pair)[] = [
+  ({ n, awayEn, awayTr }) => [`A video call with ${n} in ${awayEn}. It was breakfast there and midnight here. You both ate something.`, `${loc(awayTr)} yaşayan ${wth(n)} görüntülü konuştunuz. Orada kahvaltı, burada gece yarısıydı. İkiniz de bir şeyler atıştırdınız.`],
+  ({ n }) => [`${n} gave you a video tour of the new flat. You mostly saw the ceiling.`, `${n} yeni evini görüntülü gezdirdi. Sen çoğunlukla tavanı gördün.`],
+  ({ n }) => [`You posted ${n} a parcel of home food. Customs opened it. Customs kept the jam.`, `${dat(n)} koli koli ev yemeği yolladın. Gümrük açtı. Reçeli gümrük aldı.`],
+  ({ n, awayEn, awayTr }) => [`You flew to ${awayEn} to see ${n}. You got lost twice and loved every minute.`, `${acc(n)} görmek için ${dat(awayTr)} uçtun. İki kez kayboldun ve her dakikasına bayıldın.`],
+  ({ n }) => [`${n} called to ask how you make your soup. You talked for an hour, mostly not about soup.`, `${n} çorbanın tarifini sormak için aradı. Bir saat konuştunuz; çoğu çorba hakkında değildi.`],
+  ({ n }) => [`You learned three words of the language where ${n} lives and used all three on the phone. ${n} cried laughing.`, `${gen(n)} yaşadığı ülkenin dilinden üç kelime öğrendin ve telefonda üçünü de kullandın. ${n} gülmekten ağladı.`],
+  ({ n }) => [`${n} sent a photo of a local dish that "tastes almost like yours". It did not look like yours at all.`, `${n} "neredeyse seninki gibi" olan yerel bir yemeğin fotoğrafını attı. Hiç de seninkine benzemiyordu.`],
+  ({ n }) => [`You and ${n} watched the same film at the same time in two different countries and texted the whole way through.`, `${wth(n)} aynı filmi aynı anda, iki ayrı ülkede izlediniz ve baştan sona mesajlaştınız.`],
+];
+/** A grown child abroad with a grandchild aged 3–14. */
+const KIDS_ABROAD_GRAND: ((x: KidX) => Pair)[] = [
+  ({ n, g }) => [`${g} held the phone so close on the video call from ${n}'s that you mostly saw a nostril. Best call of the year.`, `${n} aradığında ${g} telefonu o kadar yakın tuttu ki çoğunlukla bir burun deliği gördün. Yılın en güzel görüşmesi.`],
+  ({ g }) => [`You read ${g} a bedtime story over a video call. ${g} fell asleep; you kept reading.`, `${dat(g)} görüntülü aramada uyku masalı okudun. ${g} uyudu; sen okumaya devam ettin.`],
+  ({ n, g }) => [`${n} brought ${g} home for the summer. ${g} now speaks to you in two languages and argues in both.`, `${n} yazın ${acc(g)} buraya getirdi. ${g} artık seninle iki dilde konuşuyor, iki dilde de itiraz ediyor.`],
+  ({ g }) => [`${g} sent a drawing of you by post. You are very tall and next to an aeroplane.`, `${g} postayla senin resmini yolladı. Çok uzunsun ve bir uçağın yanındasın.`],
+];
+
 // ------------------------------------------------------------------ work, lottery, baby
+
+/** Flag (year) of the last promotion earned by working extra hard. */
+const WORK_HARD_PROMO = 'work_hard_promo';
 
 const WORK_OFFICE: Pair[] = [
   ['You stayed late every night this month. Your boss nodded at you once.', 'Bu ay her gece mesaiye kaldın. Patronun sana bir kere başıyla selam verdi.'],
@@ -1018,7 +1043,11 @@ export const baseActivities: ActivityDef[] = [
       // whose turn: the grandchild's parent in the grand bucket, otherwise rotate by year (no rng)
       const gkParent = bucket === 'grand' ? pool.find((k) => grandkids(c).some((x) => x.n === g && x.p === k.person.id)) : undefined;
       const child = (gkParent ?? pool[c.s.year % pool.length]).person;
+      const away = isAbroad(c, child.id);
+      const awayIdx = (c.p.ext?.abroad as Record<string, number> | undefined)?.[child.id] ?? 0;
       const x: KidX = {
+        awayEn: (ABROAD_CITIES[awayIdx] ?? ABROAD_CITIES[0])[0],
+        awayTr: (ABROAD_CITIES[awayIdx] ?? ABROAD_CITIES[0])[1],
         n: child.firstName,
         his: c.h.his(child),
         he: c.h.he(child),
@@ -1028,6 +1057,8 @@ export const baseActivities: ActivityDef[] = [
         parentTr: c.p.gender === 'female' ? 'Anne' : 'Baba',
         g,
       };
+      // an emigrated child calls, sends parcels and flies home in summer; still one rng call
+      if (away) return bucket === 'grand' ? sayWith(c, 'kids.abroad.grand', KIDS_ABROAD_GRAND, x) : sayWith(c, 'kids.abroad', KIDS_ABROAD, x);
       return sayWith(c, `kids.${bucket}`, KID_LINES[bucket], x);
     },
   },
@@ -1052,7 +1083,11 @@ export const baseActivities: ActivityDef[] = [
     available: (c) => !!c.p.jobId,
     run: (c) => {
       c.h.stat('health', -2);
-      if (c.rng.chance(0.2 + c.p.stats.smarts / 400) && c.h.promote()) {
+      // hard work earns at most one promotion every four years, and only after two years in the job
+      const last = c.p.flags[WORK_HARD_PROMO];
+      const ready = c.p.jobYears >= 2 && (last === undefined || c.s.year - last >= 4);
+      if (c.rng.chance(0.12 + c.p.stats.smarts / 600) && ready && c.h.promote()) {
+        c.h.flag(WORK_HARD_PROMO);
         c.h.stat('happiness', 6);
         return c.t(
           `Your hard work paid off. You were promoted to ${c.h.jobTitle()}!`,
@@ -1069,7 +1104,8 @@ export const baseActivities: ActivityDef[] = [
     group: 'Career',
     minAge: 18,
     maxAge: 45,
-    available: (c) => c.p.education === 'highschool' && c.p.school === null && c.p.jailYears === 0,
+    // a professional footballer trains full time: no full-time degree alongside it
+    available: (c) => c.p.education === 'highschool' && c.p.school === null && c.p.jailYears === 0 && c.p.jobId !== 'athlete',
     run: (c) => {
       c.p.school = 'university';
       c.p.schoolYears = 0;

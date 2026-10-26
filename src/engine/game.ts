@@ -8,9 +8,10 @@ import { abl, acc, dat, gen, loc } from '../i18n/tr-grammar';
 import { furniture, hasGarden } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
-import { HOME_GROWTH, safetyNet, yearBudget } from './economy';
+import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, inheritanceTax, safetyNet, yearBudget } from './economy';
 import { cityName } from './places';
 import { ensureGrandkids, type Grandkid } from '../content/base/events-elder';
+import { say, type Pair } from '../content/base/lines';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
 
 export const START_YEAR = 2026;
@@ -26,6 +27,106 @@ export interface NewLifeOptions {
   /** Built-in test scenario with a preset family history. */
   scenario?: 'sano';
 }
+
+/** What a founding heirloom story needs to know about the great-grandparent who started it. */
+interface FounderInfo {
+  name: string;
+  year: number;
+  /** "Your great-grandfather" / "Büyük deden". */
+  who: string;
+  whoTr: string;
+  she: string;
+  her: string;
+  city: string;
+  cityTr: string;
+}
+
+interface FounderStory {
+  /** Range of years the story can be set in. */
+  years: [number, number];
+  en: (f: FounderInfo) => string;
+  tr: (f: FounderInfo) => string;
+}
+
+/**
+ * How the first heirloom came into the family, per type (playtest 2: "an unexplained name with a one-size story").
+ * Years are written as "1958 yılında", never with a suffix after the digits.
+ */
+const FOUNDER_STORIES: Record<'clock' | 'ring' | 'quilt' | 'recipes', FounderStory[]> = {
+  clock: [
+    {
+      years: [1958, 1976],
+      en: (f) => `${f.who} ${f.name} bought it in ${f.year} with ${f.her} first wage and wound it every morning for fifty years.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} yılında ilk maaşıyla almış ve elli yıl boyunca her sabah kurmuş.`,
+    },
+    {
+      years: [1955, 1972],
+      en: (f) => `${f.who} ${f.name} won it at a card table in ${f.city} in ${f.year}, and never played cards again.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} yılında ${loc(f.cityTr)} bir iskambil masasında kazanmış ve bir daha eline kâğıt almamış.`,
+    },
+    {
+      years: [1960, 1978],
+      en: (f) => `${f.who} ${f.name} got it as a wedding present in ${f.year}. It has run five minutes fast ever since, and nobody dares to fix it.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} yılında düğün hediyesi olarak almış. O günden beri beş dakika ileri gidiyor; ayarlamaya kimse cesaret edemiyor.`,
+    },
+    {
+      years: [1956, 1975],
+      en: (f) => `In the hard winter of ${f.year}, when there was nothing left to sell, ${f.who.toLowerCase()} ${f.name} still refused to sell it.`,
+      tr: (f) => `${f.year} yılının o zor kışında, satacak başka hiçbir şey kalmadığında bile ${f.whoTr.toLocaleLowerCase('tr')} ${f.name} onu satmamış.`,
+    },
+  ],
+  ring: [
+    {
+      years: [1960, 1978],
+      en: (f) => `${f.who} ${f.name} wore it at the wedding in ${f.year}. The stone is small; the story is not.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} yılındaki düğününde takmış. Taşı küçük ama hikâyesi büyük.`,
+    },
+    {
+      years: [1958, 1976],
+      en: (f) => `${f.who} ${f.name} saved for a whole year to buy it, coin by coin, and finally did in ${f.year}.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu almak için koca bir yıl kuruş kuruş biriktirmiş ve sonunda ${f.year} yılında almış.`,
+    },
+    {
+      years: [1960, 1978],
+      en: (f) => `${f.who} ${f.name} found it at a market stall in ${f.city} in ${f.year} and swore it had chosen ${f.her === 'her' ? 'her' : 'him'}.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} yılında ${loc(f.cityTr)} bir pazar tezgâhında bulmuş ve yüzüğün kendisini seçtiğine yemin edermiş.`,
+    },
+  ],
+  quilt: [
+    {
+      years: [1956, 1975],
+      en: (f) => `${f.who} ${f.name} stitched it by lamplight in the winter of ${f.year}, one square for every member of the family.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} kışında lamba ışığında dikmiş; ailedeki herkes için bir parça.`,
+    },
+    {
+      years: [1958, 1978],
+      en: (f) => `${f.who} ${f.name} sewed it in ${f.year} from old dresses and a wedding shirt. Every patch has a name.`,
+      tr: (f) => `${f.whoTr} ${f.name} onu ${f.year} yılında eski elbiselerden ve bir düğün gömleğinden dikmiş. Her yamanın bir adı var.`,
+    },
+    {
+      years: [1960, 1978],
+      en: (f) => `In ${f.year}, ${f.who.toLowerCase()} ${f.name} carried it all the way to ${f.city} on moving day. It was the first thing unpacked.`,
+      tr: (f) => `${f.whoTr} ${f.name} ${f.year} yılında ${dat(f.cityTr)} taşınırken onu kucağında getirmiş. Yeni evde ilk açılan bohça o olmuş.`,
+    },
+  ],
+  recipes: [
+    {
+      years: [1956, 1975],
+      en: (f) => `${f.who} ${f.name} started it in ${f.year} with a soup recipe and one warning in the margin: "Salt by eye, but have a good eye."`,
+      tr: (f) => `${f.whoTr} ${f.name} deftere ${f.year} yılında bir çorba tarifiyle başlamış. Kenarda hâlâ o not duruyor: "Tuzu göz kararı koy, ama gözün iyi olsun."`,
+    },
+    {
+      years: [1960, 1978],
+      en: (f) => `${f.who} ${f.name} began writing down every dish cooked in ${f.city} in ${f.year}, plus a few that were only rumours.`,
+      tr: (f) => `${f.whoTr} ${f.name}, ${f.year} yılında ${loc(f.cityTr)} ne pişiyorsa bu deftere yazmaya başlamış; birkaç da kulaktan dolma efsaneyi.`,
+    },
+    {
+      years: [1955, 1972],
+      en: (f) => `${f.who} ${f.name} wrote the first page in ${f.year}. Every kitchen since has left a stain on it.`,
+      tr: (f) => `${f.whoTr} ${f.name} ilk sayfayı ${f.year} yılında yazmış. O günden beri her mutfak deftere bir leke bırakmış.`,
+    },
+  ],
+};
 
 /** "Türkiye'de", "Almanya'da", but "Amerika Birleşik Devletleri'nde" (a compound name already ends in a possessive). */
 const countryLocTr = (name: string) => (/Devletleri$/.test(name) ? `${name}'nde` : loc(name));
@@ -135,15 +236,33 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
     s.dynasty.heirlooms.forEach((x) => (x.sinceYear = x.defId === 'ring' ? 1964 : 1961));
     h.log(c.t("The family's treasures, Grandpa Mehmet's pocket watch and Grandma Ayşe's ring, are waiting for you.", "Ailenin hazineleri, Mehmet Dede'nin cep saati ve Ayşe Nine'nin yüzüğü, seni bekliyor."));
   } else {
-    // a name nobody in the family has yet (same rng calls as a plain pick)
-    const names = freshFirstNames(s, rng.chance(0.5) ? 'female' : 'male');
+    // the founder: a great-grandparent with a name nobody in the family has yet (same rng calls as a plain pick)
+    const female = rng.chance(0.5);
+    const names = freshFirstNames(s, female ? 'female' : 'male');
     const grand = rng.pick(names);
     const defId = rng.pick(['clock', 'ring', 'quilt', 'recipes'] as const);
     const label = { clock: 'pocket watch', ring: 'ring', quilt: 'quilt', recipes: 'recipe book' }[defId];
     const labelTr = { clock: 'cep saati', ring: 'yüzüğü', quilt: 'yorganı', recipes: 'tarif defteri' }[defId];
-    const item = c.t(`${grand}'s ${label}`, `${gen(grand)} ${labelTr}`);
-    h.addHeirloom(defId, item, c.t(`${grand} kept it safe for decades before you were born.`, `${grand}, sen doğmadan önce onu yıllarca özenle sakladı.`));
-    h.log(c.t(`The family's oldest treasure, ${item}, is waiting for you.`, `Ailenin en eski hazinesi, ${item}, seni bekliyor.`));
+    const title = female ? { en: 'Great-grandma', tr: 'Nine' } : { en: 'Great-grandpa', tr: 'Dede' };
+    const item = c.t(`${title.en} ${grand}'s ${label}`, `${gen(`${grand} ${title.tr}`)} ${labelTr}`);
+    const stories = FOUNDER_STORIES[defId];
+    const story = stories[rng.int(0, stories.length - 1)];
+    const year = rng.int(story.years[0], story.years[1]);
+    const city = rng.pick(country.cities);
+    const f: FounderInfo = {
+      name: grand,
+      year,
+      who: female ? 'Your great-grandmother' : 'Your great-grandfather',
+      whoTr: female ? 'Büyük ninen' : 'Büyük deden',
+      she: female ? 'she' : 'he',
+      her: female ? 'her' : 'his',
+      city,
+      cityTr: cityName(city, 'tr'),
+    };
+    const line = c.t(story.en(f), story.tr(f));
+    h.addHeirloom(defId, item, line);
+    s.dynasty.heirlooms[s.dynasty.heirlooms.length - 1].sinceYear = year;
+    h.log(c.t(`The family's oldest treasure is waiting for you: ${item}. ${line}`, `Ailenin en eski hazinesi seni bekliyor: ${item}. ${line}`));
   }
   assignGoals(s, rng);
   return s;
@@ -188,6 +307,18 @@ function deathCause(c: Ctx): string {
   return rng.pick(['a heart attack', 'cancer', 'a stroke', 'a car accident']);
 }
 
+/** Leaving prison (playtest 2: one line, 106 times in 202 lives). */
+const RELEASE_LINES: Pair[] = [
+  ['You were released from prison. The air outside smells different.', 'Cezaevinden çıktın. Dışarının havası bambaşka kokuyor.'],
+  ['The gate closed behind you. For once, you were on the right side of it.', 'Kapı arkandan kapandı. Bu sefer doğru taraftaydın.'],
+  ['You walked out with a plastic bag of belongings and a phone that no longer turns on.', 'Elinde bir naylon poşet eşya ve artık açılmayan bir telefonla dışarı çıktın.'],
+  ['Free at last. The first thing you did was order something you could choose yourself.', 'Sonunda özgürsün. İlk iş, kendi seçtiğin bir yemeği sipariş ettin.'],
+  ['You walked out on the last day of your sentence. The guards seemed almost sorry to see you go.', 'Cezanın son günü kapıdan çıktın. Gardiyanlar gidişine neredeyse üzüldü.'],
+  ['Release day. Nobody was waiting outside, so you took the bus and watched every stop.', 'Tahliye günü. Kapıda bekleyen yoktu; otobüse binip her durağı tek tek izledin.'],
+  ['You stepped outside and squinted. The sky is much bigger than the yard.', 'Dışarı adım atıp gözlerini kıstın. Gökyüzü havalandırmadan çok daha büyükmüş.'],
+  ['Your sentence is over. Prices have gone up and your shoes are out of fashion.', 'Cezan bitti. Fiyatlar artmış, ayakkabıların da modası geçmiş.'],
+];
+
 function yearlyTick(c: Ctx): string | null {
   const { p, h, rng, s, age } = c;
   const country = getCountry(p.countryId);
@@ -211,7 +342,7 @@ function yearlyTick(c: Ctx): string | null {
   if (p.jailYears > 0) {
     p.jailYears--;
     h.stat('happiness', -6);
-    if (p.jailYears === 0) h.log(c.t('You were released from prison. The air outside smells different.', 'Cezaevinden çıktın. Dışarının havası bambaşka kokuyor.'), 'big');
+    if (p.jailYears === 0) h.log(say(c, 'engine.release', RELEASE_LINES), 'big');
   }
 
   // --- school
@@ -272,6 +403,18 @@ function yearlyTick(c: Ctx): string | null {
     h.money(salary * 0.75); // a teenager's wages, no bills yet
   }
   if (age === 65 && job && !p.retired) scheduled = scheduled ?? 'base.retirement';
+  if (p.money >= 0 && h.has('debt_plan')) h.unflag('debt_plan');
+
+  // --- nudges the engine opens as scheduled events (at most one scheduled event a year)
+  if (!scheduled && age >= 23 && p.jailYears === 0 && p.money < 0) {
+    // debt the home's value does not cover, past about a year and a half of living costs: the bank writes
+    const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
+    const last = p.eventLastAge['base.debt_letter'];
+    if (unsecured > 1.5 * country.costOfLiving && (last === undefined || age - last >= 5)) scheduled = 'base.debt_letter';
+  }
+  if (!scheduled && age >= 35 && age <= 45 && p.jailYears === 0 && !p.relations.some((r) => r.kind === 'child') && p.eventLastAge['base.family_name'] === undefined && rng.chance(0.2)) {
+    scheduled = 'base.family_name'; // once per life, for a player without children
+  }
 
   // --- expansion yearly hooks
   for (const pack of enabledPacks(s.enabledPacks)) pack.onYear?.(c);
@@ -283,9 +426,22 @@ function yearlyTick(c: Ctx): string | null {
     const pa = ageOf(s, person);
     if (rel.kind !== 'child') rel.closeness = clamp(rel.closeness - rng.int(0, 2) + (h.hasHeirloom('recipes') ? 1 : 0));
     if (rel.kind === 'child' && pa >= 24 && pa <= 42 && rng.chance(0.07)) {
+      // "You're a grandparent!" only for the first grandchild; later ones are "another" (playtest 2)
+      const firstGrandkid = ensureGrandkids(c).length === 0;
+      const again = (person.kids ?? 0) > 0;
       addGrandchild(c, person);
-      h.log(c.t(`Your ${person.gender === 'female' ? 'daughter' : 'son'} ${person.firstName} had a baby. You're a grandparent!`, `${person.gender === 'female' ? 'Kızın' : 'Oğlun'} ${gen(person.firstName)} bebeği oldu. Artık ${p.gender === 'female' ? (person.gender === 'female' ? 'anneanne' : 'babaanne') : 'dede'} oldun!`), 'good');
-      h.stat('happiness', 5);
+      const dEn = person.gender === 'female' ? 'daughter' : 'son';
+      const dTr = person.gender === 'female' ? 'Kızın' : 'Oğlun';
+      const n = person.firstName;
+      h.log(
+        firstGrandkid
+          ? c.t(`Your ${dEn} ${n} had a baby. You're a grandparent!`, `${dTr} ${gen(n)} bebeği oldu. Artık ${p.gender === 'female' ? (person.gender === 'female' ? 'anneanne' : 'babaanne') : 'dede'} oldun!`)
+          : again
+            ? c.t(`Your ${dEn} ${n} had another baby. One more grandchild!`, `${dTr} ${gen(n)} bir bebeği daha oldu. Bir torunun daha var!`)
+            : c.t(`Your ${dEn} ${n} had ${person.gender === 'female' ? 'her' : 'his'} first baby. Another grandchild for you!`, `${dTr} ${gen(n)} ilk bebeği oldu. Bir torunun daha var!`),
+        'good',
+      );
+      h.stat('happiness', firstGrandkid ? 5 : 3);
     }
     if (rng.chance(annualMortality(pa, person.stats.health, country.mortalityShift))) {
       person.deathYear = s.year;
@@ -293,15 +449,25 @@ function yearlyTick(c: Ctx): string | null {
       const record = s.dynasty.lives.find((l) => l.personId === person.id && l.handedOver && l.diedYear === undefined);
       if (record) record.diedYear = s.year;
       const f = person.gender === 'female';
-      const label = { mother: 'mother', father: 'father', sibling: f ? 'sister' : 'brother', spouse: f ? 'wife' : 'husband', partner: 'partner', ex: 'ex', child: f ? 'daughter' : 'son', friend: 'friend', grandparent: f ? 'grandmother' : 'grandfather' }[rel.kind];
+      const label = rel.step
+        ? f ? 'stepmother' : 'stepfather'
+        : { mother: 'mother', father: 'father', sibling: f ? 'sister' : 'brother', spouse: f ? 'wife' : 'husband', partner: 'partner', ex: 'ex', child: f ? 'daughter' : 'son', friend: 'friend', grandparent: f ? 'grandmother' : 'grandfather' }[rel.kind];
       if (rel.kind === 'ex' || rel.kind === 'friend') continue;
-      const labelTr = { mother: 'Annen', father: 'Baban', sibling: person.birthYear < p.birthYear ? (f ? 'Ablan' : 'Ağabeyin') : f ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: f ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: f ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın', grandparent: f ? 'Büyükannen' : 'Deden' }[rel.kind];
+      const labelTr = rel.step
+        ? f ? 'Üvey annen' : 'Üvey baban'
+        : { mother: 'Annen', father: 'Baban', sibling: person.birthYear < p.birthYear ? (f ? 'Ablan' : 'Ağabeyin') : f ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: f ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: f ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın', grandparent: f ? 'Büyükannen' : 'Deden' }[rel.kind];
       h.log(c.t(`Your ${label} ${person.firstName} passed away at ${pa}.`, `${labelTr} ${person.firstName}, ${pa} yaşında hayata gözlerini yumdu.`), 'bad');
       h.stat('happiness', -Math.round(rel.closeness / 6));
-      const parentLike = rel.kind === 'mother' || rel.kind === 'father' || rel.kind === 'grandparent';
+      const parentLike = (rel.kind === 'mother' || rel.kind === 'father' || rel.kind === 'grandparent') && !rel.step;
       const lucky = parentLike && rng.chance(0.6);
-      // a parent who handed the family over left their savings to you; other parents leave a little at random
-      const inheritance = person.estate !== undefined ? Math.max(0, Math.round(person.estate)) : lucky && rel.kind !== 'grandparent' ? Math.round(rng.int(2000, 40000) * country.wageFactor) : 0;
+      // a parent who handed the family over left you your share of what they kept: spent down by the years
+      // of retirement since, then taxed; other parents leave a little at random
+      let inheritance = 0;
+      if (person.estate !== undefined) {
+        const years = record ? s.year - record.deathYear : 0;
+        const left = Math.max(0, person.estate) * Math.max(ESTATE_FLOOR, 1 - ESTATE_DRAWDOWN * years);
+        inheritance = Math.round(left - inheritanceTax(left, country.wageFactor));
+      } else if (lucky && rel.kind !== 'grandparent') inheritance = Math.round(rng.int(2000, 40000) * country.wageFactor);
       person.estate = undefined;
       if (inheritance > 0) {
         h.money(inheritance);
@@ -356,6 +522,10 @@ export function syncGrandkids(c: Ctx): void {
     if (g.id && s.people[g.id]) continue;
     const parent = s.people[g.p];
     if (!parent) continue;
+    // a name honouring a grandparent is a family tradition (base.elder_grandbaby), but two living brothers or
+    // sisters never share one: pick the first fresh name instead (no RNG, so the call count stays the same)
+    const sibs = new Set((parent.childIds ?? []).map((id) => s.people[id]).filter((q) => q && q.deathYear === undefined).map((q) => q!.firstName));
+    if (sibs.has(g.n)) g.n = freshFirstNames(s, g.g).find((n) => !sibs.has(n)) ?? g.n;
     const rec = newRecord(c, { firstName: g.n, lastName: parent.lastName, gender: g.g, birthYear: Math.min(g.by, s.year) });
     g.id = rec.id;
     parent.childIds = [...(parent.childIds ?? []), rec.id];
@@ -555,8 +725,18 @@ export function furniturePrice(s: GameState, id: string): number {
 
 // ---------------------------------------------------------------- end of life & generations
 
+/** Last words about a heirloom, used only when the family owns one of that type (playtest 2: "Wind the clock" without a clock). */
+const HEIRLOOM_WORDS: Record<string, [string, string]> = {
+  clock: ['Wind the clock, {heir}.', 'Saati kurmayı unutma, {heir}.'],
+  ring: ['Give the ring to someone who makes you laugh, {heir}.', 'Yüzüğü seni güldüren birine tak, {heir}.'],
+  piano: ['Keep the piano tuned, {heir}. Play it badly, but often.', 'Piyanonun akordunu bozma, {heir}. Kötü çal ama sık çal.'],
+  quilt: ['Use the quilt, {heir}. It was made for cold nights, not for cupboards.', 'Yorganı dolapta saklama, {heir}. O soğuk geceler için dikildi.'],
+  recipes: ['Page twelve of the recipe book, {heir}. Use less salt than it says.', 'Tarif defterinin on ikinci sayfası, {heir}. Yazandan az tuz koy.'],
+  trophy: ['Polish the trophy, {heir}. And tell them I was fast.', 'Kupayı parlat, {heir}. Bir de herkese ne kadar hızlı olduğumu anlat.'],
+  painting: ['Never sell the painting, {heir}. Unless you really must.', 'Tabloyu satma, {heir}. Gerçekten mecbur kalmadıkça.'],
+};
+
 const FINAL_WORDS: [string, string][] = [
-  ['Wind the clock, {heir}.', 'Saati kurmayı unutma, {heir}.'],
   ["Don't fight over the furniture.", 'Eşyalar için kavga etmeyin.'],
   ['I regret nothing. Well, almost nothing.', 'Hiçbir şeyden pişman değilim. Yani, neredeyse hiçbir şeyden.'],
   ['Look after each other.', 'Birbirinize iyi bakın.'],
@@ -662,7 +842,10 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
     : p.education === 'university'
       ? c.t('University graduate', 'Üniversite mezunu')
       : c.t('No career', 'Kariyeri yok');
-  const words = handover ? HANDOVER_WORDS : heir ? FINAL_WORDS : FINAL_WORDS.slice(1);
+  // heirloom words only for the types the family really owns, and only with someone to say them to
+  const owned = [...new Set(s.dynasty.heirlooms.map((x) => x.defId))].filter((id) => HEIRLOOM_WORDS[id]);
+  const aboutHeirloom = c.rng.chance(0.35) && !handover && !!heir && owned.length > 0;
+  const words = handover ? HANDOVER_WORDS : aboutHeirloom ? owned.map((id) => HEIRLOOM_WORDS[id]) : FINAL_WORDS;
   const picked = c.rng.pick(words);
   const finalWords = c.t(picked[0], picked[1]).replace('{heir}', heir?.firstName ?? '');
   const record: LifeRecord = {
@@ -755,11 +938,21 @@ export function continueAsChild(s: GameState, heirId: string): void {
   const kids = livingChildren(s);
   const age = ageOf(s, child);
   const savings = Math.max(0, prev.money);
-  // at death 80% of the savings is split between the children (the home and any business pass separately);
-  // a hand-over gives the heir half now, and the rest stays with the parent until they die
-  const share = handedOver ? savings * 0.5 : (savings * 0.8) / Math.max(1, kids.length);
+  const wageFactor = getCountry(prev.countryId).wageFactor;
+  // the estate is split between all living children; the heir also gets the home (and any business, through
+  // the packs). At death the cash pays inheritance tax first. A hand-over gives each child their share of half
+  // the savings now (taxed as a gift); the parent keeps the rest, spends some of it in retirement, and leaves it
+  // at their death.
+  // The home counts towards the heir's part: with brothers and sisters, the heir gets the home and only the cash
+  // beyond it (playtest 2: an inherited home made every generation richer than the last).
+  const splitWays = Math.max(1, kids.length);
+  const handed = handedOver ? savings * HANDOVER_GIFT : savings;
+  const tax = inheritanceTax(handed, wageFactor);
+  const homeValue = prev.home.owned ? Math.max(0, prev.home.value) : 0;
+  const share = splitWays > 1 ? Math.max(0, (handed - tax + homeValue) / splitWays - homeValue) : handed - tax;
+  const homeTookShare = splitWays > 1 && homeValue > 0;
   const prevPerson = s.people[prev.id];
-  if (handedOver && prevPerson) prevPerson.estate = Math.round(savings - share);
+  if (handedOver && prevPerson) prevPerson.estate = Math.round((savings * (1 - HANDOVER_GIFT)) / splitWays);
 
   const { childIds: ownKids = [], kids: kidCount = 0 } = child;
   const np = makePlayer({ ...child }, prev.countryId, prev.city);
@@ -789,7 +982,15 @@ export function continueAsChild(s: GameState, heirId: string): void {
   const op = other ? s.people[other.personId] : undefined;
   if (opt.kind === 'child') {
     np.relations.push({ personId: prev.id, kind: prevAsParent, closeness: 80, sinceYear: child.birthYear });
-    if (op) np.relations.push({ personId: op.id, kind: op.gender === 'female' ? 'mother' : 'father', closeness: 75, sinceYear: child.birthYear });
+    // the other biological parent stays the heir's mother or father (alive, divorced or dead); a later spouse of the
+    // old player is a step-parent (playtest 2: the stepmother became "annen" and the real mother vanished).
+    // Older saves did not record the other parent: the current partner counts as the parent, as before.
+    const bio = child.coParentId ? s.people[child.coParentId] : op;
+    if (bio && bio.id !== prev.id) np.relations.push({ personId: bio.id, kind: bio.gender === 'female' ? 'mother' : 'father', closeness: bio.deathYear === undefined ? 75 : 60, sinceYear: child.birthYear });
+    const current = prev.relations.find((r) => (r.kind === 'spouse' || r.kind === 'partner') && s.people[r.personId] && s.people[r.personId].deathYear === undefined);
+    const step = current ? s.people[current.personId] : undefined;
+    if (step && step.id !== bio?.id && step.id !== prev.id)
+      np.relations.push({ personId: step.id, kind: step.gender === 'female' ? 'mother' : 'father', closeness: 55, sinceYear: Math.max(child.birthYear, current!.sinceYear), step: true });
     for (const k of kids) if (k.id !== child.id) np.relations.push({ personId: k.id, kind: 'sibling', closeness: rng.int(40, 85), sinceYear: k.birthYear });
   } else {
     const parent = opt.parent!;
@@ -813,7 +1014,15 @@ export function continueAsChild(s: GameState, heirId: string): void {
     c2.h.addRelation(c2.h.newPerson({ age: rng.int(0, Math.max(0, age - 22)), lastName: child.lastName }), 'child', rng.int(60, 95));
   }
   if (age >= 26 && rng.chance(0.6)) {
-    c2.h.addRelation(c2.h.newPerson({ gender: child.gender === 'female' ? 'male' : 'female', age: age + rng.int(-4, 4) }), 'spouse', rng.int(55, 90));
+    const spouse = c2.h.newPerson({ gender: child.gender === 'female' ? 'male' : 'female', age: age + rng.int(-4, 4) });
+    c2.h.addRelation(spouse, 'spouse', rng.int(55, 90));
+    // married years ago, not this morning: a wedding in their twenties, before the eldest child (playtest 2:
+    // a 40-year-old celebrating a "1st anniversary")
+    const rel = np.relations[np.relations.length - 1];
+    const eldest = Math.min(s.year, ...np.relations.filter((r) => r.kind === 'child').map((r) => s.people[r.personId]?.birthYear ?? s.year));
+    const wedding = Math.min(child.birthYear + rng.int(23, 30), eldest - 1, s.year - 1);
+    rel.sinceYear = Math.max(child.birthYear + 18, wedding);
+    for (const r of np.relations) if (r.kind === 'child' && s.people[r.personId] && !s.people[r.personId].coParentId) s.people[r.personId].coParentId = spouse.id;
   }
   for (const pack of enabledPacks(s.enabledPacks)) {
     const line = pack.onInherit?.(prev, np, s);
@@ -851,7 +1060,19 @@ export function continueAsChild(s: GameState, heirId: string): void {
       ),
       'big',
     );
-    if (np.money > 0) c2.h.log(c2.t(`${prev.firstName} gave you half of the family savings: ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını sana verdi: ${c2.h.fmt(np.money)}.`));
+    if (homeTookShare)
+      c2.h.log(
+        np.money > 0
+          ? c2.t(`${prev.firstName} shared out half of the family savings. You got the family home and ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını paylaştırdı. Sana aile evi ve ${c2.h.fmt(np.money)} düştü.`)
+          : c2.t(`${prev.firstName} shared out half of the family savings between your brothers and sisters. The family home is yours.`, `${prev.firstName} aile birikiminin yarısını kardeşlerine paylaştırdı. Aile evi sana kaldı.`),
+      );
+    else if (np.money > 0)
+      c2.h.log(
+        splitWays > 1
+          ? c2.t(`${prev.firstName} shared out half of the family savings between the children. Your part: ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını çocuklar arasında paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
+          : c2.t(`${prev.firstName} gave you half of the family savings: ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını sana verdi: ${c2.h.fmt(np.money)}.`),
+      );
+    if (tax > 0) c2.h.log(c2.t(`The tax office took its cut of the gift: ${c2.h.fmt(tax)}.`, `Vergi dairesi bu bağıştan payını aldı: ${c2.h.fmt(tax)} intikal vergisi.`));
     if (s.dynasty.heirlooms.length) c2.h.log(c2.t('The family heirlooms are yours to keep now.', 'Aile yadigârları artık sende.'));
   } else {
     c2.h.log(
@@ -861,8 +1082,32 @@ export function continueAsChild(s: GameState, heirId: string): void {
       ),
       'big',
     );
+    if (tax > 0 || splitWays > 1) {
+      const t = c2.h.fmt(tax);
+      c2.h.log(
+        tax > 0 && splitWays > 1
+          ? c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${splitWays} children.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${splitWays} kardeş arasında bölündü.`)
+          : tax > 0
+            ? c2.t(`The estate was settled. The tax office took ${t} in inheritance tax.`, `Miras işlemleri bitti. Vergi dairesi ${t} veraset vergisi aldı.`)
+            : c2.t(`The savings were split between ${splitWays} children.`, `Birikim ${splitWays} kardeş arasında bölündü.`),
+      );
+    }
+    const home = prev.home.owned;
+    const hl = s.dynasty.heirlooms.length > 0;
     if (np.money > 0)
-      c2.h.log(c2.t(`You inherited ${c2.h.fmt(np.money)}${s.dynasty.heirlooms.length ? ' and the family heirlooms' : ''}.`, `Sana ${c2.h.fmt(np.money)}${s.dynasty.heirlooms.length ? ' ve aile yadigârları' : ''} miras kaldı.`));
+      c2.h.log(
+        c2.t(
+          `You inherited ${c2.h.fmt(np.money)}${home ? (hl ? ', the family home and the heirlooms' : ' and the family home') : hl ? ' and the family heirlooms' : ''}.`,
+          `Sana ${c2.h.fmt(np.money)}${home ? (hl ? ', aile evi ve yadigârlar' : ' ve aile evi') : hl ? ' ve aile yadigârları' : ''} miras kaldı.`,
+        ),
+      );
+    else if (homeTookShare)
+      c2.h.log(
+        c2.t(
+          `The family home${hl ? ' and the heirlooms' : ''} came to you; your brothers and sisters shared the savings.`,
+          `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi kardeşlerin paylaştı.`,
+        ),
+      );
   }
   assignGoals(s, c2.rng);
 }

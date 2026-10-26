@@ -11,10 +11,43 @@ import { getCountry } from './world';
  *   so savings slowly shrink in old age instead of growing. From 70, care and medicine cost more each year.
  * - Safety net: an adult without a job who is already in debt gets enough help to cover the year,
  *   so debt does not snowball.
+ * - On top (round 2, so fortunes do not snowball over generations): spending grows with savings
+ *   (WEALTH_SPEND), an owned home costs upkeep and property tax (HOME_UPKEEP), and debt the home
+ *   does not cover pays interest (DEBT_RATE). Estates are taxed and split between children (game.ts).
  */
 export const NET_PAY = 0.75;
+/** Yearly upkeep and property tax of an owned home, as a share of its value. */
+export const HOME_UPKEEP = 0.012;
 /** Share of take-home pay above the basic cost of living that the household spends anyway. */
 export const LIFESTYLE_SHARE = 0.85;
+/**
+ * Lifestyle creep on savings: each year a household spends this share of its savings above a cushion of
+ * WEALTH_CUSHION years of living costs (a bigger car, nicer holidays, helping the kids). Keeps family
+ * fortunes from snowballing over generations (playtest 2).
+ */
+export const WEALTH_SPEND = 0.04;
+export const WEALTH_CUSHION = 3;
+/** The rich spend a further share of savings above RICH_CUSHION years of living costs (staff, a boat, a second home). */
+export const RICH_SPEND = 0.04;
+export const RICH_CUSHION = 15;
+/** Yearly interest on debt that the home's value does not cover (credit cards, personal loans). */
+export const DEBT_RATE = 0.05;
+
+// ---- inheritance (see continueAsChild in game.ts)
+/** Inheritance tax on the cash part of an estate above the allowance; the home passes untaxed. */
+export const INHERITANCE_TAX = 0.15;
+/** Tax-free allowance per estate, US-baseline dollars before the country's wage factor. */
+export const TAX_FREE_ALLOWANCE = 30_000;
+/** On a hand-over the parent gives this share of the savings away now, split between the children. */
+export const HANDOVER_GIFT = 0.5;
+/** What the retired parent keeps is spent down by this share per year until they die, never below ESTATE_FLOOR. */
+export const ESTATE_DRAWDOWN = 0.05;
+export const ESTATE_FLOOR = 0.3;
+
+/** Inheritance tax due on `cash` (game dollars) in a country with this wage factor. */
+export function inheritanceTax(cash: number, wageFactor: number): number {
+  return Math.round(Math.max(0, cash - TAX_FREE_ALLOWANCE * wageFactor) * INHERITANCE_TAX);
+}
 /** Real yearly growth of an owned home's value. */
 export const HOME_GROWTH = 0.01;
 /** Owning your home cuts living costs (no rent). */
@@ -53,12 +86,21 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
   cost += LIFESTYLE_SHARE * Math.max(0, pay - cost);
   if (p.home.owned) cost *= OWNER_DISCOUNT;
   if (age >= 70) cost += country.costOfLiving * Math.min(0.5, 0.03 * (age - 69)); // care and medicine
+  if ('debt_plan' in p.flags && p.money < 0) cost *= 0.9; // a repayment plan: fewer takeaways, no holidays
   if (p.jailYears > 0) return { pay: 0, cost: 0, support: 0 };
   let support = 0;
   if (!salary) {
     if (p.retired || age >= PENSION_AGE) support = pensionFor(p.lastSalary, cost);
     else if (age >= 23) support = country.costOfLiving * 0.7; // odd jobs and benefits
   }
+  // on top of the living costs the pension is measured against: spending that grows with savings, and interest
+  if (age >= 23) {
+    cost += WEALTH_SPEND * Math.max(0, p.money - WEALTH_CUSHION * country.costOfLiving);
+    cost += RICH_SPEND * Math.max(0, p.money - RICH_CUSHION * country.costOfLiving);
+  }
+  if (p.home.owned) cost += HOME_UPKEEP * p.home.value;
+  const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
+  if (p.money < 0 && unsecured > 0) cost += DEBT_RATE * unsecured;
   return { pay, cost, support };
 }
 

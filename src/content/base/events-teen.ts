@@ -1,7 +1,9 @@
 import type { Ctx, EventDef } from '../types';
 import type { Person, RelationKind } from '../../engine/types';
 import { acc, cap, dat, eligibleJobs, gen, kinWord, nm, olderThanPlayer, single, wage, who, wth } from './util';
-import { he, him, his, inTr } from './events-flavour';
+import { atParents, he, him, his, inTr, settled } from './events-flavour';
+import { homeTitle } from './activities-home';
+import { houseState } from '../../engine/home';
 
 // Teen and young-adult years (13–24): braces, curfews, first jobs, first flats, first heartbreaks.
 // University life lives in the Campus pack and YKS / askerlik in the Türkiye pack, so they are not here.
@@ -1321,7 +1323,8 @@ export const teenEvents: EventDef[] = [
     maxAge: 24,
     once: true,
     weight: 10,
-    when: (c) => hasParent(c) && !c.h.has('teen_moved_out') && c.p.school !== 'university' && !c.p.home.owned,
+    // only someone still in the parents' home, with no partner, spouse or children of their own
+    when: (c) => hasParent(c) && !c.h.has('teen_moved_out') && c.p.school !== 'university' && !settled(c) && atParents(c),
     setup: pickParent,
     title: (c) => c.t('You found a room in a shared flat.', 'Ev arkadaşlı bir dairede boş oda buldun.'),
     text: (c) => c.t('Cheap rent, three flatmates, one bathroom.', 'Kira ucuz. Üç ev arkadaşı, tek banyo.'),
@@ -1334,6 +1337,9 @@ export const teenEvents: EventDef[] = [
           c.h.money(-wage(c, 600));
           c.h.flag('teen_moved_out');
           c.h.stat('happiness', 6);
+          // the Home screen should show the room you moved into, not your parents' home
+          c.p.home = { name: homeTitle('room', c.p.city, c.lang), value: 0, owned: false, furniture: c.p.home.furniture };
+          houseState(c.p).tier = 'room';
           c.h.closeness(String(c.vars.par), -1);
           return c.t(
             `You moved out. Your ${ke(c)} cried at the door and packed you forty jars of food.`,
@@ -1363,7 +1369,8 @@ export const teenEvents: EventDef[] = [
     maxAge: 26,
     weight: 9,
     cooldown: 6,
-    when: (c) => c.h.has('teen_moved_out'),
+    // the shared flat ends when you marry, have a child or buy a place
+    when: (c) => c.h.has('teen_moved_out') && !settled(c),
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: c.age + c.rng.int(-1, 3) }).id;
     },
@@ -1468,7 +1475,7 @@ export const teenEvents: EventDef[] = [
     maxAge: 27,
     once: true,
     weight: 8,
-    when: (c) => c.h.has('teen_moved_out') && hasParent(c),
+    when: (c) => c.h.has('teen_moved_out') && hasParent(c) && !settled(c),
     setup: pickParent,
     title: (c) => c.t('Rent went up again.', 'Kiraya yine zam geldi.'),
     text: (c) =>
@@ -1483,6 +1490,8 @@ export const teenEvents: EventDef[] = [
         badge: 'Big change',
         resolve: (c) => {
           c.h.unflag('teen_moved_out');
+          c.p.home = { name: homeTitle('parents', c.p.city, c.lang), value: 0, owned: false, furniture: c.p.home.furniture };
+          houseState(c.p).tier = 'parents';
           c.h.money(wage(c, 1000));
           c.h.closeness(String(c.vars.par), 4);
           c.h.stat('happiness', -3);
@@ -1576,14 +1585,23 @@ export const teenEvents: EventDef[] = [
       },
       {
         id: 'village',
-        label: (c) => c.t('Quit everything and move to a village', 'Her şeyi bırakıp köye yerleş'),
+        label: (c) => c.t('Quit everything for a season in a village', 'Her şeyi bırakıp bir mevsim köye git'),
         badge: 'Big change',
         resolve: (c) => {
-          if (c.p.jobId) c.h.setJob(null);
+          const quit = !!c.p.jobId;
+          if (quit) c.h.setJob(null);
           c.h.money(-wage(c, 400));
           c.h.stat('happiness', 9);
           c.h.stat('health', 3);
-          return c.t('You moved to a village and grow tomatoes now. They are terrible. You are happy.', 'Köye yerleşip domates yetiştirmeye başladın. Domatesler berbat. Sen mutlusun.');
+          return quit
+            ? c.t(
+                'You quit and spent six months in a village growing tomatoes. They were terrible. You came back happy, and jobless.',
+                'İşi bırakıp altı ay bir köyde domates yetiştirdin. Domatesler berbattı. Mutlu döndün; işsiz ama mutlu.',
+              )
+            : c.t(
+                'You spent six months in a village growing tomatoes. They were terrible. You came back happy.',
+                'Altı ay bir köyde domates yetiştirdin. Domatesler berbattı. Mutlu döndün.',
+              );
         },
         tone: 'big',
       },

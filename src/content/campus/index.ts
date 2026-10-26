@@ -4,6 +4,7 @@ import { titleFor } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
 import { isCoastal } from '../../engine/places';
+import { say, type Pair } from '../base/lines';
 import {
   CLUBS,
   COMPANIES,
@@ -38,6 +39,37 @@ const jobTitle0 = (c: Ctx, id: string) => {
   const j = jobById(c, id);
   return j ? titleFor(j, 0, c.lang) : id;
 };
+// Repeatable campus lines (one rng call per pick; no repeat until most of a list has been seen).
+const STUDY: Pair[] = [
+  ['You studied in the library until they turned the lights off.', 'Kütüphanede ışıkları kapatana kadar çalıştın.'],
+  ['You rewrote your notes in four colors. Some of it stuck.', 'Notlarını dört renk kalemle temize çektin. Bir kısmı kafana girdi.'],
+  ['You solved every past exam from the last five years.', 'Son beş yılın çıkmış sorularını tek tek çözdün.'],
+  ['You joined a study group. Two hours of gossip, forty minutes of studying. The forty minutes were excellent.', 'Bir çalışma grubuna katıldın. İki saat dedikodu, kırk dakika ders. O kırk dakika harikaydı.'],
+  ['You explained the whole topic to your houseplant. It understood nothing, but you did.', 'Bütün konuyu saksı çiçeğine anlattın. O hiçbir şey anlamadı ama sen anladın.'],
+  ['You made flashcards for everything, including your own name, just in case.', 'Her şey için bilgi kartı hazırladın; ne olur ne olmaz diye kendi adın için bile.'],
+  ['You studied with headphones and no music, so nobody would talk to you. It worked.', 'Kimse konuşmasın diye müziksiz kulaklıkla çalıştın. İşe yaradı.'],
+  ['You went to office hours. The professor was so surprised to see a student that she explained everything twice.', 'Hocanın ofis saatine gittin. Öğrenci görmeye o kadar şaşırdı ki her şeyi iki kez anlattı.'],
+  ['You borrowed the best notes in the class and copied them by hand. Some of it went in through your fingers.', 'Sınıfın en iyi notlarını ödünç alıp elle yazdın. Bir kısmı parmaklarından kafana girdi.'],
+];
+const ALLNIGHTER: Pair[] = [
+  ['You pulled an all-nighter with four coffees and a sense of doom. It worked.', 'Dört kahve ve bir kıyamet hissiyle sabahladın. İşe yaradı.'],
+  ['You studied until the birds started singing. You wrote the exam on pure adrenaline, and it went well.', 'Kuşlar ötmeye başlayana kadar çalıştın. Sınavı saf adrenalinle yazdın ve iyi geçti.'],
+  ['An all-nighter in the dorm kitchen, fuelled by instant noodles. You aced the first question and guessed the rest well.', 'Yurt mutfağında hazır erişteyle sabahladın. İlk soruyu tam yaptın, gerisini de iyi tahmin ettin.'],
+  ['You and a friend kept each other awake all night with quiz questions. You both passed, barely awake.', 'Bir arkadaşınla bütün gece birbirinize soru sorup uyanık kaldınız. İkiniz de geçtiniz, gözleriniz açık kalabildiği kadarıyla.'],
+  ['You saw the sunrise from the library steps. The exam felt like a dream, a good one.', 'Güneşin doğuşunu kütüphane merdivenlerinden izledin. Sınav bir rüya gibi geçti, güzel bir rüya.'],
+];
+const PARTY: Pair[] = [
+  ['You danced on a table. There is video. There is always video.', 'Masanın üstünde dans ettin. Videosu var. Her zaman videosu olur.'],
+  ["You woke up wearing someone else's jacket and holding a traffic cone.", 'Sabah üstünde başkasının montu, elinde bir trafik konisiyle uyandın.'],
+  ['You made eleven new best friends. You remember two of their names.', 'On bir yeni kanka edindin. İkisinin adını hatırlıyorsun.'],
+  ['You ended up running the music. Someone asked for the same song nine times; you played it nine times.', 'Bir şekilde müziği sen idare etmeye başladın. Biri aynı şarkıyı dokuz kez istedi, dokuz kez çaldın.'],
+  ['You spent the whole party in the kitchen talking about the meaning of life with a philosophy student.', 'Bütün partiyi mutfakta bir felsefe öğrencisiyle hayatın anlamını konuşarak geçirdin.'],
+  ['There was a costume theme nobody told you about. You went as "student". It was very convincing.', 'Kimsenin söylemediği bir kostüm teması varmış. Sen "öğrenci" kılığında gittin. Çok inandırıcıydın.'],
+  ['You won a dance-off against a third-year. Your knees lost.', 'Üçüncü sınıftan biriyle dans yarışına girip kazandın. Dizlerin kaybetti.'],
+  ['You left at midnight with a pizza box and a story you will tell for years.', 'Gece yarısı elinde bir pizza kutusu ve yıllarca anlatacağın bir hikâyeyle çıktın.'],
+  ['You helped clean up at 4 a.m. The host now considers you family.', 'Sabaha karşı dörtte toplamaya yardım ettin. Ev sahibi artık seni aileden sayıyor.'],
+];
+
 const pickLine = (c: Ctx, lines: [string, string][]) => {
   const [en, tr] = c.rng.pick(lines);
   return c.t(en, tr);
@@ -634,7 +666,9 @@ const events: EventDef[] = [
       if (i === 2) bumpGpa(c, 0.05);
       if (i === 3) bumpGpa(c, -0.05);
       return [
-        c.t('The cafeteria served lentil soup for the 40th day in a row. You have started to like it, which is worrying.', 'Yemekhane kırkıncı gün üst üste mercimek çorbası çıkardı. Sevmeye başladın, bu endişe verici.'),
+        inTR(c)
+          ? c.t('The cafeteria served lentil soup for the 40th day in a row. You have started to like it, which is worrying.', 'Yemekhane kırkıncı gün üst üste mercimek çorbası çıkardı. Sevmeye başladın, bu endişe verici.')
+          : c.t('The cafeteria served the same pasta bake for the 40th day in a row. You have started to like it, which is worrying.', 'Yemekhane kırkıncı gün üst üste aynı fırın makarnayı çıkardı. Sevmeye başladın, bu endişe verici.'),
         c.t('Someone stole your slippers from the dorm shower. Again.', 'Yurt banyosundan terliklerini yine çaldılar. Bu dönem üçüncü.'),
         c.t('You found an archive of old exams at the photocopy shop. Pure gold.', 'Fotokopicide eski yıllardan kalma çıkmış soru arşivi buldun. Altın değerinde.'),
         c.t('You skipped one lecture and it was the only day the professor took attendance.', 'Bir derse girmedin, hoca da tam o gün yoklama aldı. Devamsızlık sınırındasın.'),
@@ -804,7 +838,7 @@ const events: EventDef[] = [
       }
     },
     title: (c) => c.t('Diploma in hand. Now what?', 'Diploma elinde. Şimdi ne olacak?'),
-    text: (c) => c.t('Your relatives have started asking "So, where are you working?" at every dinner.', 'Akrabalar her bayram yemeğinde "Eee, nerede çalışıyorsun?" diye sormaya başladı.'),
+    text: (c) => c.t('Your relatives have started asking "So, where are you working?" at every dinner.', inTR(c) ? 'Akrabalar her bayram yemeğinde "Eee, nerede çalışıyorsun?" diye sormaya başladı.' : 'Akrabalar her aile yemeğinde "Eee, nerede çalışıyorsun?" diye sormaya başladı.'),
     choices: [
       {
         id: 'offer',
@@ -1020,11 +1054,7 @@ const activities: ActivityDef[] = [
     run: (c) => {
       bumpGpa(c, 0.12 + c.p.stats.smarts / 1000 + c.rng.next() * 0.08);
       c.h.stat('smarts', c.rng.int(1, 2));
-      return pickLine(c, [
-        ['You studied in the library until they turned the lights off.', 'Kütüphanede ışıkları kapatana kadar çalıştın.'],
-        ['You rewrote your notes in four colors. Some of it stuck.', 'Notlarını dört renk kalemle temize çektin. Bir kısmı kafana girdi.'],
-        ['You solved every past exam from the last five years.', 'Son beş yılın çıkmış sorularını tek tek çözdün.'],
-      ]);
+      return say(c, 'campus_study', STUDY);
     },
   },
   {
@@ -1042,8 +1072,11 @@ const activities: ActivityDef[] = [
         return c.t('The professor took attendance for the first time all year. You are one absence away from failing.', 'Hoca bütün dönem ilk kez yoklama aldı. Devamsızlıktan kalmana tek ders kaldı.');
       }
       bumpGpa(c, -0.1);
-      return pickLine(c, [
-        ['You skipped class and played cards in the cafeteria for three hours.', 'Dersi asıp kantinde üç saat okey oynadın.'],
+      return say(c, 'campus_skip', [
+        inTR(c)
+          ? ['You skipped class and played okey in the cafeteria for three hours.', 'Dersi asıp kantinde üç saat okey oynadın.']
+          : ['You skipped class and played cards in the cafeteria for three hours.', 'Dersi asıp kantinde üç saat kâğıt oynadın.'],
+        ['You skipped class to see a film in the afternoon. The cinema was empty except for two other students from your class.', 'Dersi asıp öğleden sonra sinemaya gittin. Salonda senden başka sadece sınıftan iki kişi vardı.'],
         ['You skipped a lecture to sleep. Best lecture you ever missed.', 'Dersi asıp uyudun. Kaçırdığın en güzel dersti.'],
         inTR(c)
           ? isCoastal(c.p.city)
@@ -1068,7 +1101,7 @@ const activities: ActivityDef[] = [
         return c.t('You studied all night and then slept through the exam.', 'Sabaha kadar çalıştın, sonra sınavı uyuyarak kaçırdın.');
       }
       bumpGpa(c, 0.2 + c.rng.next() * 0.15);
-      return c.t('You pulled an all-nighter with four coffees and a sense of doom. It worked.', 'Dört kahve ve bir kıyamet hissiyle sabahladın. İşe yaradı.');
+      return say(c, 'campus_allnighter', ALLNIGHTER);
     },
   },
   {
@@ -1100,11 +1133,7 @@ const activities: ActivityDef[] = [
         c.h.addRelation(them, 'partner', c.rng.int(50, 72));
         return c.t(`You met ${them.firstName} at the party. Apparently you are a couple now.`, `Partide ${them.firstName} ile tanıştın. Görünen o ki artık sevgilisiniz.`);
       }
-      return pickLine(c, [
-        ['You danced on a table. There is video. There is always video.', 'Masanın üstünde dans ettin. Videosu var. Her zaman videosu olur.'],
-        ['You woke up wearing someone else\'s jacket and holding a traffic cone.', 'Sabah üstünde başkasının montu, elinde bir trafik konisiyle uyandın.'],
-        ['You made eleven new best friends. You remember two of their names.', 'On bir yeni kanka edindin. İkisinin adını hatırlıyorsun.'],
-      ]);
+      return say(c, 'campus_party', PARTY);
     },
   },
   {

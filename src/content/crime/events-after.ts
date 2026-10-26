@@ -83,7 +83,7 @@ export const afterEvents: EventDef[] = [
     title: (c) => c.t(`${nm(c)} found your old mugshot online.`, `${nm(c)} internette eski sabıka fotoğrafını bulmuş.`),
     text: (c) => {
       const k = kin(c, c.h.person(String(c.vars.pid)), 'child');
-      return c.t(`Your ${k} holds up the phone. "Is this you? Why are you holding a number?"`, `${cap(k)} telefonu sana doğru tutuyor: "Bu sen misin? Neden elinde numara var?"`);
+      return c.t(`Your ${k} holds up the phone. "Is this you? Why are you holding a number?"`, `${cap(k)}, telefonu sana doğru uzatıyor: "Bu sen misin? Neden elinde numara var?"`);
     },
     choices: [
       {

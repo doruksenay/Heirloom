@@ -5,7 +5,7 @@ import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans,
 import { compact, fameOf, free, hasPath } from './util';
 import { moreFameEvents } from './events-more';
 import { moreFameActivities } from './activities-more';
-import { sayWith, type Pair } from '../base/lines';
+import { pickIndex, say, sayWith, type Pair } from '../base/lines';
 
 // "Fame" expansion: music, social media and acting careers, the single-player side of Popmundo.
 export const FAME_ENTITLEMENT = 'pack.fame';
@@ -39,7 +39,35 @@ function nextTour(f: { tours?: number }) {
 }
 
 
-function choosePath(path: FamePath, line: string, lineTr: string): ChoiceDef {
+/** Picking a path can happen more than once in a life (after quitting or "not yet"), so each has a few lines. */
+const PATH_LINES: Record<FamePath, Pair[]> = {
+  music: [
+    ['You decided to become a musician. Your neighbors decided to buy earplugs.', 'Müzisyen olmaya karar verdin. Komşuların da kulak tıkacı almaya karar verdi.'],
+    ['You decided to make music. You wrote your first song that night; it rhymed "heart" with "heart".', 'Müzik yapmaya karar verdin. İlk şarkını o gece yazdın; "kalp" ile "kalp" kafiyeliydi.'],
+    ['You bought a second-hand guitar and announced you were a musician now. The guitar had other plans for its strings.', 'İkinci el bir gitar alıp artık müzisyen olduğunu ilan ettin. Gitarın telleri başka fikirdeydi.'],
+    ['Music it is. You practised in the bathroom, where the echo is kindest.', 'Kararın müzikten yana. Yankının en merhametli olduğu yerde, banyoda çalışmaya başladın.'],
+  ],
+  social: [
+    ['You decided to become a content creator. You bought a ring light the same day.', 'İçerik üreticisi olmaya karar verdin. Aynı gün bir halka ışık aldın.'],
+    ['You decided to become a content creator. Your first video was about deciding to become a content creator.', 'İçerik üreticisi olmaya karar verdin. İlk videon, içerik üreticisi olmaya karar vermen üzerineydi.'],
+    ['You opened accounts on every platform and spent a whole evening choosing a username.', 'Bütün platformlarda hesap açtın ve bütün bir akşamı kullanıcı adı seçerek geçirdin.'],
+    ['Social media it is. You now say "hey guys" to an empty room every morning.', 'Kararın sosyal medyadan yana. Artık her sabah boş bir odaya "Selam millet" diyorsun.'],
+  ],
+  acting: [
+    ['You decided to become an actor. You practiced crying in the mirror for an hour.', 'Oyuncu olmaya karar verdin. Bir saat boyunca aynanın karşısında ağlama çalıştın.'],
+    ['You decided to become an actor and started reading the bus timetable out loud, with feeling.', 'Oyuncu olmaya karar verdin ve otobüs saatlerini yüksek sesle, duygu katarak okumaya başladın.'],
+    ['Acting it is. You signed up with an agency whose office is above a launderette.', 'Kararın oyunculuktan yana. Ofisi bir çamaşırhanenin üstünde olan bir ajansa kaydoldun.'],
+    ['You decided to act. You had headshots taken; in all of them you look slightly surprised.', 'Oyuncu olmaya karar verdin. Vesikalık fotoğraflar çektirdin; hepsinde hafif şaşırmış görünüyorsun.'],
+  ],
+};
+const FAME_LATER: Pair[] = [
+  ['You decided fame can wait. It will be a while before you think about it again.', 'Şöhret biraz bekleyebilir dedin. Bir süre aklına bile gelmeyecek.'],
+  ['You put the dream on a shelf, next to the guitar you never learned. Not now.', 'Hayalini, hiç çalmayı öğrenmediğin gitarın yanına, rafa kaldırdın. Şimdi değil.'],
+  ['Fame can find you later. Right now you have a life to get on with.', 'Şöhret seni sonra da bulur. Şu an yaşaman gereken bir hayat var.'],
+  ['You thought about it for a whole afternoon and decided normal is underrated.', 'Bütün bir öğleden sonra düşündün ve sıradan bir hayatın hakkının verilmediğine karar verdin.'],
+];
+
+function choosePath(path: FamePath): ChoiceDef {
   return {
     id: path,
     label: (c) => ({ music: c.t('Music', 'Müzik'), social: c.t('Social media', 'Sosyal medya'), acting: c.t('Acting', 'Oyunculuk') })[path],
@@ -48,7 +76,7 @@ function choosePath(path: FamePath, line: string, lineTr: string): ChoiceDef {
       f.path = path;
       f.lastActiveYear = c.s.year;
       c.h.stat('happiness', 5);
-      return c.t(line, lineTr);
+      return say(c, `fame.path.${path}`, PATH_LINES[path]);
     },
     tone: 'big',
   };
@@ -88,15 +116,15 @@ const events: EventDef[] = [
     title: (c) => c.t('You want to be famous. But for what?', 'Ünlü olmak istiyorsun. Peki ama neyle?'),
     text: (c) => c.t('Every path starts small. Some end on billboards.', 'Her yol küçük başlar. Bazıları dev reklam panolarında biter.'),
     choices: [
-      choosePath('music', 'You decided to become a musician. Your neighbors decided to buy earplugs.', 'Müzisyen olmaya karar verdin. Komşuların da kulak tıkacı almaya karar verdi.'),
-      choosePath('social', 'You decided to become a content creator. You bought a ring light the same day.', 'İçerik üreticisi olmaya karar verdin. Aynı gün bir halka ışık aldın.'),
-      choosePath('acting', 'You decided to become an actor. You practiced crying in the mirror for an hour.', 'Oyuncu olmaya karar verdin. Bir saat boyunca aynanın karşısında ağlama çalıştın.'),
+      choosePath('music'),
+      choosePath('social'),
+      choosePath('acting'),
       {
         id: 'later',
         label: (c) => c.t('Not yet', 'Şimdi değil'),
         resolve: (c) => {
           c.h.flag('fame_later'); // closes "Chase fame" for a few years
-          return c.t('You decided fame can wait. It will be a while before you think about it again.', 'Şöhret biraz bekleyebilir dedin. Bir süre aklına bile gelmeyecek.');
+          return say(c, 'fame.path.later', FAME_LATER);
         },
       },
     ],
@@ -545,6 +573,81 @@ const events: EventDef[] = [
 ];
 
 // ------------------------------------------------------------------ activities
+// Repeatable acting and fan lines (one rng call per pick; no repeat until most of a list has been seen).
+/** What a post was: [English noun phrase, Turkish object of "paylaştın"]. */
+const POSTS: Pair[] = [
+  ['a "day in my life" video', '"Bir günüm" videosu'],
+  ['a dance trend', 'Dans akımı videosu'],
+  ['a rant about public transport', 'Toplu taşıma isyanı'],
+  ['a cooking fail', 'Mutfak felaketi videosu'],
+  ['a get-ready-with-me', '"Benimle hazırlan" videosu'],
+  ['a room tour of a room you tidied for the first time in months', 'Aylardır ilk kez topladığın odanın tur videosu'],
+  ['a video of your cat ignoring you in slow motion', 'Kedinin seni ağır çekimde görmezden geldiği bir video'],
+  ['a "what I eat in a day" that was mostly toast', 'Çoğu tost olan bir "Bir günde ne yiyorum" videosu'],
+  ['a life-hack that did not work', 'İşe yaramayan bir pratik bilgi videosu'],
+  ['a tearful apology for something nobody had noticed', 'Kimsenin fark etmediği bir şey için ağlamaklı bir özür videosu'],
+  ['a prank on your own mother', 'Annene şaka yaptığın bir video'],
+  ['a review of every crisp flavour in the corner shop', 'Bakkaldaki bütün cips çeşitlerini tek tek denediğin bir video'],
+];
+const PRACTICE: Pair[] = [
+  ['You practiced scales until your fingers hurt.', 'Parmakların acıyana kadar gam çalıştın.'],
+  ['You learned a song you hate. You play it perfectly now.', 'Nefret ettiğin bir şarkıyı öğrendin. Artık kusursuz çalıyorsun.'],
+  ['You practiced for four hours. Your neighbor knocked twice.', 'Dört saat çalıştın. Komşun iki kez kapıyı çaldı.'],
+  ['You played along to your favourite record until you could not tell yourself apart from it.', 'En sevdiğin plakla birlikte, kendini ondan ayırt edemeyene kadar çaldın.'],
+  ['You practiced with a metronome. You and the metronome are no longer on speaking terms.', 'Metronomla çalıştın. Metronomla artık küssünüz.'],
+  ['You finally nailed the hard part of a song you have been failing for a year. You played it nine times in a row to celebrate.', 'Bir yıldır beceremediğin şarkının zor kısmını sonunda çıkardın. Kutlamak için arka arkaya dokuz kez çaldın.'],
+  ['You recorded yourself practicing and listened back. Then you practiced a lot more.', 'Çalışırken kendini kaydedip dinledin. Sonra çok daha fazla çalıştın.'],
+  ['You practiced in the park. A child danced, a dog howled, and a man gave you a coin.', 'Parkta çalıştın. Bir çocuk dans etti, bir köpek uludu, bir adam da sana bozuk para verdi.'],
+  ['You learned a new chord and used it in everything for a week.', 'Yeni bir akor öğrendin ve bir hafta boyunca her şeyde onu kullandın.'],
+];
+const GIG_BAD: Pair[] = [
+  ['Your gig was a disaster. The amp died and so did the crowd.', 'Konser tam bir felaketti. Önce amfi öldü, sonra seyirci.'],
+  ['You forgot the words to your own song and hummed the second verse. Loudly.', 'Kendi şarkının sözlerini unuttun ve ikinci kıtayı mırıldandın. Hem de yüksek sesle.'],
+  ['The venue double-booked you with a karaoke night. The karaoke won.', 'Mekân seni aynı geceye bir karaoke etkinliğiyle birlikte yazmış. Karaoke kazandı.'],
+  ['A string snapped in the first song and the spare was at home. You did the rest a cappella.', 'İlk şarkıda bir tel koptu, yedeği de evdeydi. Gerisini çalgısız, sadece sesinle tamamladın.'],
+];
+const GIG_OK: ((v: { crowd: string; fans: string; band?: string }) => Pair)[] = [
+  ({ crowd, fans, band }) => [`You played to ${crowd} people${band ? ` with ${band}` : ''}. ${fans} new fans.`, `${band ? `${band} ile ` : ''}${crowd} kişiye çaldın. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`${band ?? 'You'} played a sweaty set to ${crowd} people. Someone threw a sock on stage. ${fans} new fans.`, `${band ? `${band} ile ` : ''}${crowd} kişiye terli bir konser verdin. Biri sahneye çorap fırlattı. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`${crowd} people sang the chorus back at you${band ? ` and ${band}` : ''}. You pretended not to be moved. ${fans} new fans.`, `${crowd} kişi nakaratı ${band ? `sana ve ${band} grubuna` : 'sana'} geri söyledi. Duygulanmamış gibi yaptın. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`An encore! ${crowd} people would not let ${band ?? 'you'} leave. ${fans} new fans.`, `Bis! ${crowd} kişi ${band ? `${band} grubunu` : 'seni'} sahneden bırakmadı. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`You played a rooftop gig${band ? ` with ${band}` : ''} for ${crowd} people and a few confused pigeons. ${fans} new fans.`, `${band ? `${band} ile ` : ''}${crowd} kişiye ve birkaç şaşkın güvercine çatı konseri verdin. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`The sound engineer said it was the best show of the month${band ? ` for ${band}` : ''}. ${crowd} people agreed. ${fans} new fans.`, `Ses teknisyeni bunun ayın en iyi konseri olduğunu söyledi. ${crowd} kişi de aynı fikirdeydi. ${fans} yeni hayran.`],
+];
+const ACTING_CLASS: Pair[] = [
+  ['Your acting coach made you be a tree for an hour.', 'Oyunculuk hocan bir saat boyunca ağaç olmanı istedi.'],
+  ['You did a Shakespeare monologue. The coach nodded slowly.', 'Bir Shakespeare monoloğu yaptın. Hoca yavaşça başını salladı.'],
+  ['You practiced crying on command. You are now unstoppable.', 'İstediğin an ağlamayı çalıştın. Artık seni kimse durduramaz.'],
+  ['You spent a whole class walking like different animals. Your penguin got a round of applause.', 'Bütün ders boyunca farklı hayvanlar gibi yürüdün. Penguen taklidin alkış topladı.'],
+  ['You learned to faint convincingly. You fainted eleven times. Your elbows filed a complaint.', 'İnandırıcı biçimde bayılmayı öğrendin. On bir kez bayıldın. Dirseklerin şikâyetçi oldu.'],
+  ['Improvisation night: you played a lighthouse keeper in love with a seagull. It was surprisingly moving.', 'Doğaçlama gecesinde bir martıya âşık deniz feneri bekçisini oynadın. Şaşırtıcı derecede dokunaklıydı.'],
+  ['The coach made you say "I am fine" in forty different ways. Number 31 made someone cry.', 'Hoca sana "Ben iyiyim" cümlesini kırk farklı şekilde söyletti. Otuz birincisinde biri ağladı.'],
+  ['You worked on an accent for a role you do not have yet. Your family now only hears the accent.', 'Henüz elinde olmayan bir rol için aksan çalıştın. Ailen artık sadece aksanı duyuyor.'],
+  ['A voice class: you hummed into a straw for an hour. Apparently that is acting.', 'Ses dersi: bir saat boyunca pipete mırıldandın. Oyunculuk buymuş meğer.'],
+  ['You rehearsed a stage fight with a classmate and only hit the scenery once.', 'Bir sınıf arkadaşınla sahne dövüşü çalıştın ve dekora yalnızca bir kez vurdun.'],
+];
+const AUDITION_MISS: ((r: { en: string; tr: string }) => Pair)[] = [
+  ({ en, tr }) => [`You auditioned for ${en}. They said you were "almost right". Next time.`, `${cap(tr)} için seçmelere girdin. "Neredeyse aradığımız kişisin" dediler. Bir dahaki sefere.`],
+  ({ en, tr }) => [`You auditioned for ${en} and waited four hours for a ninety-second slot. "We'll call you." They did not.`, `${cap(tr)} için seçmelere girdin. Doksan saniyelik sıra için dört saat bekledin. "Biz sizi ararız" dediler. Aramadılar.`],
+  ({ en, tr }) => [`You went up for ${en}. The director loved you, the producer's nephew got the part.`, `${cap(tr)} için şansını denedin. Yönetmen sana bayıldı, rolü yapımcının yeğeni aldı.`],
+  ({ en, tr }) => [`You read for ${en}. They said you were "too much". You are trying to be less.`, `${cap(tr)} için okuma yaptın. "Biraz fazlasın" dediler. Daha az olmaya çalışıyorsun.`],
+  ({ en, tr }) => [`You auditioned for ${en} with a cold. You sneezed in the middle of the big speech.`, `${cap(tr)} için seçmelere nezleyle girdin. En önemli repliğin ortasında hapşırdın.`],
+  ({ en, tr }) => [`No luck with ${en}. The casting director wrote "good energy" on your photo, then put it on the wrong pile.`, `${cap(tr)} olmadı. Cast direktörü fotoğrafına "enerjisi iyi" yazdı, sonra yanlış yığına koydu.`],
+  ({ en, tr }) => [`You auditioned for ${en}. They asked if you could ride a horse. You said yes. You cannot.`, `${cap(tr)} için seçmelere girdin. Ata binip binemediğini sordular. "Evet" dedin. Binemiyorsun.`],
+];
+const MEET_FANS: ((n: string) => Pair)[] = [
+  (n) => [`You signed autographs for three hours. ${n} new fans and one sore wrist.`, `Üç saat imza dağıttın. ${n} yeni hayran ve bir ağrıyan bilek.`],
+  (n) => [`You held a meet-and-greet in a shopping mall. ${n} new fans, and a security guard asked for a selfie.`, `Bir AVM'de hayranlarınla buluştun. ${n} yeni hayran; güvenlik görevlisi bile fotoğraf istedi.`],
+  (n) => [`You took photos with fans until the café ran out of cups. ${n} new fans.`, `Kafede bardak bitene kadar hayranlarınla fotoğraf çektirdin. ${n} yeni hayran.`],
+  (n) => [`A fan showed you a tattoo of your autograph. You signed next to it. ${n} new fans.`, `Bir hayran, koluna yaptırdığı imza dövmesini gösterdi. Yanına bir imza daha attın. ${n} yeni hayran.`],
+  (n) => [`You answered fan questions in a bookshop for an hour. Someone asked for your shoe size. ${n} new fans.`, `Bir kitapçıda bir saat hayranlarının sorularını cevapladın. Biri ayakkabı numaranı sordu. ${n} yeni hayran.`],
+  (n) => [`A grandmother queued two hours to tell you her grandson loves you. ${n} new fans, starting with her.`, `Bir teyze, torununun sana bayıldığını söylemek için iki saat sıra bekledi. ${n} yeni hayran; ilki o.`],
+  (n) => [`You surprised a small fan club at their monthly meeting. They screamed for a full minute. ${n} new fans.`, `Küçük bir hayran kulübünü aylık toplantılarında ziyaret edip şaşırttın. Tam bir dakika çığlık attılar. ${n} yeni hayran.`],
+  (n) => [`You signed a cast, a guitar and, against your better judgement, a forehead. ${n} new fans.`, `Bir alçıyı, bir gitarı ve, içinden gelmese de, bir alnı imzaladın. ${n} yeni hayran.`],
+  (n) => [`Fans brought you homemade cakes. You ate a slice of each and regretted nothing. ${n} new fans.`, `Hayranların sana ev yapımı kekler getirdi. Her birinden bir dilim yedin, hiç pişman değilsin. ${n} yeni hayran.`],
+  (n) => [`The signing ran so long the shop closed around you. ${n} new fans and a very patient manager.`, `İmza günü o kadar uzadı ki dükkân etrafında kapandı. ${n} yeni hayran ve çok sabırlı bir müdür.`],
+];
+
 const activities: ActivityDef[] = [
   {
     id: 'fame_start',
@@ -569,11 +672,7 @@ const activities: ActivityDef[] = [
     run: (c) => {
       const f = fameState(c.p);
       f.skill = Math.min(100, f.skill + c.rng.int(3, 7));
-      const i = c.rng.int(0, 2);
-      return c.t(
-        ['You practiced scales until your fingers hurt.', 'You learned a song you hate. You play it perfectly now.', 'You practiced for four hours. Your neighbor knocked twice.'][i],
-        ['Parmakların acıyana kadar gam çalıştın.', 'Nefret ettiğin bir şarkıyı öğrendin. Artık kusursuz çalıyorsun.', 'Dört saat çalıştın. Komşun iki kez kapıyı çaldı.'][i],
-      );
+      return say(c, 'fame_practice', PRACTICE);
     },
   },
   {
@@ -619,15 +718,12 @@ const activities: ActivityDef[] = [
       const f = fameState(c.p);
       if (c.rng.chance(0.15)) {
         c.h.stat('happiness', -4);
-        return c.t('Your gig was a disaster. The amp died and so did the crowd.', 'Konser tam bir felaketti. Önce amfi öldü, sonra seyirci.');
+        return say(c, 'fame_gig.bad', GIG_BAD);
       }
       const crowd = Math.round(20 + f.skill * 3 + f.fans * 0.04 * c.rng.next());
       const g = gainFans(c, f, crowd * (0.3 + f.skill / 200) * (f.band ? 1.3 : 1));
       c.h.money(wage(c, crowd * 2));
-      return c.t(
-        `You played to ${compact(c, crowd)} people${f.band ? ` with ${f.band.name}` : ''}. ${compact(c, g)} new fans.`,
-        `${f.band ? `${f.band.name} ile ` : ''}${compact(c, crowd)} kişiye çaldın. ${compact(c, g)} yeni hayran.`,
-      );
+      return sayWith(c, 'fame_gig', GIG_OK, { crowd: compact(c, crowd), fans: compact(c, g), band: f.band?.name });
     },
   },
   {
@@ -692,9 +788,7 @@ const activities: ActivityDef[] = [
         return c.t(`Your video went massively viral. ${compact(c, g)} new followers overnight.`, `Videon fena patladı. Bir gecede ${compact(c, g)} yeni takipçi.`);
       }
       const g = gainFans(c, f, (50 + c.p.stats.looks * 6 + f.fans * 0.08) * (0.4 + roll));
-      const wi = c.rng.int(0, 4); // one RNG call, same as rng.pick on a 5-item list
-      const what = ['a "day in my life" video', 'a dance trend', 'a rant about public transport', 'a cooking fail', 'a get-ready-with-me'][wi];
-      const whatTr = ['"Bir günüm" videosu', 'Dans akımı videosu', 'Toplu taşıma isyanı', 'Mutfak felaketi videosu', '"Benimle hazırlan" videosu'][wi];
+      const [what, whatTr] = POSTS[pickIndex(c, 'fame_post', POSTS.length)];
       return c.t(`You posted ${what}. ${compact(c, g)} new followers.`, `${whatTr} paylaştın. ${compact(c, g)} yeni takipçi.`);
     },
   },
@@ -729,11 +823,7 @@ const activities: ActivityDef[] = [
       const f = fameState(c.p);
       f.skill = Math.min(100, f.skill + c.rng.int(3, 7));
       c.h.money(-wage(c, 150));
-      const i = c.rng.int(0, 2);
-      return c.t(
-        ['Your acting coach made you be a tree for an hour.', 'You did a Shakespeare monologue. The coach nodded slowly.', 'You practiced crying on command. You are now unstoppable.'][i],
-        ['Oyunculuk hocan bir saat boyunca ağaç olmanı istedi.', 'Bir Shakespeare monoloğu yaptın. Hoca yavaşça başını salladı.', 'İstediğin an ağlamayı çalıştın. Artık seni kimse durduramaz.'][i],
-      );
+      return say(c, 'fame_class', ACTING_CLASS);
     },
   },
   {
@@ -756,10 +846,7 @@ const activities: ActivityDef[] = [
         const g = gainFans(c, f, [300, 4000, 40000, 300000][tier] * (0.5 + f.skill / 100));
         return c.t(`You got ${role}! Paid ${c.h.fmt(pay)} and ${compact(c, g)} new fans.`, `${cap(roleTr)} kaptın! ${c.h.fmt(pay)} kazandın, ${compact(c, g)} yeni hayran.`);
       }
-      return c.t(
-        `You auditioned for ${role}. They said you were "almost right". Next time.`,
-        `${cap(roleTr)} için seçmelere girdin. "Neredeyse aradığımız kişisin" dediler. Bir dahaki sefere.`,
-      );
+      return sayWith(c, 'fame_audition', AUDITION_MISS, { en: role, tr: roleTr });
     },
   },
   {
@@ -772,20 +859,7 @@ const activities: ActivityDef[] = [
     run: (c) => {
       c.h.stat('happiness', 5);
       const g = gainFans(c, fameState(c.p), fameState(c.p).fans * 0.03);
-      const i = c.rng.int(0, 2);
-      const n = compact(c, g);
-      return c.t(
-        [
-          `You signed autographs for three hours. ${n} new fans and one sore wrist.`,
-          `You held a meet-and-greet in a shopping mall. ${n} new fans, and a security guard asked for a selfie.`,
-          `You took photos with fans until the café ran out of tea. ${n} new fans.`,
-        ][i],
-        [
-          `Üç saat imza dağıttın. ${n} yeni hayran ve bir ağrıyan bilek.`,
-          `Bir AVM'de hayranlarınla buluştun. ${n} yeni hayran; güvenlik görevlisi bile fotoğraf istedi.`,
-          `Kafede çay bitene kadar hayranlarınla fotoğraf çektirdin. ${n} yeni hayran.`,
-        ][i],
-      );
+      return sayWith(c, 'fame_meet', MEET_FANS, compact(c, g));
     },
   },
   {

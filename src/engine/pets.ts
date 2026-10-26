@@ -63,7 +63,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { health: 1, happiness: 2 },
     price: 400,
     neglect: 8,
-    names: ['Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Max', 'Rocky', 'Biscuit', 'Bella', 'Charlie', 'Zeytin', 'Coco', 'Buddy', 'Daisy', 'Bailey'],
+    names: ['Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Max', 'Rocky', 'Biscuit', 'Bella', 'Charlie', 'Zeytin', 'Coco', 'Buddy', 'Daisy', 'Bailey', 'Kömür', 'Bulut', 'Aslan'],
   },
   {
     kind: 'cat',
@@ -73,7 +73,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 2 },
     price: 250,
     neglect: 5,
-    names: ['Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Luna', 'Oliver', 'Lokum', 'Mia', 'Simba', 'Whiskers', 'Cleo', 'Milo'],
+    names: ['Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Luna', 'Oliver', 'Lokum', 'Mia', 'Simba', 'Whiskers', 'Cleo', 'Milo', 'Tekir', 'Sarman', 'Mırmır'],
   },
   {
     kind: 'bird',
@@ -83,7 +83,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 1 },
     price: 120,
     neglect: 5,
-    names: ['Maviş', 'Cıvcıv', 'Limon', 'Kiwi', 'Sunny', 'Pip', 'Mango'],
+    names: ['Maviş', 'Cıvcıv', 'Limon', 'Kiwi', 'Sunny', 'Pip', 'Mango', 'Şakrak', 'Cikcik', 'Fıstık'],
   },
   {
     kind: 'fish',
@@ -93,7 +93,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 1 },
     price: 50,
     neglect: 2,
-    names: ['Nemo', 'Dory', 'Balon', 'Fokur', 'Şirin', 'Goldie', 'Pul', 'Bubbles'],
+    names: ['Nemo', 'Dory', 'Balon', 'Fokur', 'Şirin', 'Goldie', 'Pul', 'Bubbles', 'Kabarcık', 'Kızıl'],
   },
   {
     kind: 'rabbit',
@@ -103,7 +103,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { happiness: 1, health: 1 },
     price: 150,
     neglect: 6,
-    names: ['Pofuduk', 'Havuç', 'Bunny', 'Kartopu', 'Kar Tanesi', 'Coco', 'Thumper', 'Clover', 'Hazel'],
+    names: ['Pofuduk', 'Havuç', 'Bunny', 'Kartopu', 'Kar Tanesi', 'Coco', 'Thumper', 'Clover', 'Hazel', 'Ponpon', 'Zıpzıp'],
   },
   {
     kind: 'turtle',
@@ -113,7 +113,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { smarts: 1 },
     price: 200,
     neglect: 1,
-    names: ['Tosbik', 'Leonardo', 'Sheldon', 'Yavaş', 'Franklin', 'Ninja'],
+    names: ['Tosbik', 'Leonardo', 'Sheldon', 'Yavaş', 'Franklin', 'Ninja', 'Sabır', 'Tosun', 'Kaplan'],
   },
   {
     kind: 'horse',
@@ -123,7 +123,7 @@ export const PET_KINDS: PetKindDef[] = [
     fx: { health: 2, happiness: 2 },
     price: 6000,
     neglect: 8,
-    names: ['Rüzgâr', 'Yıldız', 'Kısmet', 'Spirit', 'Ruby', 'Atlas', 'Storm', 'Maple'],
+    names: ['Rüzgâr', 'Yıldız', 'Kısmet', 'Spirit', 'Ruby', 'Atlas', 'Storm', 'Maple', 'Doru', 'Karayel', 'Şahin'],
   },
 ];
 
@@ -145,15 +145,24 @@ export const kindLabel = (k: PetKind, lang: Lang | undefined) => (lang === 'tr' 
 type HasExt = Pick<Player, 'flags'> & { ext?: Record<string, unknown>; countryId?: string };
 
 /** Pet names that only make sense for a family in Türkiye. Elsewhere the international names are used. */
-const TURKISH_PET_NAMES = new Set([
-  'Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Zeytin', 'Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Lokum',
-  'Maviş', 'Cıvcıv', 'Limon', 'Balon', 'Fokur', 'Şirin', 'Pul', 'Pofuduk', 'Havuç', 'Kartopu', 'Kar Tanesi',
-  'Tosbik', 'Yavaş', 'Rüzgâr', 'Yıldız', 'Kısmet',
+export const TURKISH_PET_NAMES = new Set([
+  'Karabaş', 'Çomar', 'Paşa', 'Fındık', 'Zeytin', 'Kömür', 'Bulut', 'Aslan',
+  'Pamuk', 'Boncuk', 'Tarçın', 'Duman', 'Minnoş', 'Lokum', 'Tekir', 'Sarman', 'Mırmır',
+  'Maviş', 'Cıvcıv', 'Limon', 'Şakrak', 'Cikcik', 'Fıstık',
+  'Balon', 'Fokur', 'Şirin', 'Pul', 'Kabarcık', 'Kızıl',
+  'Pofuduk', 'Havuç', 'Kartopu', 'Kar Tanesi', 'Ponpon', 'Zıpzıp',
+  'Tosbik', 'Yavaş', 'Sabır', 'Tosun', 'Kaplan',
+  'Rüzgâr', 'Yıldız', 'Kısmet', 'Doru', 'Karayel', 'Şahin',
 ]);
 
-/** Name pool for a new pet of this kind in this country (Turkish families use both kinds of names). */
+/** International pet names that Turkish families really use (Max the dog, Luna the cat, Nemo the goldfish). */
+const SHARED_PET_NAMES = new Set(['Max', 'Luna', 'Simba', 'Mia', 'Nemo', 'Leonardo', 'Atlas']);
+
+/** Name pool for a new pet of this kind: Turkish names (and a few shared ones) in Türkiye, international names elsewhere. */
 export const petNames = (kind: PetKind, countryId: string | undefined): string[] =>
-  countryId === 'tr' ? petKind(kind).names : petKind(kind).names.filter((n) => !TURKISH_PET_NAMES.has(n));
+  countryId === 'tr'
+    ? petKind(kind).names.filter((n) => TURKISH_PET_NAMES.has(n) || SHARED_PET_NAMES.has(n))
+    : petKind(kind).names.filter((n) => !TURKISH_PET_NAMES.has(n));
 
 /** The family cat's default name: Pamuk in Türkiye, Snowball elsewhere. */
 const defaultCatName = (p: HasExt) => (p.countryId === 'tr' ? 'Pamuk' : 'Snowball');

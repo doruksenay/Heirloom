@@ -1,6 +1,6 @@
 import type { ActivityDef } from '../types';
 import { wage } from '../base/util';
-import { say, sayWith } from '../base/lines';
+import { say, sayWith, type Pair } from '../base/lines';
 import { deskJob } from './events-street';
 import { convict, convictFor, crimeState, free, inside, peekCrime, petty } from './state';
 
@@ -20,6 +20,24 @@ const PICKPOCKET_LINES: ((v: string) => [string, string])[] = [
   (v) => [`You lifted ${v} from a man arguing on the phone. He is still arguing.`, `Telefonda tartışan bir adamın cebinden ${v} çekip uzaklaştın. Adam hâlâ tartışıyor.`],
   (v) => [`A crowded market, a careless handbag, and you are ${v} richer. You bought a coffee for your nerves.`, `Kalabalık bir pazar, dalgın bir çanta ve ${v} daha zengin bir sen. Sinirlerin için bir kahve aldın.`],
   (v) => [`You bumped into a tourist, apologized beautifully and walked off ${v} richer.`, `Bir turiste çarptın, çok güzel özür diledin ve ${v} daha zengin yürüyüp gittin.`],
+];
+
+const PICKPOCKET_CAUGHT: ((x: string) => Pair)[] = [
+  (x) => [`You were caught with your hand in the wrong pocket and fined ${x}.`, `Elin yanlış cebin içindeyken yakalandın. Sana ${x} ceza kesildi.`],
+  (x) => [`The "tourist" you picked was an off-duty police officer. The fine: ${x}.`, `Seçtiğin "turist" izinli bir polis çıktı. Ceza: ${x}.`],
+  (x) => [`A grandmother grabbed your wrist with a grip of iron and shouted until the police came. Fined ${x}.`, `Yaşlı bir teyze bileğini demir gibi kavradı ve polis gelene kadar bağırdı. Ceza: ${x}.`],
+  (x) => [`The wallet was chained to the trousers. You were still pulling when the police arrived. Fined ${x}.`, `Cüzdan pantolona zincirliymiş. Polis geldiğinde hâlâ çekiştiriyordun. Ceza: ${x}.`],
+  (x) => [`A shop window showed your reflection with your hand in someone's bag. So did the security camera. Fined ${x}.`, `Vitrin camı, elin birinin çantasındayken seni yansıttı. Güvenlik kamerası da. Ceza: ${x}.`],
+];
+
+/** Workshop days after the first certificates: a different job each time. */
+const WORKSHOP_LATER: ((x: string) => Pair)[] = [
+  (x) => [`You are the best carpenter on the block now. The guards bring you their broken chairs. You earned ${x}.`, `Artık koğuşun en iyi marangozu sensin. Gardiyanlar kırık sandalyelerini sana getiriyor. Kazancın ${x}.`],
+  (x) => [`You built a cradle in the workshop for a guard's new baby. He did not know what to say. You earned ${x}.`, `Atölyede bir gardiyanın yeni doğan bebeği için beşik yaptın. Ne diyeceğini bilemedi. Kazancın ${x}.`],
+  (x) => [`You taught a new inmate to use a plane without losing a finger. Both of you were proud. You earned ${x}.`, `Yeni gelen bir mahkûma parmağını kaybetmeden rende kullanmayı öğrettin. İkiniz de gurur duydunuz. Kazancın ${x}.`],
+  (x) => [`You repaired every bench in the visiting room. Families sit a little more comfortably now. You earned ${x}.`, `Görüş salonundaki bütün bankları onardın. Aileler artık biraz daha rahat oturuyor. Kazancın ${x}.`],
+  (x) => [`You carved a chess set in the workshop and the whole block plays with it. You earned ${x}.`, `Atölyede bir satranç takımı oydun, bütün koğuş onunla oynuyor. Kazancın ${x}.`],
+  (x) => [`An order of forty chairs for a school came through the workshop. You signed the bottom of one. You earned ${x}.`, `Atölyeye bir okul için kırk sandalyelik sipariş geldi. Birinin altına adını kazıdın. Kazancın ${x}.`],
 ];
 
 export const crimeActivities: ActivityDef[] = [
@@ -52,7 +70,7 @@ export const crimeActivities: ActivityDef[] = [
       return say(c, 'shoplift.fine', [
         ['You were caught shoplifting and paid a heavy fine.', 'Mağazada suçüstü yakalandın ve tuzlu bir para cezası ödedin.'],
         ['Security had been watching you on camera before you even touched anything. A heavy fine.', 'Güvenlik görevlisi daha hiçbir şeye dokunmadan seni kamerada izliyormuş. Tuzlu bir ceza.'],
-        ['The alarm went off at the door. You tried to look surprised. The fine was not surprised.', 'Kapıda alarm öttü. Şaşırmış gibi yapmaya çalıştın. Ceza hiç şaşırmadı.'],
+        ['The alarm went off at the door. You tried to look surprised. The fine was not surprised.', 'Kapıda alarm öttü. Şaşırmış gibi yapmaya çalıştın. Cezayı kesen görevli hiç şaşırmadı.'],
         ['You were caught with a cheese up your sleeve. The fine was heavy, the shame heavier.', 'Kolunun içinde bir peynirle yakalandın. Ceza ağırdı, utanç daha da ağır.'],
       ]);
     },
@@ -89,7 +107,7 @@ export const crimeActivities: ActivityDef[] = [
       const fine = wage(c, c.rng.int(200, 500));
       c.h.money(-fine);
       petty(c, 6);
-      return c.t(`You were caught with your hand in the wrong pocket and fined ${c.h.fmt(fine)}.`, `Elin yanlış cebin içindeyken yakalandın. Sana ${c.h.fmt(fine)} ceza kesildi.`);
+      return sayWith(c, 'crime_pickpocket.caught', PICKPOCKET_CAUGHT, c.h.fmt(fine));
     },
   },
   {
@@ -167,19 +185,12 @@ export const crimeActivities: ActivityDef[] = [
           `Cezaevi atölyesinde marangozluk sertifikası aldın, üstüne ${c.h.fmt(pay)} yevmiye. Usta elini sıktı.`,
         );
       }
-      const i = st.trade === 1 ? 0 : st.trade === 3 ? 1 : 2;
-      return c.t(
-        [
-          `You sanded chair legs for eight hours and earned ${c.h.fmt(pay)}. Your hands smell like pine.`,
-          `You built a bookshelf for the prison library and earned ${c.h.fmt(pay)}. The warden wants one too.`,
-          `You are the best carpenter on the block now. The guards bring you their broken chairs. You earned ${c.h.fmt(pay)}.`,
-        ][i],
-        [
-          `Sekiz saat sandalye ayağı zımparaladın ve ${c.h.fmt(pay)} kazandın. Ellerin çam kokuyor.`,
-          `Cezaevi kütüphanesine bir kitaplık yaptın ve ${c.h.fmt(pay)} kazandın. Müdür de bir tane istiyor.`,
-          `Artık koğuşun en iyi marangozu sensin. Gardiyanlar kırık sandalyelerini sana getiriyor. Kazancın ${c.h.fmt(pay)}.`,
-        ][i],
-      );
+      if (st.trade === 1)
+        return c.t(`You sanded chair legs for eight hours and earned ${c.h.fmt(pay)}. Your hands smell like pine.`, `Sekiz saat sandalye ayağı zımparaladın ve ${c.h.fmt(pay)} kazandın. Ellerin çam kokuyor.`);
+      if (st.trade === 3)
+        return c.t(`You built a bookshelf for the prison library and earned ${c.h.fmt(pay)}. The warden wants one too.`, `Cezaevi kütüphanesine bir kitaplık yaptın ve ${c.h.fmt(pay)} kazandın. Müdür de bir tane istiyor.`);
+      // a long stretch in the workshop: a different job every time
+      return sayWith(c, 'crime_workshop', WORKSHOP_LATER, c.h.fmt(pay));
     },
   },
 ];

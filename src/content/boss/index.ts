@@ -1,10 +1,33 @@
-import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../types';
+import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef, Txt } from '../types';
 import { cap, dat, kin, kinWord, nm, wage } from '../base/util';
 import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
-import { INDUSTRIES, SALE_RANGE, STAGE_NAMES, bossState, stageName, companyOf, genOf, peekBoss, saleShare, valuate, type Company, type Industry } from './state';
+import { inheritanceTax } from '../../engine/economy';
+import {
+  INDUSTRIES,
+  MIN_YEARS_TO_SELL,
+  SALE_RANGE,
+  STAGE_NAMES,
+  addMark,
+  an,
+  bossState,
+  canFound,
+  companyNames,
+  companyOf,
+  endCompany,
+  genOf,
+  hasMark,
+  peekBoss,
+  saleShare,
+  stageName,
+  tidy,
+  valuate,
+  type Company,
+  type Industry,
+} from './state';
 import { afterYear, moraleGrowth, moreActivities, moreEvents } from './extra';
-import { sayWith, type Pair } from '../base/lines';
+import { say, sayWith, type Pair } from '../base/lines';
+import { inTr } from '../base/events-flavour';
 
 // "Boss" expansion: start a company, grow it, raise money, sell it, take it public, or lose everything.
 export const BOSS_ENTITLEMENT = 'pack.boss';
@@ -24,8 +47,10 @@ function industryChoice(id: Industry): ChoiceDef {
       const cost = wage(c, ind.startCost);
       const loan = c.p.money < cost;
       c.h.money(-cost); // without savings this becomes a bank loan (negative balance)
-      const ni = c.rng.int(0, ind.names.length - 1); // one RNG call, same as rng.pick(ind.names)
-      const name = c.lang === 'tr' ? ind.namesTr[ni] : ind.names[ni];
+      // one RNG call picks the row; Turkish flavour (Rize, tavşan kanı) only for lives in Türkiye
+      const names = companyNames(id, c.p.countryId);
+      const [nameEn, nameTr] = names[c.rng.int(0, names.length - 1)];
+      const name = c.t(nameEn, nameTr);
       const company: Company = {
         name,
         industry: id,
@@ -59,7 +84,7 @@ function industryChoice(id: Industry): ChoiceDef {
 function bankrupt(c: Ctx, reason: string, reasonTr: string): string {
   const b = bossState(c.p);
   const name = b.company?.name ?? c.t('your company', 'şirketin');
-  b.company = null;
+  endCompany(c.p, c.s.year);
   b.bankruptcies++;
   c.h.stat('happiness', -18);
   c.h.stat('health', -5);
@@ -71,6 +96,42 @@ function bankrupt(c: Ctx, reason: string, reasonTr: string): string {
 
 const BUYERS = ['a big rival', 'a private equity firm', 'a foreign conglomerate', 'your biggest customer'];
 const BUYERS_TR = ['büyük bir rakip', 'bir özel sermaye fonu', 'yabancı bir holding', 'en büyük müşterin'];
+
+// ------------------------------------------------------------------ lines
+// Repeatable company lines pick a variant with `say`/`sayWith` (base/lines.ts): one rng call, and a line
+// does not come back until most of its list has been seen. Amounts stand alone, never with a suffix.
+
+type NameAmount = { name: string; x: string };
+
+const SOLD: ((v: NameAmount) => Pair)[] = [
+  ({ name, x }) => [`You sold ${name} and walked away with ${x} after taxes. You slept for 14 hours.`, `${name} şirketini sattın; vergiden sonra cebine ${x} kaldı. 14 saat uyudun.`],
+  ({ name, x }) => [`You sold ${name}. ${x} after taxes, and a strange quiet on Monday morning.`, `${name} şirketini sattın. Vergiden sonra ${x} kaldı, pazartesi sabahı da tuhaf bir sessizlik.`],
+  ({ name, x }) => [`The sale of ${name} went through: ${x} for you after taxes. You kept your first business card as a souvenir.`, `${name} satışı tamamlandı: vergiden sonra sana ${x} kaldı. İlk kartvizitini hatıra olarak sakladın.`],
+  ({ name, x }) => [`You handed over the keys to ${name}, and ${x} landed in your account after taxes. You did not know what to do with your hands.`, `${name} şirketinin anahtarlarını teslim ettin, vergiden sonra hesabına ${x} yattı. Ellerini nereye koyacağını bilemedin.`],
+  ({ name, x }) => [`You signed the last page and ${name} was no longer yours. After taxes: ${x}. You took the office mug home.`, `Son sayfayı imzaladın ve ${name} artık senin değildi. Vergiden sonra kalan: ${x}. Ofisteki kupanı eve götürdün.`],
+];
+
+const INVESTORS_WALKED: Pair[] = [
+  ['You pushed too hard. The investors walked out and took the sneakers with them.', 'Fazla zorladın. Yatırımcılar spor ayakkabılarıyla birlikte kapıyı çarpıp çıktı.'],
+  ['You asked for a better valuation. They asked for the exit.', 'Daha yüksek bir değerleme istedin. Onlar da çıkış kapısını sordu.'],
+  ['You held out for better terms. The investors said they would "circle back". Nobody circles back.', 'Daha iyi şartlar için direttin. Yatırımcılar "Sonra döneriz" dedi. Kimse sonra dönmez.'],
+  ['The negotiation went on until the coffee went cold, then so did the deal.', 'Pazarlık kahveler soğuyana kadar sürdü, sonra anlaşma da soğudu.'],
+];
+const INVESTORS_NO: ((name: string) => Pair)[] = [
+  (n) => [`You kept 100% control of ${n}. And 100% of the stress.`, `${n} yüzde yüz senin kontrolünde kaldı. Stresi de yüzde yüz.`],
+  (n) => [`You said no to the money. ${n} stays small, stubborn and entirely yours.`, `Paraya hayır dedin. ${n} küçük, inatçı ve tamamen senin kalıyor.`],
+  (n) => [`You turned the investors down. At the next board meeting of ${n}, you were the whole board.`, `Yatırımcıları geri çevirdin. ${n} yönetim kurulunun bir sonraki toplantısında kurulun tamamı yine sendin.`],
+  (n) => [`No outside money for ${n}. Your accountant called it brave. Your bank called it "noted".`, `${n} için dışarıdan para yok. Muhasebecin buna cesaret dedi, bankan "Not edildi" dedi.`],
+];
+
+const KEEP: ((name: string) => Pair)[] = [
+  (n) => [`You turned the offer down. ${n} is not for sale.`, `Teklifi geri çevirdin. ${n} satılık değil.`],
+  (n) => [`You read the offer twice, then said no. ${n} stays yours.`, `Teklifi iki kez okudun, sonra hayır dedin. ${n} seninle kalıyor.`],
+  (n) => [`"Not at that price," you said, and meant "not at any price." ${n} keeps going.`, `"O fiyata olmaz" dedin; aslında "Hiçbir fiyata olmaz" demek istiyordun. ${n} yoluna devam ediyor.`],
+  () => ['You walked out of the meeting, then walked back in for your umbrella. Still no deal.', 'Toplantıdan çıktın, sonra şemsiyeni almak için geri döndün. Anlaşma yine yok.'],
+  (n) => [`The buyer's lawyer looked hurt. You did not sell ${n}.`, `Alıcının avukatı kırılmış gibi baktı. ${n} şirketini satmadın.`],
+  (n) => [`You slept on it and woke up certain: you are not done with ${n} yet.`, `Bir gece düşündün ve sabah emin uyandın: ${n} ile işin daha bitmedi.`],
+];
 
 // ------------------------------------------------------------------ events
 const events: EventDef[] = [
@@ -135,13 +196,13 @@ const events: EventDef[] = [
               `Diretip daha iyi bir anlaşma kaptın. ${comp.name} ${c.h.fmt(Number(c.vars.amt) * 1.3)} yatırım aldı.`,
             );
           }
-          return c.t('You pushed too hard. The investors walked out and took the sneakers with them.', 'Fazla zorladın. Yatırımcılar spor ayakkabılarıyla birlikte kapıyı çarpıp çıktı.');
+          return say(c, 'boss.investors.walked', INVESTORS_WALKED);
         },
       },
       {
         id: 'decline',
         label: (c) => c.t('Stay independent', 'Bağımsız kal'),
-        resolve: (c) => c.t(`You kept 100% control of ${co(c)!.name}. And 100% of the stress.`, `${co(c)!.name} yüzde yüz senin kontrolünde kaldı. Stresi de yüzde yüz.`),
+        resolve: (c) => sayWith(c, 'boss.investors.no', INVESTORS_NO, co(c)!.name),
       },
     ],
   },
@@ -174,22 +235,19 @@ const events: EventDef[] = [
           const comp = b.company!;
           const payout = saleShare(Number(c.vars.price), comp.ownership);
           c.h.money(payout);
-          b.company = null;
+          endCompany(c.p, c.s.year);
           b.exits++;
           c.h.achieve('exit');
           c.h.stat('happiness', 10);
           if (!c.p.jobId) c.p.jobTitle = c.t(`Founder of ${comp.name}`, `${comp.name} Kurucusu`);
-          return c.t(
-            `You sold ${comp.name} and walked away with ${c.h.fmt(payout)} after taxes. You slept for 14 hours.`,
-            `${comp.name} şirketini sattın; vergiden sonra cebine ${c.h.fmt(payout)} kaldı. 14 saat uyudun.`,
-          );
+          return sayWith(c, 'boss.sell.sold', SOLD, { name: comp.name, x: c.h.fmt(payout) });
         },
         tone: 'big',
       },
       {
         id: 'keep',
         label: (c) => c.t('Keep building', 'Büyütmeye devam et'),
-        resolve: (c) => c.t(`You turned the offer down. ${co(c)!.name} is not for sale.`, `Teklifi geri çevirdin. ${co(c)!.name} satılık değil.`),
+        resolve: (c) => sayWith(c, 'boss.sell.keep', KEEP, co(c)!.name),
       },
     ],
   },
@@ -217,7 +275,7 @@ const events: EventDef[] = [
           const comp = b.company!;
           const payout = saleShare(Number(c.vars.price), comp.ownership);
           c.h.money(payout);
-          b.company = null;
+          endCompany(c.p, c.s.year);
           b.exits++;
           c.h.achieve('exit');
           c.h.stat('happiness', 12);
@@ -375,7 +433,7 @@ const events: EventDef[] = [
         label: (c) => c.t('Match the offer', 'Teklifi eşitle'),
         resolve: (c) => {
           co(c)!.cash -= wage(c, 25000);
-          return c.t(`You matched the offer. ${nm(c)} stayed and brought donuts.`, `Teklifi eşitledin. ${nm(c)} kaldı ve herkese poğaça getirdi.`);
+          return c.t(`You matched the offer. ${nm(c)} stayed and brought donuts.`, `Teklifi eşitledin. ${nm(c)} kaldı ve herkese ${inTr(c) ? 'poğaça' : 'donut'} getirdi.`);
         },
       },
       {
@@ -483,10 +541,6 @@ const events: EventDef[] = [
 ];
 
 // ------------------------------------------------------------------ activity lines
-// Repeatable company activities pick a line with `sayWith` (base/lines.ts): one rng call, and a line
-// does not come back until most of its list has been seen. Amounts stand alone, never with a suffix.
-
-type NameAmount = { name: string; x: string };
 
 const GRIND: ((name: string) => Pair)[] = [
   (n) => [`You worked until 3 a.m. on ${n} all month. Revenue is up.`, `Bütün ay ${n} için gece üçe kadar çalıştın. Ciro yükseldi.`],
@@ -515,13 +569,13 @@ const MARKETING_HIT: ((v: NameAmount) => Pair)[] = [
 
 const MARKETING_MEH: ((v: NameAmount) => Pair)[] = [
   ({ name, x }) => [`You spent ${x} on ads for ${name}. Some people noticed.`, `${name} reklamlarına ${x} harcadın. Birkaç kişi fark etti.`],
-  ({ name, x }) => [`You paid ${x} for a ${name} billboard. It is mostly seen by pigeons.`, `${name} için bir afişe ${x} ödedin. Afişi en çok güvercinler görüyor.`],
+  ({ name, x }) => [`You paid ${x} for ${an(name)} billboard. It is mostly seen by pigeons.`, `${name} için bir afişe ${x} ödedin. Afişi en çok güvercinler görüyor.`],
   ({ name, x }) => [`The ${name} radio ad aired at 3 a.m. Cost: ${x}. Audience: insomniacs.`, `${name} radyo reklamı gece üçte yayınlandı. Maliyeti ${x}, dinleyicisi uykusuzlar.`],
   ({ name, x }) => [`You printed ${name} flyers for ${x} and handed them out on a corner. Most are in the recycling now.`, `Sokak köşesinde ${name} broşürü dağıttın. Basımına ${x} gitti; çoğu şimdi geri dönüşüm kutusunda.`],
   ({ name, x }) => [`You paid an influencer ${x}. Their post about ${name} got fewer likes than their breakfast.`, `Bir fenomene ${x} ödedin. ${name} paylaşımı, kahvaltı fotoğrafından az beğeni aldı.`],
   ({ name, x }) => [`The ${name} campaign cost ${x}. A cousin says she saw it. Nobody else has confirmed.`, `${name} kampanyası ${x} tuttu. Bir kuzenin gördüğünü söylüyor; doğrulayan başka kimse yok.`],
   ({ name, x }) => [`You spent ${x} on online ads for ${name}. Most of the clicks were you, checking the ads.`, `${name} için internet reklamlarına ${x} harcadın. Tıklamaların çoğu reklamı kontrol eden sendin.`],
-  ({ name, x }) => [`${x} on a ${name} campaign bought a little buzz. A very little buzz.`, `${name} kampanyasına ${x} harcadın; biraz ses getirdi. Çok az bir ses.`],
+  ({ name, x }) => [`${x} on ${an(name)} campaign bought a little buzz. A very little buzz.`, `${name} kampanyasına ${x} harcadın; biraz ses getirdi. Çok az bir ses.`],
 ];
 
 const INVEST: ((v: NameAmount) => Pair)[] = [
@@ -537,6 +591,90 @@ const INVEST: ((v: NameAmount) => Pair)[] = [
   ({ name, x }) => [`Half your savings, ${x}, now lives at ${name}. Your piggy bank feels betrayed.`, `Birikiminin yarısı, yani ${x}, artık ${name} kasasında. Kumbaran ihanete uğramış gibi.`],
 ];
 
+/** A hire or a layoff: who, how many, and the team size afterwards (counting you). */
+type Staff = { name: string; n: number; team: number };
+const people = (n: number) => (n === 1 ? 'person' : 'people');
+
+/** The very first employee of a company (once per company: the 'firsthire' mark). */
+const FIRST_HIRE: ((v: Staff) => Pair)[] = [
+  ({ name }) => [`You hired your first employee at ${name}. The team is now two: you, and someone who actually reads the manual.`, `${name} ilk çalışanını işe aldı. Ekip artık iki kişi: sen ve kullanım kılavuzunu gerçekten okuyan biri.`],
+  ({ name }) => [`${name} has its first employee. You gave them the good chair and kept the wobbly one.`, `${name} ilk çalışanına kavuştu. İyi sandalyeyi ona verdin, sallananı sende kaldı.`],
+  ({ name }) => [`Your first hire at ${name} started on Monday. You had practised saying "my team" in the mirror.`, `${name} şirketindeki ilk çalışanın pazartesi başladı. Aynanın karşısında "ekibim" demeyi prova etmiştin.`],
+  ({ name }) => [`You signed your first employment contract at ${name}, with a pen you bought for the occasion. A team of two.`, `${name} adına ilk iş sözleşmeni, sırf bu iş için aldığın bir kalemle imzaladın. İki kişilik bir ekip.`],
+];
+
+/** Back from zero staff after layoffs or quits. */
+const REHIRE: ((v: Staff) => Pair)[] = [
+  ({ name, team }) => [`After a lonely stretch, ${name} has staff again. The team is back to ${team}, and the office plant looks relieved.`, `Yalnız geçen bir dönemden sonra ${name} yine eleman aldı. Ekip yeniden ${team} kişi; ofisteki saksı çiçeği bile rahatlamış görünüyor.`],
+  ({ name, team }) => [`You hired again at ${name}. The empty desks have owners, and the team is ${team} once more.`, `${name} için yeniden eleman aldın. Boş masaların sahibi çıktı, ekip yine ${team} kişi.`],
+  ({ name, team }) => [`${name} is hiring again. You are a team of ${team}, and you no longer talk to the printer.`, `${name} yeniden işe alım yapıyor. Artık ${team} kişilik bir ekipsiniz, sen de yazıcıyla konuşmayı bıraktın.`],
+  ({ name, team }) => [`You put the "We're hiring" sign back in the window at ${name}. Someone answered it the same day. A team of ${team} again.`, `${name} vitrinine "Eleman aranıyor" yazısını yeniden astın. Aynı gün başvuran oldu. Yine ${team} kişilik bir ekipsiniz.`],
+  ({ name, team }) => [`An old employee came back to ${name}. "I missed the chaos," they said. The team is ${team}.`, `Eski çalışanlarından biri ${name} şirketine geri döndü. "Bu kargaşayı özlemişim" dedi. Ekip ${team} kişi.`],
+  ({ name, team }) => [`${name} has a second coffee cup in the sink again. You hired, and the team is ${team}.`, `${name} ofisinin lavabosunda yine ikinci bir kahve fincanı var. Eleman aldın, ekip ${team} kişi.`],
+];
+
+/** Small team: up to ten people. */
+const HIRE_SMALL: ((v: Staff) => Pair)[] = [
+  ({ name, n, team }) => [`You hired ${n} ${people(n)} at ${name}. The team grows to ${team}.`, `${name} için ${n} kişi işe aldın. Ekip ${team} kişiye çıktı.`],
+  ({ name, n, team }) => [`${n === 1 ? 'A new face' : `${n} new faces`} at ${name}. The team is ${team} now, and the mugs no longer match.`, `${name} şirketinde ${n} yeni yüz var. Ekip artık ${team} kişi ve kupalar birbirini tutmuyor.`],
+  ({ name, n, team }) => [`You interviewed all week and hired ${n}. ${name} is ${team} people strong, and the lunch order is now a spreadsheet.`, `Bütün hafta mülakat yaptın ve ${n} kişiyi işe aldın. ${name} artık ${team} kişi; öğle yemeği siparişi bir tabloya dönüştü.`],
+  ({ name, n, team }) => [`${name} took on ${n} more. With ${team} people, someone has started a birthday calendar.`, `${name} ${n} kişi daha aldı. ${team} kişi olunca biri doğum günü takvimi tutmaya başladı.`],
+  ({ name, n, team }) => [`You hired ${n} at ${name} and bought the desks at a flea market. The team grows to ${team}.`, `${name} için ${n} kişi aldın, masaları da bit pazarından buldun. Ekip ${team} kişiye çıktı.`],
+  ({ name, n, team }) => [`Welcome drinks for the new ${people(n)} at ${name}. You are a team of ${team}, and you still know everyone's coffee order.`, `${name} şirketinde yeni gelenlere hoş geldin içkisi. ${team} kişilik bir ekipsiniz ve hâlâ herkesin kahvesini nasıl içtiğini biliyorsun.`],
+  ({ name, n, team }) => [`${n} new ${people(n)} started at ${name} on the same rainy Monday. The team is ${team}, and the umbrella stand is full.`, `Yağmurlu bir pazartesi ${name} şirketinde ${n} kişi işe başladı. Ekip ${team} kişi oldu, şemsiyelik de doldu.`],
+];
+
+/** Mid-sized: eleven to fifty. */
+const HIRE_MID: ((v: Staff) => Pair)[] = [
+  ({ name, n, team }) => [`You hired ${n} more at ${name}. The team grows to ${team}; you no longer know every name, and you feel bad about it.`, `${name} için ${n} kişi daha aldın. Ekip ${team} kişiye çıktı; artık herkesin adını bilmiyorsun ve bu seni üzüyor.`],
+  ({ name, n, team }) => [`${name} brought in ${n} new ${people(n)}. At ${team}, the office needs a second coffee machine and a first HR person.`, `${name} ${n} yeni kişiyle büyüdü. ${team} kişiye ulaşınca ofise ikinci bir kahve makinesi ve ilk insan kaynakları uzmanı şart oldu.`],
+  ({ name, n, team }) => [`${n} new hires at ${name}. The team is ${team} now, and everyone has muted the group chat.`, `${name} şirketine ${n} yeni çalışan katıldı. Ekip ${team} kişi oldu ve herkes grup sohbetini sessize aldı.`],
+  ({ name, n, team }) => [`You signed ${n} contracts in one afternoon. ${name} is ${team} people now, and the kitchen fridge needs rules.`, `Bir öğleden sonra ${n} sözleşme imzaladın. ${name} artık ${team} kişi; mutfaktaki buzdolabının kurallara ihtiyacı var.`],
+  ({ name, n, team }) => [`${name} grew by ${n}. With ${team} people, the all-hands meeting needs a microphone.`, `${name} ${n} kişi büyüdü. ${team} kişi olunca genel toplantıya mikrofon gerekti.`],
+  ({ name, n, team }) => [`The new ${people(n)} at ${name} got name badges, the first ones the company ever printed. The team is ${team}.`, `${name} şirketinde yeni gelenlere yaka kartı basıldı, şirketin bastığı ilk kartlar. Ekip ${team} kişi.`],
+];
+
+/** Big: more than fifty. */
+const HIRE_BIG: ((v: Staff) => Pair)[] = [
+  ({ name, n, team }) => [`HR hired ${n} people at ${name} this year. The team is now ${team}; you have met about half of them.`, `İnsan kaynakları bu yıl ${name} için ${n} kişi işe aldı. Ekip ${team} kişi oldu; yarısıyla tanıştın tanışmadın.`],
+  ({ name, n, team }) => [`${name} took on ${n} new staff. At ${team} people, the company has a football team, a choir and a feud.`, `${name} ${n} yeni çalışan aldı. ${team} kişilik şirketin artık bir futbol takımı, bir korosu ve bir de küslüğü var.`],
+  ({ name, n, team }) => [`${n} new badges were printed at ${name}. The team is ${team} strong and the lifts are always full.`, `${name} şirketinde ${n} yeni yaka kartı basıldı. Ekip ${team} kişi ve asansörler hep dolu.`],
+  ({ name, n, team }) => [`You approved ${n} hires with one signature. ${name} employs ${team} people now, which still surprises you.`, `Tek imzayla ${n} kişinin işe alımını onayladın. ${name} artık ${team} kişiye iş veriyor; bu hâlâ seni şaşırtıyor.`],
+  ({ name, n, team }) => [`${name} opened a new floor for ${n} new hires. The team is ${team}, and the canteen now has a queue.`, `${name} ${n} yeni çalışan için yeni bir kat açtı. Ekip ${team} kişi oldu, yemekhanede artık sıra var.`],
+];
+
+const LAYOFF: ((v: Staff) => Pair)[] = [
+  ({ name, n }) => [`You let ${n} ${people(n)} go at ${name}. The office is very quiet.`, `${name} bünyesinde ${n} kişiyi işten çıkardın. Ofiste çıt çıkmıyor.`],
+  ({ name, n }) => [`You had to let ${n} ${people(n)} go at ${name}. You told each of them in person and went home with a headache.`, `${name} şirketinde ${n} kişiyle yollarını ayırmak zorunda kaldın. Her birine yüz yüze söyledin, eve baş ağrısıyla döndün.`],
+  ({ name, n, team }) => [`${name} shrank by ${n}. The team is down to ${team}, and nobody laughs at the coffee machine any more.`, `${name} ${n} kişi küçüldü. Ekip ${team} kişiye indi; kahve makinesinin başında artık kimse gülmüyor.`],
+  ({ name, n }) => [`Cutbacks at ${name}: ${n} empty ${n === 1 ? 'desk' : 'desks'}. You wrote a reference letter for every one of them.`, `${name} şirketinde kadro daraldı, ${n} masa boş kaldı. Hepsine birer referans mektubu yazdın.`],
+  ({ name, n, team }) => [`You cut ${n} ${n === 1 ? 'job' : 'jobs'} at ${name}. The ${team} of you who are left work harder and talk less.`, `${name} şirketinde ${n} kişinin işine son verdin. Geride kalan ${team} kişi daha çok çalışıyor, daha az konuşuyor.`],
+  ({ name }) => [`The layoff meeting at ${name} took ten minutes. You thought about it for ten weeks.`, `${name} şirketindeki işten çıkarma toplantısı on dakika sürdü. Sen on hafta düşündün.`],
+];
+
+const DIVIDEND: ((v: NameAmount) => Pair)[] = [
+  ({ name, x }) => [`You paid yourself ${x} from ${name}.`, `${name} kasasından kendine ${x} ödedin.`],
+  ({ name, x }) => [`You took ${x} home from ${name}. Your bank sent a polite "Is everything all right?"`, `${name} kasasından eve ${x} götürdün. Bankan kibarca "Her şey yolunda mı?" diye sordu.`],
+  ({ name, x }) => [`Payday for the founder: ${x} from ${name}. You celebrated with a sandwich somebody else made.`, `Kurucuya maaş günü: ${name} kasasından ${x}. Başkasının yaptığı bir sandviçle kutladın.`],
+  ({ name, x }) => [`Your accountant moved ${x} from ${name} to you and sighed only once.`, `Muhasebecin ${name} hesabından sana ${x} aktardı ve yalnızca bir kez iç çekti.`],
+  ({ name, x }) => [`You paid yourself ${x} from ${name}, then immediately started worrying about payroll.`, `${name} kasasından kendine ${x} ödedin, ardından hemen maaşları dert etmeye başladın.`],
+  ({ name, x }) => [`${x} from ${name} landed in your account. For one evening you felt like a real tycoon.`, `${name} kasasından hesabına ${x} geçti. Bir akşamlığına kendini gerçek bir patron gibi hissettin.`],
+  ({ name, x }) => [`You took ${x} out of ${name} as a dividend. Your family already has opinions on how to spend it.`, `${name} kasasından kâr payı olarak ${x} çektin. Ailen, paranın nasıl harcanacağı konusunda şimdiden fikir beyan ediyor.`],
+  ({ name, x }) => [`You signed off ${x} to yourself from ${name}. The staff noticed your new shoes.`, `${name} kasasından kendine ${x} çıkardın. Çalışanlar yeni ayakkabılarını fark etti.`],
+  ({ name, x }) => [`You paid yourself ${x} from ${name} and put some of it aside "for the bad year."`, `${name} kasasından kendine ${x} ödedin ve bir kısmını "kara gün" için kenara koydun.`],
+  ({ name, x }) => [`${x} out of ${name} and into your pocket. It still feels like raiding your own piggy bank.`, `${name} kasasından cebine ${x} geçti. Hâlâ kendi kumbaranı soyuyormuşsun gibi geliyor.`],
+];
+
+const PITCH_FAIL: ((name: string) => Pair)[] = [
+  () => ['You pitched to six investors. They all said "keep us posted."', 'Altı yatırımcıya sunum yaptın. Hepsi "Bizi haberdar edin" dedi.'],
+  () => ['An investor took your deck home "to read it properly." That was a year ago.', 'Bir yatırımcı sunumunu "Doğru dürüst okumak için" eve götürdü. Üstünden bir yıl geçti.'],
+  (n) => [`You pitched ${n} to a room full of investors. One asked if you had considered being a different company.`, `Bir salon dolusu yatırımcıya ${n} sunumu yaptın. Biri, başka bir şirket olmayı hiç düşünüp düşünmediğini sordu.`],
+  () => ['The investors loved your energy and hated your numbers.', 'Yatırımcılar enerjine bayıldı, rakamlarından nefret etti.'],
+  () => ['You flew to a startup conference, pitched eleven times and came home with a tote bag.', 'Bir girişim konferansına uçtun, on bir kez sunum yaptın ve eve bir bez çantayla döndün.'],
+  () => ['"Come back when you have more traction," they said. You are not sure what traction is, but you want it.', '"Biraz daha ivme kazanınca gelin" dediler. İvmenin tam olarak ne olduğunu bilmiyorsun ama istiyorsun.'],
+  () => ['Your slides froze halfway through the pitch. So did the investors.', 'Sunumun ortasında slaytlar dondu. Yatırımcılar da.'],
+];
+
 // ------------------------------------------------------------------ activities
 const activities: ActivityDef[] = [
   {
@@ -546,7 +684,8 @@ const activities: ActivityDef[] = [
     group: 'Business',
     minAge: 18,
     maxAge: 75,
-    available: (c) => !co(c) && free(c),
+    // after a sale or a bankruptcy, a few years pass before the next company (longer each time)
+    available: (c) => !co(c) && free(c) && canFound(c.p, c.s.year),
     run: () => ({ event: 'boss.found' }),
   },
   {
@@ -576,12 +715,18 @@ const activities: ActivityDef[] = [
     available: (c) => !!co(c) && free(c),
     run: (c) => {
       const comp = co(c)!;
+      const before = comp.employees;
       const n = Math.max(1, Math.round(comp.employees * 0.3));
       comp.employees += n;
-      return c.t(
-        `You hired ${n} ${n === 1 ? 'person' : 'people'} at ${comp.name}. The team is now ${comp.employees + 1}, counting you.`,
-        `${comp.name} için ${n} kişi işe aldın. Seninle birlikte ekip artık ${comp.employees + 1} kişi.`,
-      );
+      // the line follows the company's growth: the first hire, a comeback from zero, then the team size
+      const v: Staff = { name: comp.name, n, team: comp.employees + 1 };
+      if (before === 0 && !hasMark(comp, 'firsthire')) {
+        addMark(comp, 'firsthire');
+        return sayWith(c, 'boss_hire.first', FIRST_HIRE, v);
+      }
+      addMark(comp, 'firsthire');
+      if (before === 0) return sayWith(c, 'boss_hire.again', REHIRE, v);
+      return sayWith(c, 'boss_hire', v.team <= 10 ? HIRE_SMALL : v.team <= 50 ? HIRE_MID : HIRE_BIG, v);
     },
   },
   {
@@ -596,10 +741,7 @@ const activities: ActivityDef[] = [
       const n = Math.max(1, Math.round(comp.employees * 0.3));
       comp.employees -= n;
       c.h.stat('happiness', -5);
-      return c.t(
-        `You let ${n} ${n === 1 ? 'person' : 'people'} go at ${comp.name}. The office is very quiet.`,
-        `${comp.name} bünyesinde ${n} kişiyi işten çıkardın. Ofiste çıt çıkmıyor.`,
-      );
+      return sayWith(c, 'boss_layoffs', LAYOFF, { name: comp.name, n, team: comp.employees + 1 });
     },
   },
   {
@@ -631,7 +773,7 @@ const activities: ActivityDef[] = [
       const take = Math.round(comp.cash * 0.3);
       comp.cash -= take;
       c.h.money(Math.round(take * comp.ownership));
-      return c.t(`You paid yourself ${c.h.fmt(take * comp.ownership)} from ${comp.name}.`, `${comp.name} kasasından kendine ${c.h.fmt(take * comp.ownership)} ödedin.`);
+      return sayWith(c, 'boss_dividend', DIVIDEND, { name: comp.name, x: c.h.fmt(take * comp.ownership) });
     },
   },
   {
@@ -659,7 +801,7 @@ const activities: ActivityDef[] = [
     available: (c) => !!co(c) && co(c)!.stage !== 'public' && co(c)!.revenue >= wage(c, 40_000) && free(c),
     run: (c) => {
       if (c.rng.chance(0.35 + c.p.stats.smarts / 300 + co(c)!.hype / 300)) return { event: 'boss.investors' };
-      return c.t('You pitched to six investors. They all said "keep us posted."', 'Altı yatırımcıya sunum yaptın. Hepsi "Bizi haberdar edin" dedi.');
+      return sayWith(c, 'boss_pitch', PITCH_FAIL, co(c)!.name);
     },
   },
   {
@@ -668,7 +810,8 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('Find a buyer', 'Alıcı bul'),
     group: 'Business',
     minAge: 18,
-    available: (c) => !!co(c) && co(c)!.valuation > 0 && co(c)!.stage !== 'public' && free(c),
+    // a buyer wants a few years of track record (and found-sell-found loops slow down)
+    available: (c) => !!co(c) && co(c)!.valuation > 0 && co(c)!.stage !== 'public' && c.s.year - co(c)!.founded >= MIN_YEARS_TO_SELL && free(c),
     run: () => ({ event: 'boss.sell' }),
   },
   {
@@ -721,14 +864,32 @@ function onYear(c: Ctx) {
 
 const equity = (comp: Company) => Math.round(comp.valuation * comp.ownership);
 
+// ------------------------------------------------------------------ punctuation-aware joins
+// Company names can end in a full stop ("Steep & Co."), and many lines end with the name. Every boss line
+// goes through `tidy`, so "Steep & Co.." never reaches the log, whatever line a later edit adds.
+const tidyTxt = (x: Txt): Txt => (typeof x === 'function' ? (c: Ctx) => tidy(x(c)) : tidy(x));
+const tidyEvent = (e: EventDef): EventDef => ({
+  ...e,
+  ...(e.title !== undefined ? { title: tidyTxt(e.title) } : {}),
+  text: tidyTxt(e.text),
+  ...(e.apply ? { apply: (c: Ctx) => { const r = e.apply!(c); return typeof r === 'string' ? tidy(r) : r; } } : {}),
+  ...(e.choices ? { choices: e.choices.map((ch): ChoiceDef => ({ ...ch, label: tidyTxt(ch.label), resolve: (c) => tidy(ch.resolve(c)) })) } : {}),
+});
+const tidyActivity = (a: ActivityDef): ActivityDef => ({
+  ...a,
+  label: tidyTxt(a.label),
+  description: tidyTxt(a.description),
+  run: (c) => { const r = a.run(c); return typeof r === 'string' ? tidy(r) : r; },
+});
+
 export const bossPack: ContentPack = {
   id: 'boss',
   title: 'Boss',
   description: 'Start a company, hire, raise money, sell it or take it public. Pass the family business down.',
   rating: 'all',
   entitlement: BOSS_ENTITLEMENT,
-  events: [...events, ...moreEvents],
-  activities: [...activities, ...moreActivities],
+  events: [...events, ...moreEvents].map(tidyEvent),
+  activities: [...activities, ...moreActivities].map(tidyActivity),
   onYear,
   netWorth: (s) => {
     const comp = companyOf(s.player);
@@ -741,14 +902,27 @@ export const bossPack: ContentPack = {
     const nb = bossState(next);
     // the cofounder retires with the old boss; milestones and the family generation count carry on
     const g = genOf(comp) + 1;
-    nb.company = { ...comp, gen: g, cofounderId: undefined, marks: [...(comp.marks ?? [])] };
+    // a new generation draws up its own succession plan
+    nb.company = { ...comp, gen: g, cofounderId: undefined, heirId: undefined, heirAsked: undefined, marks: [...(comp.marks ?? [])] };
     nb.peakValuation = comp.valuation;
     if (!next.jobId) next.jobTitle = tr ? `${comp.name} CEO'su` : `CEO of ${comp.name}`;
+    // inheritance tax on the family's stake, with 50% business relief: paid from company cash first, then by selling shares
+    const stake = Math.max(0, comp.valuation * comp.ownership);
+    let due = Math.round(inheritanceTax(stake, getCountry(next.countryId).wageFactor) * 0.5);
+    let taxLine = '';
+    if (due > 0) {
+      const nc = nb.company!;
+      const fromCash = Math.min(due, Math.max(0, nc.cash));
+      nc.cash -= fromCash;
+      due -= fromCash;
+      if (due > 0 && nc.valuation > 0) nc.ownership = Math.max(0.05, nc.ownership * (1 - Math.min(0.5, due / nc.valuation)));
+      taxLine = tr ? ' Veraset vergisi şirketin kasasından ve bir miktar hisse satışıyla ödendi.' : ' Inheritance tax was paid from company cash and a small share sale.';
+    }
     bossState(prev).company = null;
-    const extra = g >= 3 ? (tr ? ` Şirketi yöneten ${g}. kuşak sensin.` : ` You are generation ${g} to run it.`) : '';
-    return tr
+    const extra = (g >= 3 ? (tr ? ` Şirketi yöneten ${g}. kuşak sensin.` : ` You are generation ${g} to run it.`) : '') + taxLine;
+    return tidy(tr
       ? `Aile şirketinin başına geçtin: ${comp.name}. ${comp.founderName} tarafından ${comp.founded} yılında kurulmuştu.${extra}`
-      : `You took over the family business, ${comp.name}, founded by ${comp.founderName} in ${comp.founded}.${extra}`;
+      : `You took over the family business, ${comp.name}, founded by ${comp.founderName} in ${comp.founded}.${extra}`);
   },
   lifeTiles: (s) => {
     const comp = companyOf(s.player);

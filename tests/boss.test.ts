@@ -229,6 +229,7 @@ describe('boss v0.7 playtest fixes', () => {
     const comp = companyOf(s.player)!;
     Object.assign(comp, { revenue: 2_000_000, cash: 0, lastProfit: 100_000, ownership: 0.8, stage: 'startup' });
     comp.valuation = 20_000_000;
+    comp.founded -= 5; // buyers want a few years of track record
     const before = s.player.money;
     doActivity(s, 'boss_sell');
     expect(s.pending?.body).toContain('kalır');
@@ -237,5 +238,131 @@ describe('boss v0.7 playtest fixes', () => {
     const got = s.player.money - before;
     expect(got).toBeGreaterThanOrEqual(Math.round(20_000_000 * 0.6 * 0.8 * SALE_KEEP) - 1);
     expect(got).toBeLessThanOrEqual(Math.round(20_000_000 * 1.0 * 0.8 * SALE_KEEP) + 1);
+  });
+});
+
+describe('boss round-2 playtest fixes', () => {
+  const start = (lang: Lang, countryId = 'us', city = 'Austin', seed = 11) => {
+    const s = newGame({ firstName: 'Ada', lastName: 'Wood', gender: 'female', countryId, city, seed }, profile(lang));
+    s.year += 30;
+    s.player.money = 1_000_000;
+    return s;
+  };
+  const found = (s: GameState, ind: Industry) => {
+    doActivity(s, 'boss_found');
+    choose(s, ind);
+    return companyOf(s.player)!;
+  };
+  const settle = (s: GameState) => {
+    for (let g = 0; g < 8 && s.pending; g++) choose(s, s.pending.choices.find((x) => !x.disabled)!.id);
+  };
+  const canDo = (s: GameState, id: string) => {
+    const a = activitiesFor(['boss']).find((x) => x.id === id)!;
+    return !a.available || a.available(makeCtx(s));
+  };
+
+  it('asks for a successor once per company; "not yet" waits a few years', () => {
+    const s = start('en');
+    found(s, 'cafe');
+    const c = makeCtx(s);
+    c.h.addRelation(c.h.newPerson({ age: 25, lastName: 'Wood' }), 'child', 80);
+    expect(canDo(s, 'boss_successor')).toBe(true);
+    doActivity(s, 'boss_successor');
+    choose(s, 'later');
+    expect(canDo(s, 'boss_successor')).toBe(false);
+    s.year += 9;
+    expect(canDo(s, 'boss_successor')).toBe(false);
+    s.year += 1;
+    s.player.actionsThisYear = {};
+    expect(canDo(s, 'boss_successor')).toBe(true);
+    doActivity(s, 'boss_successor');
+    choose(s, 'name');
+    for (let y = 0; y < 20; y++) {
+      s.year++;
+      expect(canDo(s, 'boss_successor')).toBe(false);
+    }
+  });
+
+  it('waits a few years before selling and before founding again, longer after each company', () => {
+    const s = start('en');
+    found(s, 'app');
+    // no buyer for a company younger than three years
+    expect(canDo(s, 'boss_sell')).toBe(false);
+    s.year += 3;
+    expect(canDo(s, 'boss_sell')).toBe(true);
+    doActivity(s, 'boss_sell');
+    choose(s, 'sell');
+    expect(companyOf(s.player)).toBeNull();
+    expect(canDo(s, 'boss_found')).toBe(false);
+    s.year += 7;
+    expect(canDo(s, 'boss_found')).toBe(false);
+    s.year += 1;
+    expect(canDo(s, 'boss_found')).toBe(true);
+    s.player.actionsThisYear = {};
+    found(s, 'app');
+    s.year += 3;
+    doActivity(s, 'boss_sell');
+    choose(s, 'sell');
+    s.year += 10;
+    expect(canDo(s, 'boss_found')).toBe(false);
+    s.year += 1;
+    expect(canDo(s, 'boss_found')).toBe(true);
+  });
+
+  it('never prints a double full stop after "Steep & Co." and uses "an" before Heirloom Interactive', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = start('en', 'uk', 'London', seed);
+      const comp = found(s, 'tea');
+      comp.name = 'Steep & Co.';
+      for (let y = 0; y < 12; y++) {
+        s.player.actionsThisYear = {};
+        for (const a of ['boss_hire', 'boss_invest', 'boss_dividend', 'boss_grind', 'boss_marketing', 'boss_new_line', 'boss_charity']) doActivity(s, a);
+        settle(s);
+        ageUp(s);
+        settle(s);
+        if (!companyOf(s.player)) break;
+      }
+      for (const l of s.player.log) expect(l.text, l.text).not.toMatch(/Co\.\./);
+    }
+    const s = start('en');
+    const comp = found(s, 'games');
+    comp.name = 'Heirloom Interactive';
+    for (let i = 0; i < 30; i++) {
+      s.player.actionsThisYear = {};
+      doActivity(s, 'boss_marketing');
+    }
+    for (const l of s.player.log) expect(l.text, l.text).not.toMatch(/\ba Heirloom/);
+  });
+
+  it('hiring lines follow the team size instead of repeating', () => {
+    const s = start('tr', 'tr', 'İzmir');
+    found(s, 'food');
+    const lines: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      s.player.actionsThisYear = {};
+      const n = s.player.log.length;
+      doActivity(s, 'boss_hire');
+      lines.push(s.player.log[n].text);
+    }
+    expect(new Set(lines).size).toBe(lines.length);
+    expect(lines[0]).toMatch(/ilk çalışan/);
+    const team = companyOf(s.player)!.employees + 1;
+    expect(lines[lines.length - 1]).toContain(String(team));
+  });
+
+  it('keeps Turkish company names and flavour to lives in Türkiye', () => {
+    const FLAVOUR = /Rize|Tavşan|İnce Belli|Demlik|Mahalle Kahvecisi|Sefer Tası|Kapı Kapı|yayla|vapur|poğaça|baklava/i;
+    for (const countryId of ['br', 'de', 'uk', 'us']) {
+      for (let seed = 1; seed <= 24; seed++) {
+        const s = start('tr', countryId, countryId === 'br' ? 'Curitiba' : countryId === 'de' ? 'Berlin' : countryId === 'uk' ? 'London' : 'Austin', seed);
+        found(s, INDUSTRY_IDS[seed % INDUSTRY_IDS.length]);
+        for (let y = 0; y < 6; y++) {
+          s.player.actionsThisYear = {};
+          for (const a of ['boss_vacation', 'boss_new_line', 'boss_charity']) doActivity(s, a);
+          s.year++;
+        }
+        for (const l of s.player.log) expect(l.text, `${countryId}: ${l.text}`).not.toMatch(FLAVOUR);
+      }
+    }
   });
 });

@@ -1,26 +1,33 @@
 import type { ActivityDef, Ctx } from '../types';
 import { isCoastal } from '../../engine/places';
 import { acc, dat, wage, wth } from './util';
-import { say, sayWith, type Pair } from './lines';
+import { pickFrom, say, sayWith, type Pair } from './lines';
 import { elderState, ensureGrandkids, gkAge, grandkids, peekElder } from './events-elder';
 
 // Things to do in old age (60+). Small, steady effects; the memoir pays off after four years.
 
-const MEMOIR_CHAPTERS: [string, string][] = [
-  [
-    'Chapter one: "The Early Years." You remembered your first teacher\'s name after fifty years.',
-    'Birinci bölüm: "İlk Yıllar." Elli yıl sonra ilk öğretmeninin adını hatırladın.',
-  ],
-  [
-    'Chapter two: "Love and Other Disasters." You laughed so hard you had to lie down.',
-    'İkinci bölüm: "Aşk ve Diğer Felaketler." Öyle güldün ki uzanman gerekti.',
-  ],
-  [
-    'Chapter three: "Things I Never Told Anyone." You wrote it, read it twice and locked the drawer.',
-    'Üçüncü bölüm: "Kimseye Anlatmadıklarım." Yazdın, iki kere okudun ve çekmeceyi kilitledin.',
-  ],
+/** Chapter numbers, in order: a memoir has three chapters, then base.elder_memoir_done. */
+const MEMOIR_ORDINALS: [string, string][] = [
+  ['Chapter one', 'Birinci bölüm'],
+  ['Chapter two', 'İkinci bölüm'],
+  ['Chapter three', 'Üçüncü bölüm'],
 ];
-export const MEMOIR_LENGTH = MEMOIR_CHAPTERS.length + 1;
+/** The chapters themselves, drawn from a pool so every memoir is a different book: [English, Turkish]. */
+const MEMOIR_CHAPTERS: Pair[] = [
+  ['"The Early Years." You remembered your first teacher\'s name after fifty years.', '"İlk Yıllar." Elli yıl sonra ilk öğretmeninin adını hatırladın.'],
+  ['"Love and Other Disasters." You laughed so hard you had to lie down.', '"Aşk ve Diğer Felaketler." Öyle güldün ki uzanman gerekti.'],
+  ['"Things I Never Told Anyone." You wrote it, read it twice and locked the drawer.', '"Kimseye Anlatmadıklarım." Yazdın, iki kere okudun ve çekmeceyi kilitledin.'],
+  ['"Every Home I Ever Had." You drew each floor plan from memory. Two of them have a room that never existed.', '"Oturduğum Bütün Evler." Her birinin planını ezberden çizdin. İkisinde hiç var olmamış bir oda var.'],
+  ['"Work, Mostly." Forty pages about one boss. Your grandchild suggested cutting it to four.', '"Çoğunlukla İş." Tek bir patron hakkında kırk sayfa. Torunun dört sayfaya indirmeni önerdi.'],
+  ['"My Parents." You wrote it in one night and slept until noon.', '"Annem ve Babam." Bir gecede yazdın, sonra öğlene kadar uyudun.'],
+  ['"Money, Briefly." The shortest chapter: a list of regrets and one very good decision.', '"Kısaca Para." En kısa bölüm: bir pişmanlık listesi ve çok iyi bir karar.'],
+  ['"The Year Everything Changed." You could not decide which year, so you wrote about three.', '"Her Şeyin Değiştiği Yıl." Hangi yıl olduğuna karar veremedin, üçünü birden yazdın.'],
+  ['"Friends I Lost Touch With." You wrote it, then looked two of them up. One wrote back.', '"İzini Kaybettiğim Dostlar." Yazdın, sonra ikisini aradın buldun. Biri cevap yazdı.'],
+  ['"What We Kept." Why the family never threw certain things away. You cried at the part about the drawer.', '"Sakladıklarımız." Ailenin bazı şeyleri neden hiç atmadığı. Çekmeceyle ilgili kısımda ağladın.'],
+  ['"Advice Nobody Asked For." Twelve pages. You stand by every word.', '"Kimsenin İstemediği Tavsiyeler." On iki sayfa. Her kelimesinin arkasındasın.'],
+  ['"The Kitchen Table." Everything important in your life was said at one. You listed what.', '"Mutfak Masası." Hayatındaki bütün önemli sözler bir mutfak masasında söylendi. Hepsini tek tek yazdın.'],
+];
+export const MEMOIR_LENGTH = MEMOIR_ORDINALS.length + 1;
 
 const tr = (c: Ctx) => c.p.countryId === 'tr';
 
@@ -260,8 +267,10 @@ export const elderActivities: ActivityDef[] = [
         st.memoirDone = true;
         return { event: 'base.elder_memoir_done' };
       }
-      const line = MEMOIR_CHAPTERS[st.memoir - 1];
-      return c.t(line[0], line[1]);
+      // the chapter number follows the order; the chapter itself comes from the pool (one rng call, never twice in a life)
+      const [oEn, oTr] = MEMOIR_ORDINALS[Math.min(st.memoir, MEMOIR_ORDINALS.length) - 1];
+      const [en, tr] = pickFrom(c, 'elder_memoir', MEMOIR_CHAPTERS, MEMOIR_CHAPTERS.length - 1);
+      return c.t(`${oEn}: ${en}`, `${oTr}: ${tr}`);
     },
   },
   {

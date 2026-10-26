@@ -3,8 +3,9 @@ import type { GameState, Person, Relation, RelationKind } from './types';
 import { ageOf, makeCtx } from './context';
 import { getCountry } from './world';
 import { isCoastal, seaName } from './places';
-import { acc, dat, gen, wth } from '../i18n/tr-grammar';
-import { cap, kin, kinWord } from '../content/base/util';
+import { acc, dat, gen, loc, wth } from '../i18n/tr-grammar';
+import { ABROAD_CITIES } from '../content/base/events-flavour';
+import { cap, isStep, kin, kinWord } from '../content/base/util';
 
 /** How many times per year the player can interact with the same person. */
 export const INTERACTIONS_PER_PERSON = 2;
@@ -50,7 +51,7 @@ const who = (p: Person): Who => {
 function kinPair(c: Ctx, p: Person, kind: RelationKind): Line {
   const f = p.gender === 'female';
   if (kind === 'grandparent') return [f ? 'grandma' : 'grandpa', f ? 'büyükannen' : 'deden'];
-  let en = kinWord(p, kind);
+  let en = kinWord(p, kind, isStep(c, p));
   if (kind === 'sibling' && p.birthYear !== c.p.birthYear) en = `${p.birthYear < c.p.birthYear ? 'big' : 'little'} ${en}`;
   // kin() reads c.lang; build the Turkish word from a Turkish view of the same context
   return [en, kin({ ...c, lang: 'tr' }, p, kind)];
@@ -343,7 +344,7 @@ function complimentLines(c: Ctx, p: Person, kind: RelationKind, ok: boolean): { 
             [`You told ${N} ${he} has the best cheeks in the family. ${He} sneezed on you.`, `${dat(N)} ailenin en güzel yanaklarının onda olduğunu söyledin. Üstüne hapşırdı.`],
           ],
         }
-      : { pool: 'compliment:baby:no', lines: [[`You praised ${N}'s new haircut. ${N} has about four hairs.`, `${gen(N)} yeni saçını övdün. ${gen(N)} toplam dört tel saçı var.`]] };
+      : { pool: 'compliment:baby:no', lines: [[`You praised baby ${N}'s "new haircut". ${N} has about four hairs.`, `Bebek ${gen(N)} "yeni saçını" övdün. Kafasında toplam dört tel saç var.`]] };
   }
   if (!ok) {
     const lines: Line[] = [
@@ -431,6 +432,46 @@ function adviceLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lin
   return { pool, lines };
 }
 
+// ---------------------------------------------------------------- a child who emigrated (base.child_abroad)
+
+/** [English, Turkish] city of a child abroad (c.p.ext.abroad keeps the ABROAD_CITIES index). */
+function awayCity(c: Ctx, p: Person): Line {
+  const m = c.p.ext?.abroad as Record<string, number> | undefined;
+  return ABROAD_CITIES[m?.[p.id] ?? 0] ?? ABROAD_CITIES[0];
+}
+
+/** "Spend time together" with someone who lives abroad: calls, never "came over". */
+function abroadTimeLines(c: Ctx, p: Person): { pool: string; lines: Line[] } {
+  const { N, his } = who(p);
+  const [en, tr] = awayCity(c, p);
+  return {
+    pool: 'time:abroad',
+    lines: [
+      [`You video-called ${N} in ${en}. The picture froze on ${his} funniest face.`, `${loc(tr)} yaşayan ${wth(N)} görüntülü konuştun. Görüntü tam en komik suratında dondu.`],
+      [`You and ${N} watched the same film at the same time, one at home and one in ${en}, texting all the way through.`, `${wth(N)} aynı filmi aynı anda izlediniz; sen evde, o ${loc(tr)}. Film boyunca mesajlaştınız.`],
+      [`${N} gave you a video tour of ${his} flat in ${en}. You mostly asked about the radiators.`, `${N} sana ${loc(tr)} oturduğu evi görüntülü gezdirdi. Sen en çok kaloriferleri sordun.`],
+      [`You called ${N} "for five minutes". It lasted two hours.`, `${dat(N)} "beş dakikalığına" diye aradın. İki saat sürdü.`],
+      [`${N} sent you a voice message from ${en}, so you sent back a longer one. That is how you talk now.`, `${N} ${loc(tr)} sesli mesaj attı, sen daha uzununu yolladın. Artık böyle konuşuyorsunuz.`],
+    ],
+  };
+}
+
+/** "Give a gift" to someone abroad: parcels and deliveries. */
+function abroadGiftLines(c: Ctx, p: Person): { pool: string; lines: Line[] } {
+  const { N } = who(p);
+  const [en, tr] = awayCity(c, p);
+  return {
+    pool: 'gift:abroad',
+    lines: [
+      [`You posted ${N} a parcel to ${en}: tea, spices and a note. Customs opened it, but ${N} said it still smelled like home.`, `${loc(tr)} yaşayan ${dat(N)} bir koli yolladın: çay, baharat ve bir not. Gümrük açmış ama ${N} hâlâ ev gibi koktuğunu söyledi.`],
+      [`You sent ${N} a framed family photo by post. It reached ${en} three weeks later with the glass intact.`, `${dat(N)} postayla çerçeveli bir aile fotoğrafı gönderdin. Üç hafta sonra camı bile kırılmadan vardı.`],
+      [`You ordered ${N} a present online for delivery in ${en}. You got the address slightly wrong; a kind neighbour sorted it out.`, `${dat(N)} internetten hediye sipariş ettin, teslimat ${loc(tr)}. Adresi biraz yanlış yazmışsın; iyi kalpli bir komşu halletti.`],
+    ],
+  };
+}
+
+const livesAbroad = (c: Ctx, p: Person) => c.h.has(`abroad:${p.id}`);
+
 // ---------------------------------------------------------------- the interactions
 
 export const INTERACTIONS: InteractionDef[] = [
@@ -442,7 +483,7 @@ export const INTERACTIONS: InteractionDef[] = [
     run: (c, p, r) => {
       c.h.closeness(p.id, c.rng.int(4, 9));
       c.h.stat('happiness', 2);
-      const { pool, lines } = timeLines(c, p, r.kind);
+      const { pool, lines } = livesAbroad(c, p) ? abroadTimeLines(c, p) : timeLines(c, p, r.kind);
       return pickLine(c, pool, lines);
     },
   },
@@ -457,7 +498,7 @@ export const INTERACTIONS: InteractionDef[] = [
       const cost = wage(c, c.rng.int(30, 120));
       c.h.money(-cost);
       c.h.closeness(p.id, c.rng.int(8, 14));
-      const { pool, lines } = giftLines(c, p);
+      const { pool, lines } = livesAbroad(c, p) ? abroadGiftLines(c, p) : giftLines(c, p);
       return pickLine(c, pool, lines);
     },
   },

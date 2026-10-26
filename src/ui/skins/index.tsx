@@ -10,6 +10,32 @@ import { T } from '../../i18n/ui';
  * and register it in the matching map below.
  */
 
+/** Small filled glyphs for the four stats (happiness, health, smarts, looks). */
+const STAT_GLYPH: Record<keyof Stats, preact.JSX.Element> = {
+  happiness: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="8.6" cy="10" r="1.4" fill="var(--bg)" />
+      <circle cx="15.4" cy="10" r="1.4" fill="var(--bg)" />
+      <path d="M7.5 14a5 5 0 0 0 9 0" stroke="var(--bg)" stroke-width="2" fill="none" stroke-linecap="round" />
+    </>
+  ),
+  health: <path d="M12 21s-8-5.2-8-11.2A4.6 4.6 0 0 1 12 6.6a4.6 4.6 0 0 1 8 3.2C20 15.8 12 21 12 21z" />,
+  smarts: (
+    <>
+      <path d="M12 4 1 9l11 5 9-4.1V16h2V9z" />
+      <path d="M6 12.6V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-3.4l-6 2.7z" />
+    </>
+  ),
+  looks: <path d="m12 2 2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.2l-6.1 3.4 1.4-6.8L2.2 9.1l6.9-.8z" />,
+};
+
+const StatIcon = ({ k, color }: { k: keyof Stats; color: string }) => (
+  <svg class="stat-ico" viewBox="0 0 24 24" fill={color} aria-hidden="true">
+    {STAT_GLYPH[k]}
+  </svg>
+);
+
 const STAT_META: { key: keyof Stats; label: string; color: string }[] = [
   { key: 'happiness', label: 'Happiness', color: 'var(--stat-happiness)' },
   { key: 'health', label: 'Health', color: 'var(--stat-health)' },
@@ -23,7 +49,10 @@ function StatBars({ stats }: { stats: Stats }) {
       {STAT_META.map((m) => (
         <div class="stat" key={m.key}>
           <div class="stat-head">
-            <span>{T(m.label)}</span>
+            <span class="stat-name">
+              <StatIcon k={m.key} color={m.color} />
+              {T(m.label)}
+            </span>
             <span class="num">{stats[m.key]}</span>
           </div>
           <div class="bar" role="meter" aria-label={T(m.label)} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>

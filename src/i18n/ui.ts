@@ -200,6 +200,8 @@ export const TR: Record<string, string> = {
   Daughter: 'Kız',
   Son: 'Oğul',
   Friend: 'Arkadaş',
+  Stepmother: 'Üvey anne',
+  Stepfather: 'Üvey baba',
 
   // summary
   'New ribbon: {name}': 'Yeni kurdele: {name}',
@@ -234,6 +236,16 @@ export const TR: Record<string, string> = {
   'Continue as {name}, {n}': '{name} olarak devam et ({n})',
   'No children to carry on. The {name} story ends here, but a new family can begin.':
     '{name} ailesini sürdürecek çocuk yok. Hikâye burada bitiyor ama yeni bir aile başlayabilir.',
+  // end of a dynasty (engine, round 2)
+  'The {name} family story ends here': '{name} ailesinin hikâyesi burada bitiyor',
+  'One generation, {from}–{to}.': 'Tek kuşak, {from}–{to}.',
+  '{n} generations, {from}–{to}.': '{n} kuşak, {from}–{to}.',
+  '{item} went to the town museum, with a small card that tells the family story.':
+    '{item}, aile hikâyesini anlatan küçük bir kartla şehir müzesine bağışlandı.',
+  'There is no one left to carry the name, but every one of these lives was lived in full.':
+    'Bu adı taşıyacak kimse kalmadı ama bu hayatların her biri dolu dolu yaşandı.',
+  'Family legacy: {n}.': 'Aile mirası: {n} puan.',
+  'A new family can begin whenever you are ready.': 'Hazır olduğunda yeni bir aile başlayabilir.',
   'Share her story': 'Hikâyesini paylaş',
   'Share his story': 'Hikâyesini paylaş',
   'Start a new family': 'Yeni bir aile kur',
@@ -305,6 +317,10 @@ export const TR: Record<string, string> = {
   'Something went wrong': 'Bir şeyler ters gitti',
   'Your family is safe. Tap below to go back to your life.': 'Ailen güvende. Hayatına dönmek için aşağıya dokun.',
   'Back to my life': 'Hayatıma dön',
+
+  // brand
+  'Live a life. Leave a legacy.': 'Bir hayat yaşa. Bir miras bırak.',
+  'Start a random life': 'Rastgele bir hayata başla',
 
   // onboarding
   'Got it': 'Anladım',

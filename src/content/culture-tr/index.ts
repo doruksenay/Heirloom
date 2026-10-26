@@ -1286,9 +1286,10 @@ const adult: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -4);
           c.h.stat('health', -1);
-          return coastal(c)
+          // a commuter ferry only exists in İstanbul and İzmir (not in Antalya or Trabzon, coastal or not)
+          return isIstanbul(c) || isIzmir(c)
             ? c.t('You moved to a cheaper flat. Your commute is now two buses and a ferry.', 'Daha ucuz bir daireye taşındın. İşe gidiş artık iki otobüs bir vapur.')
-            : c.t('You moved to a cheaper flat. Your commute is now two buses and a dolmuş.', 'Daha ucuz bir daireye taşındın. İşe gidiş artık iki otobüs bir dolmuş.');
+            : c.t('You moved to a cheaper flat. Your commute is now two buses and a minibus.', 'Daha ucuz bir daireye taşındın. İşe gidiş artık iki otobüs bir minibüs.');
         },
       },
     ],
@@ -1312,7 +1313,7 @@ const adult: EventDef[] = [
         resolve: (c) => {
           c.h.money(-Number(c.vars.amt));
           c.h.stat('happiness', -1);
-          return c.t('For the broken boiler, the technician came four days later, changed one part and charged like a surgeon. Warm, though.', 'Kombi için usta dört gün sonra geldi, tek bir parça değiştirdi, cerrah gibi para aldı. Ama ev sıcak.');
+          return say(c, 'tr.kombi.service', KOMBI_SERVICE);
         },
       },
       {
@@ -1439,12 +1440,12 @@ const adult: EventDef[] = [
     maxAge: 88,
     cooldown: 7,
     when: (c) => inTR(c) && ownHome(c),
+    // a different fight each meeting: elevator, insulation, roof, intercom, garden
+    setup: (c) => {
+      c.vars.topic = pickIndex(c, 'tr.aidat', AIDAT.length);
+    },
     title: (c) => c.t('Emergency building meeting (apartman toplantısı).', 'Olağanüstü apartman toplantısı.'),
-    text: (c) =>
-      c.t(
-        'The building manager (yönetici) wants to raise the monthly fees (aidat) for a new elevator. Flat 7 has brought a lawyer cousin.',
-        'Yönetici yeni asansör için aidata zam istiyor. 7 numara avukat kuzenini getirmiş.',
-      ),
+    text: (c) => aidat(c, 'text'),
     choices: [
       {
         id: 'pay',
@@ -1452,7 +1453,7 @@ const adult: EventDef[] = [
         resolve: (c) => {
           c.h.money(-wage(c, 250));
           c.h.stat('happiness', -1);
-          return c.t('The building meeting voted yes. The new elevator arrived eight months later and plays music.', 'Apartman toplantısında teklif geçti. Yeni asansör sekiz ay sonra geldi ve içinde müzik çalıyor.');
+          return aidat(c, 'yes');
         },
       },
       {
@@ -1461,9 +1462,9 @@ const adult: EventDef[] = [
         badge: 'Risky',
         resolve: (c) => {
           c.h.stat('happiness', -2);
-          if (c.rng.chance(0.5)) return c.t('You won the elevator fight. The old elevator still groans, but it groans for free.', 'Asansör kavgasını kazandın. Eski asansör hâlâ inliyor ama bedavaya inliyor.');
+          if (c.rng.chance(0.5)) return aidat(c, 'won');
           c.h.money(-wage(c, 250));
-          return c.t('You lost the elevator fight after three hours and two pots of tea. You now take the stairs out of principle.', 'Apartman toplantısında üç saat ve iki demlik çaydan sonra kaybettin. Artık prensip gereği merdivenden çıkıyorsun.');
+          return aidat(c, 'lost');
         },
       },
       {
@@ -1730,16 +1731,77 @@ const adult: EventDef[] = [
         resolve: (c) => {
           c.h.money(-wage(c, 15));
           c.h.stat('happiness', 5);
-          return c.t("You brought güllaç (a milky rose-water dessert) and were declared everybody's favorite neighbor.", 'Güllaç götürdün ve oybirliğiyle apartmanın en sevilen komşusu ilan edildin.');
+          return say(c, 'tr.iftar.go', IFTAR_GO);
         },
       },
       {
         id: 'decline',
         label: (c) => c.t('Thank them and stay in', 'Teşekkür et, evde kal'),
-        resolve: (c) => c.t('You stayed in. Somebody still left a plate of börek at your door.', 'Evde kaldın. Yine de biri kapına bir tabak börek bırakmış.'),
+        resolve: (c) => say(c, 'tr.iftar.stay', IFTAR_STAY),
       },
     ],
   },
+];
+
+const IFTAR_GO: Pair[] = [
+  ["You brought güllaç (a milky rose-water dessert) and were declared everybody's favorite neighbor.", 'Güllaç götürdün ve oybirliğiyle apartmanın en sevilen komşusu ilan edildin.'],
+  ['You brought a tray of baklava. The neighbor from the fourth floor took three pieces "for her husband".', 'Bir tepsi baklava götürdün. Dördüncü kattaki komşu "eşime" diye üç dilim ayırdı.'],
+  ['You brought dates and sat next to the oldest neighbor, who told you how the building was built, brick by brick.', 'Hurma götürdün ve en yaşlı komşunun yanına oturdun. Sana apartmanın nasıl yapıldığını tuğla tuğla anlattı.'],
+  ['You brought dessert and stayed for tea. The children set the table and set off three arguments.', 'Tatlı götürüp çaya kaldın. Çocuklar sofrayı kurdu, üç de tartışma başlattı.'],
+  ['You waited with everyone for the call to prayer, forks in the air. Nobody has ever been so quiet in that building.', 'Herkesle birlikte çatallar havada ezanı bekledin. O apartmanda hiç bu kadar sessiz bir an olmamıştı.'],
+  ['You brought künefe from the good place. Somebody asked for the address before saying hello.', 'İyi yerden künefe götürdün. Biri daha selam vermeden adresi sordu.'],
+];
+const IFTAR_STAY: Pair[] = [
+  ['You stayed in. Somebody still left a plate of börek at your door.', 'Evde kaldın. Yine de biri kapına bir tabak börek bırakmış.'],
+  ['You stayed in. At nine the doorbell rang: soup, pide and a note saying "afiyet olsun".', 'Evde kaldın. Saat dokuzda kapı çaldı: çorba, pide ve "Afiyet olsun" yazan bir not.'],
+  ['You thanked them and stayed home. You could hear the laughter through the floor all evening.', 'Teşekkür edip evde kaldın. Bütün akşam kahkahaları döşemeden duydun.'],
+  ['You stayed in. The next morning a neighbor returned your empty plate, full of cookies, from a meal you never went to.', 'Evde kaldın. Ertesi sabah bir komşu, hiç gitmediğin bir yemekten, kurabiyeyle doldurulmuş bir tabak getirdi.'],
+];
+
+/** Building-meeting topics for tr.aidat: the proposal and how each vote ends. */
+type AidatPart = 'text' | 'yes' | 'won' | 'lost';
+const AIDAT: Record<AidatPart, Pair>[] = [
+  {
+    text: ['The building manager (yönetici) wants to raise the monthly fees (aidat) for a new elevator. Flat 7 has brought a lawyer cousin.', 'Yönetici yeni asansör için aidata zam istiyor. 7 numara avukat kuzenini getirmiş.'],
+    yes: ['The building meeting voted yes. The new elevator arrived eight months later and plays music.', 'Apartman toplantısında teklif geçti. Yeni asansör sekiz ay sonra geldi ve içinde müzik çalıyor.'],
+    won: ['You won the elevator fight. The old elevator still groans, but it groans for free.', 'Asansör kavgasını kazandın. Eski asansör hâlâ inliyor ama bedavaya inliyor.'],
+    lost: ['You lost the elevator fight after three hours and two pots of tea. You now take the stairs out of principle.', 'Apartman toplantısında üç saat ve iki demlik çaydan sonra kaybettin. Artık prensip gereği merdivenden çıkıyorsun.'],
+  },
+  {
+    text: ['The building manager (yönetici) wants higher fees (aidat) to insulate the outside walls (mantolama). Flat 7 has brought a lawyer cousin.', 'Yönetici mantolama için aidata zam istiyor. 7 numara avukat kuzenini getirmiş.'],
+    yes: ['The building was insulated and painted a colour the paint company calls "peach". The gas bill dropped.', 'Bina mantolandı ve boya firmasının "şeftali" dediği bir renge boyandı. Doğalgaz faturası düştü.'],
+    won: ['You won the insulation fight. The walls stay cold, but so do the fees.', 'Mantolama kavgasını kazandın. Duvarlar soğuk kaldı ama aidat da yerinde saydı.'],
+    lost: ['You lost the insulation fight after three hours and two pots of tea. The building is now peach.', 'Üç saat ve iki demlik çaydan sonra mantolama kavgasını kaybettin. Bina artık şeftali rengi.'],
+  },
+  {
+    text: ['The building manager (yönetici) wants higher fees (aidat) for a new roof. The top floor has started a bucket collection.', 'Yönetici çatı tamiri için aidata zam istiyor. En üst kattakilerin bir kova koleksiyonu oluşmuş.'],
+    yes: ['The roof was fixed. The top-floor neighbors gave their buckets away in a little ceremony.', 'Çatı yapıldı. Üst kattakiler kovalarını küçük bir törenle dağıttı.'],
+    won: ['You won the roof vote. The top floor now glares at you on the stairs.', 'Çatı oylamasını kazandın. Üst kattakiler artık merdivende sana ters ters bakıyor.'],
+    lost: ['You lost the roof vote after three hours. To be fair, it was raining during the meeting.', 'Üç saat sonra çatı oylamasını kaybettin. Hakkını yeme, toplantı boyunca yağmur yağıyordu.'],
+  },
+  {
+    text: ['The building manager (yönetici) wants higher fees (aidat) for a camera intercom at the front door. Flat 3 is worried about privacy, and about flat 5.', 'Yönetici kapıya kameralı diyafon için aidata zam istiyor. 3 numara mahremiyetinden, bir de 5 numaradan endişeli.'],
+    yes: ['The camera intercom went in. Its main job so far: filming the cat that sleeps on the doormat.', 'Kameralı diyafon takıldı. Şimdiye kadarki tek işi paspasta uyuyan kediyi çekmek oldu.'],
+    won: ['You won the intercom vote. Visitors still shout up from the street, as is tradition.', 'Diyafon oylamasını kazandın. Misafirler gelenek olduğu üzere hâlâ sokaktan bağırıyor.'],
+    lost: ['You lost the intercom vote after three hours and two pots of tea. The camera now films you taking out the rubbish.', 'Üç saat ve iki demlik çaydan sonra diyafon oylamasını kaybettin. Kamera artık seni çöp çıkarırken çekiyor.'],
+  },
+  {
+    text: ['The building manager (yönetici) wants higher fees (aidat) to turn the garden into parking. The auntie who loves the plum tree has come too.', 'Yönetici bahçeyi otoparka çevirmek için aidata zam istiyor. Bahçedeki erik ağacını seven teyze de toplantıda.'],
+    yes: ['The garden became four parking spaces. The plum tree stayed in its corner; the auntie made sure of it.', 'Bahçe dört araçlık otopark oldu. Erik ağacı köşesinde kaldı; teyze buna bizzat göz kulak oldu.'],
+    won: ['You and the auntie saved the garden. She brings you plums every summer now.', 'Teyzeyle birlikte bahçeyi kurtardınız. Artık her yaz sana erik getiriyor.'],
+    lost: ['You lost the garden vote after three hours. The auntie has not spoken to the manager since.', 'Üç saat sonra bahçe oylamasını kaybettin. Teyze o günden beri yöneticiyle konuşmuyor.'],
+  },
+];
+const aidat = (c: Ctx, part: AidatPart) => {
+  const [en, tr] = (AIDAT[Number(c.vars.topic)] ?? AIDAT[0])[part];
+  return c.t(en, tr);
+};
+
+const KOMBI_SERVICE: Pair[] = [
+  ['For the broken boiler, the technician came four days later, changed one part and charged like a surgeon. Warm, though.', 'Kombi için usta dört gün sonra geldi, tek bir parça değiştirdi, cerrah gibi para aldı. Ama ev sıcak.'],
+  ['The service said "between nine and six". He came at five to six, sighed at the boiler and fixed it in ten minutes.', 'Servis "dokuzla altı arası" dedi. Usta altıya beş kala geldi, kombiye bakıp iç çekti ve on dakikada tamir etti.'],
+  ['The technician said your model is "a classic", which means no spare parts. He found one anyway, for a price.', 'Usta senin kombi için "klasik model" dedi; yani yedek parça yok. Yine de buldu, fiyatıyla.'],
+  ['The authorized service replaced the board and told you to bleed the radiators. You nodded as if you knew how.', 'Yetkili servis kartı değiştirdi ve peteklerin havasını almanı söyledi. Nasıl yapılacağını biliyormuş gibi başını salladın.'],
 ];
 
 // ------------------------------------------------------------------ later life

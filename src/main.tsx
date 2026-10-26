@@ -3,7 +3,7 @@ import { App } from './ui/App';
 import { applyTheme, getTheme } from './themes/registry';
 import { initStorage, loadProfile } from './platform/storage';
 import { configureAnalytics, installGlobalHandlers, track } from './platform/analytics';
-import './ui/fonts/base.css';
+import './ui/fonts/bloom.css'; // brand fonts: Fredoka + Nunito (also used by the Bloom theme)
 import './ui/styles.css';
 
 initStorage().finally(() => {

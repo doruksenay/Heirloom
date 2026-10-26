@@ -2,18 +2,20 @@ import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { salaryFor, titleFor } from '../../engine/careers';
 import { getCountry } from '../../engine/world';
-import { acc, cap, dat, eligibleJobs, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
-import { byCountry, cityOf, didFor, he, He, him, his, His, inTr, markFor, type ByCountry } from './events-flavour';
+import { abl, acc, cap, dat, eligibleJobs, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
+import { divorceTerms, divorcedLine } from './relationships';
+import { ABROAD_CITIES, abroadCity, bringHome, byCountry, cityOf, didFor, he, He, him, his, His, inTr, isAbroad, markFor, sendAbroad, type ByCountry } from './events-flavour';
 
 // Ages 25–64: work, kids, love, money, health and the small absurdities of the middle of life.
 
 // ------------------------------------------------ helpers
 // office-style work events: not for athletes, soldiers, farmers and the like
 const hasJob = officeJob;
+/** Living children in an age range who live nearby (an emigrated child is not in the kitchen). */
 const kidsAged = (c: Ctx, lo: number, hi: number) =>
   c.h.relatives('child').filter((k) => {
     const a = c.h.ageOf(k.person);
-    return a >= lo && a <= hi;
+    return a >= lo && a <= hi && !isAbroad(c, k.person.id);
   });
 const pid = (c: Ctx) => String(c.vars.pid);
 /** What a child of this age still wants: a phone (11–15), a tattoo (16–17), a car or a tattoo (18+). */
@@ -41,13 +43,6 @@ const TRIP_CITIES: [string, string][] = [
   ['Baku', 'Bakü'],
   ['Milan', 'Milano'],
   ['Rotterdam', 'Rotterdam'],
-];
-const ABROAD_CITIES: [string, string][] = [
-  ['Amsterdam', 'Amsterdam'],
-  ['Toronto', 'Toronto'],
-  ['Melbourne', 'Melbourne'],
-  ['Tokyo', 'Tokyo'],
-  ['Barcelona', 'Barselona'],
 ];
 const FAMILY_CHAT: [string, string][] = [
   [
@@ -488,8 +483,8 @@ export const midlifeEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -1);
           return c.t(
-            'Your colleague gave the talk and became a LinkedIn thought leader. Fine. Good for them.',
-            "Konuşmayı iş arkadaşın yaptı ve LinkedIn'de düşünce lideri oldu. İyi. Güzel. Sevindik.",
+            'Your colleague gave the talk and is now an online "thought leader". Fine. Good for them.',
+            'Konuşmayı iş arkadaşın yaptı ve artık internette "düşünce lideri" oldu. İyi. Güzel. Sevindik.',
           );
         },
       },
@@ -950,6 +945,7 @@ export const midlifeEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -2);
           c.h.closeness(pid(c), 8);
+          sendAbroad(c, pid(c), amt(c, 'city'));
           return c.t(
             `You told ${nm(c)} to go. You smiled at the airport and cried in the parking lot.`,
             `${dat(nm(c))} "Git" dedin. Havalimanında gülümsedin, otoparkta ağladın.`,
@@ -967,6 +963,7 @@ export const midlifeEvents: EventDef[] = [
             return c.t(`The guilt worked. ${nm(c)} stayed, and mentions it every holiday.`, `Vicdan azabı işe yaradı. ${nm(c)} kaldı ve her bayram bunu hatırlatıyor.`);
           }
           c.h.closeness(pid(c), -10);
+          sendAbroad(c, pid(c), amt(c, 'city'));
           return c.t(
             `${nm(c)} went anyway. Your diaper speech is now the family's favourite joke.`,
             `${nm(c)} yine de gitti. Senin "bezini ben değiştirdim" konuşman artık ailenin en sevdiği şaka.`,
@@ -981,10 +978,77 @@ export const midlifeEvents: EventDef[] = [
         resolve: (c) => {
           c.h.money(-wage(c, 2000));
           c.h.closeness(pid(c), 12);
+          sendAbroad(c, pid(c), amt(c, 'city'));
           return c.t(
             `You paid for the flight and the first month's rent. ${nm(c)} sends you a photo of every meal.`,
             `Uçak biletini ve ilk ayın kirasını sen ödedin. ${nm(c)} sana her yemeğinin fotoğrafını atıyor.`,
           );
+        },
+      },
+    ],
+  },
+  {
+    // an emigrated child, some years on: the call that says "we're coming home" (or "we're staying")
+    id: 'base.child_abroad_home',
+    category: 'family',
+    minAge: 48,
+    once: true,
+    weight: 6,
+    when: (c) => c.h.relatives('child').some((k) => isAbroad(c, k.person.id) && c.s.year - (c.p.flags[`abroad:${k.person.id}`] ?? c.s.year) >= 6),
+    setup: (c) => {
+      const away = c.h.relatives('child').filter((k) => isAbroad(c, k.person.id) && c.s.year - (c.p.flags[`abroad:${k.person.id}`] ?? c.s.year) >= 6);
+      c.vars.pid = c.rng.pick(away).person.id;
+      c.vars.home = c.rng.chance(0.55) ? 1 : 0;
+    },
+    title: (c) => {
+      const city = abroadCity(c, pid(c));
+      return c.t(`${nm(c)} is on a video call from ${city}, looking serious.`, `${nm(c)} ${abl(city)} görüntülü arıyor. Yüzü ciddi.`);
+    },
+    text: (c) =>
+      c.vars.home
+        ? c.t(`"We've been thinking about coming home."`, '"Eve dönmeyi düşünüyoruz."')
+        : c.t(`"We've been offered a permanent contract. We'd like to stay."`, '"Kalıcı sözleşme teklif ettiler. Kalmak istiyoruz."'),
+    choices: [
+      {
+        id: 'welcome',
+        label: (c) => (c.vars.home ? c.t("Say you'll air out the spare room", 'Misafir odasını havalandıracağını söyle') : c.t('Say you are proud of them', 'Onunla gurur duyduğunu söyle')),
+        resolve: (c) => {
+          c.h.closeness(pid(c), 8);
+          if (c.vars.home) {
+            bringHome(c, pid(c));
+            c.h.stat('happiness', 8);
+            return c.t(
+              `${nm(c)} moved back after years abroad. The first Sunday lunch took four hours and nobody looked at a phone.`,
+              `${nm(c)} yıllar sonra yurt dışından döndü. İlk pazar yemeği dört saat sürdü ve kimse telefonuna bakmadı.`,
+            );
+          }
+          c.h.stat('happiness', 2);
+          return c.t(
+            `You told ${nm(c)} you were proud, and meant it. Then you looked up flight prices for the summer.`,
+            `${dat(nm(c))} onunla gurur duyduğunu söyledin ve içtenlikle söyledin. Sonra yaz için uçak bileti fiyatlarına baktın.`,
+          );
+        },
+        tone: 'good',
+      },
+      {
+        id: 'push',
+        label: (c) => (c.vars.home ? c.t('Tell them to think it over', 'İyice düşünmesini söyle') : c.t('Ask them to come home', 'Eve dönmesini iste')),
+        resolve: (c) => {
+          if (c.vars.home) {
+            c.h.closeness(pid(c), -2);
+            return c.t(
+              `You told ${nm(c)} to be sure. ${nm(c)} stayed where ${he(who(c))} was, and now you are not sure what you wanted.`,
+              `${dat(nm(c))} emin olmasını söyledin. ${nm(c)} olduğu yerde kaldı. Şimdi sen neyi istediğinden emin değilsin.`,
+            );
+          }
+          if (c.rng.chance(0.35)) {
+            bringHome(c, pid(c));
+            c.h.closeness(pid(c), -3);
+            c.h.stat('happiness', 5);
+            return c.t(`${nm(c)} came home. ${He(who(c))} mentions the contract at every family dinner.`, `${nm(c)} döndü. O sözleşmeyi her aile yemeğinde anıyor.`);
+          }
+          c.h.closeness(pid(c), -6);
+          return c.t(`${nm(c)} stayed. The next call was shorter.`, `${nm(c)} kaldı. Bir sonraki görüşme daha kısa sürdü.`);
         },
       },
     ],
@@ -1174,7 +1238,7 @@ export const midlifeEvents: EventDef[] = [
     once: true,
     weight: 5,
     when: (c) => {
-      const ps = c.p.relations.filter((r) => (r.kind === 'mother' || r.kind === 'father') && c.s.people[r.personId]);
+      const ps = c.p.relations.filter((r) => (r.kind === 'mother' || r.kind === 'father') && !r.step && c.s.people[r.personId]);
       const alive = ps.filter((r) => c.s.people[r.personId].deathYear === undefined);
       if (alive.length !== 1 || ps.length < 2) return false;
       const a = c.h.ageOf(c.s.people[alive[0].personId]);
@@ -1359,8 +1423,12 @@ export const midlifeEvents: EventDef[] = [
         label: (c) => c.t('Call it quits', 'Bitir bu işi'),
         badge: 'Big change',
         resolve: (c) => {
-          c.h.setKind(pid(c), 'ex');
           c.h.stat('happiness', -8);
+          if (c.p.relations.some((r) => r.personId === pid(c) && r.kind === 'spouse')) {
+            const head = divorcedLine(c, pid(c));
+            return `${head} ${divorceTerms(c, pid(c))} ${c.t('The house is quieter than ever.', 'Ev hiç olmadığı kadar sessiz.')}`.replace(/\s+/g, ' ').trim();
+          }
+          c.h.setKind(pid(c), 'ex');
           return c.t(`You and ${nm(c)} split up. The house is quieter than ever.`, `${wth(nm(c))} ayrıldınız. Ev hiç olmadığı kadar sessiz.`);
         },
         tone: 'big',
@@ -1988,7 +2056,7 @@ export const midlifeEvents: EventDef[] = [
           c.h.stat('happiness', -3);
           return c.t(
             'You exaggerated. Your old deskmate works at your company and knows your exact title.',
-            'Abarttın. Eski sıra arkadaşın senin şirkette çalışıyormuş ve unvanını gayet iyi biliyor.',
+            'Abarttın. Eski sıra arkadaşın senin şirketinde çalışıyormuş ve unvanını gayet iyi biliyor.',
           );
         },
       },

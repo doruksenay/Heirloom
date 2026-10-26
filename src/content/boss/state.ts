@@ -19,19 +19,73 @@ export interface IndustryDef {
   staffCost: number; // per employee per year
   revPerHead: number; // revenue one person can carry
   market: number; // yearly revenue ceiling for the whole market you can win
-  names: string[];
-  /** Turkish-flavored company names for Turkish players, same length/order as names (one RNG index serves both). */
-  namesTr: string[];
+  /**
+   * Company names as [English, Turkish] pairs. `tr` is for lives in Türkiye (Turkish flavour: Rize, tavşan kanı,
+   * ince belli); `other` is for every other country and carries no Turkish flavour; a country may add its own list.
+   * One RNG index picks the row, so both languages found the same company.
+   */
+  names: { tr: NamePair[]; other: NamePair[]; br?: NamePair[]; de?: NamePair[]; uk?: NamePair[]; us?: NamePair[] };
 }
 
+export type NamePair = readonly [string, string];
+/** A proper name that reads the same in both languages. */
+const same = (...xs: string[]): NamePair[] => xs.map((x) => [x, x] as const);
+
 export const INDUSTRIES: Record<Industry, IndustryDef> = {
-  cafe: { name: 'Café', pitch: 'A cozy neighborhood café', nameTr: 'Kafe', pitchTr: 'Sıcacık bir mahalle kafesi', kindTr: 'mahalle kafesi', startCost: 9000, growth: 0.08, grossMargin: 0.5, volatility: 0.12, multiple: 1.5, staffCost: 18000, revPerHead: 70000, market: 4_000_000, names: ['Bean There', 'The Daily Grind', 'Kettle House', 'Second Cup Corner'], namesTr: ['Köşe Kahve', 'Demlik Kafe', 'Bi Kahve Daha', 'Mahalle Kahvecisi'] },
-  tea: { name: 'Tea brand', pitch: 'Packaged tea for the whole country', nameTr: 'Çay markası', pitchTr: 'Bütün ülkeye paket çay', kindTr: 'çay markası', startCost: 6000, growth: 0.12, grossMargin: 0.58, volatility: 0.18, multiple: 3, staffCost: 22000, revPerHead: 120000, market: 80_000_000, names: ['Rize Gold', 'Steep & Co.', 'Leaf Republic', 'Tulip Glass Tea'], namesTr: ['Rize Altını', 'Tavşan Kanı Çay', 'Yaprak Cumhuriyeti', 'İnce Belli Çay'] },
-  fashion: { name: 'Fashion label', pitch: 'Your own clothing line', nameTr: 'Moda markası', pitchTr: 'Kendi giyim markan', kindTr: 'giyim markası', startCost: 12000, growth: 0.15, grossMargin: 0.55, volatility: 0.3, multiple: 2.5, staffCost: 30000, revPerHead: 130000, market: 250_000_000, names: ['Atelier North', 'Loom & Thread', 'Velvet Riot', 'Plain Studio'], namesTr: ['Atölye Poyraz', 'İğne İplik', 'Kadife İsyan', 'Sade Stüdyo'] },
-  food: { name: 'Food delivery', pitch: 'Hot meals to doors in 20 minutes', nameTr: 'Yemek siparişi', pitchTr: '20 dakikada kapıya sıcak yemek', kindTr: 'yemek siparişi girişimi', startCost: 10000, growth: 0.25, grossMargin: 0.32, volatility: 0.35, multiple: 4, staffCost: 25000, revPerHead: 100000, market: 600_000_000, names: ['Doorstep', 'Hungry Fox', 'Lunchbox', 'Kapı Kapı'], namesTr: ['Tıkla Gelsin', 'Aç Tilki', 'Sefer Tası', 'Kapı Kapı'] },
-  app: { name: 'Tech startup', pitch: 'An app that fixes something annoying', nameTr: 'Teknoloji girişimi', pitchTr: 'Sinir bozucu bir derde çare olan bir uygulama', kindTr: 'teknoloji girişimi', startCost: 5000, growth: 0.35, grossMargin: 0.85, volatility: 0.5, multiple: 8, staffCost: 60000, revPerHead: 260000, market: 2_500_000_000, names: ['Nudgely', 'Orbit Labs', 'Pocketwise', 'Fixr'], namesTr: ['Dürtbi', 'Yörünge Lab', 'Cepte', 'Hallet'] },
-  games: { name: 'Mobile game studio', pitch: 'Little games, big downloads', nameTr: 'Mobil oyun stüdyosu', pitchTr: 'Küçük oyunlar, büyük indirmeler', kindTr: 'mobil oyun stüdyosu', startCost: 7000, growth: 0.3, grossMargin: 0.7, volatility: 0.6, multiple: 6, staffCost: 55000, revPerHead: 220000, market: 1_200_000_000, names: ['Tiny Lantern', 'Pixel Kiln', 'Golden Goose Games', 'Heirloom Interactive'], namesTr: ['Minik Fener', 'Piksel Fırın', 'Altın Kaz Oyun', 'Heirloom Interactive'] },
+  cafe: {
+    name: 'Café', pitch: 'A cozy neighborhood café', nameTr: 'Kafe', pitchTr: 'Sıcacık bir mahalle kafesi', kindTr: 'mahalle kafesi', startCost: 9000, growth: 0.08, grossMargin: 0.5, volatility: 0.12, multiple: 1.5, staffCost: 18000, revPerHead: 70000, market: 4_000_000,
+    names: {
+      tr: [['Bean There', 'Köşe Kahve'], ['The Daily Grind', 'Demlik Kafe'], ['Kettle House', 'Bi Kahve Daha'], ['Second Cup Corner', 'Mahalle Kahvecisi']],
+      other: [['Bean There', 'Bean There'], ['Corner Cup', 'Köşe Fincan'], ['Kettle House', 'Kettle House'], ['Morning Ritual', 'Sabah Ritüeli']],
+      br: same('Café da Esquina', 'Grão Dourado', 'Cafezinho & Cia', 'Bule Azul'),
+      de: same('Kaffeehaus Ecke', 'Bohne & Becher', 'Morgenrot Café', 'Kleine Rösterei'),
+    },
+  },
+  tea: {
+    name: 'Tea brand', pitch: 'Packaged tea for the whole country', nameTr: 'Çay markası', pitchTr: 'Bütün ülkeye paket çay', kindTr: 'çay markası', startCost: 6000, growth: 0.12, grossMargin: 0.58, volatility: 0.18, multiple: 3, staffCost: 22000, revPerHead: 120000, market: 80_000_000,
+    names: {
+      tr: [['Rize Gold', 'Rize Altını'], ['Rabbit Blood Tea', 'Tavşan Kanı Çay'], ['Leaf Republic', 'Yaprak Cumhuriyeti'], ['Tulip Glass Tea', 'İnce Belli Çay']],
+      other: [['Steep & Co.', 'Steep & Co.'], ['Leaf Republic', 'Yaprak Cumhuriyeti'], ['Silver Kettle', 'Gümüş Çaydanlık'], ['Cloud Leaf', 'Bulut Yaprak']],
+      br: same('Mate Real', 'Erva Boa', 'Chá da Serra', 'Folha Viva'),
+      uk: same('Steep & Co.', 'Brewster & Daughters', 'Kettle Republic', 'Northern Leaf'),
+    },
+  },
+  fashion: {
+    name: 'Fashion label', pitch: 'Your own clothing line', nameTr: 'Moda markası', pitchTr: 'Kendi giyim markan', kindTr: 'giyim markası', startCost: 12000, growth: 0.15, grossMargin: 0.55, volatility: 0.3, multiple: 2.5, staffCost: 30000, revPerHead: 130000, market: 250_000_000,
+    names: {
+      tr: [['Atelier North', 'Atölye Poyraz'], ['Loom & Thread', 'İğne İplik'], ['Velvet Riot', 'Kadife İsyan'], ['Plain Studio', 'Sade Stüdyo']],
+      other: [['Atelier North', 'Atelier North'], ['Loom & Thread', 'İğne İplik'], ['Velvet Riot', 'Kadife İsyan'], ['Plain Studio', 'Sade Stüdyo']],
+    },
+  },
+  food: {
+    name: 'Food delivery', pitch: 'Hot meals to doors in 20 minutes', nameTr: 'Yemek siparişi', pitchTr: '20 dakikada kapıya sıcak yemek', kindTr: 'yemek siparişi girişimi', startCost: 10000, growth: 0.25, grossMargin: 0.32, volatility: 0.35, multiple: 4, staffCost: 25000, revPerHead: 100000, market: 600_000_000,
+    names: {
+      tr: [['Doorstep', 'Sıcak Sefer'], ['Hungry Fox', 'Aç Tilki'], ['Lunchbox', 'Sefer Tası'], ['Kapı Kapı', 'Kapı Kapı']],
+      other: [['Doorstep', 'Kapıda'], ['Hungry Fox', 'Aç Tilki'], ['Lunchbox', 'Lunchbox'], ['Hot Plate', 'Sıcak Tabak']],
+      br: same('Marmita Já', 'Prato Quente', 'Bate-Porta', 'Fome Boa'),
+    },
+  },
+  app: {
+    name: 'Tech startup', pitch: 'An app that fixes something annoying', nameTr: 'Teknoloji girişimi', pitchTr: 'Sinir bozucu bir derde çare olan bir uygulama', kindTr: 'teknoloji girişimi', startCost: 5000, growth: 0.35, grossMargin: 0.85, volatility: 0.5, multiple: 8, staffCost: 60000, revPerHead: 260000, market: 2_500_000_000,
+    names: {
+      tr: [['Nudgely', 'Dürtbi'], ['Orbit Labs', 'Yörünge Lab'], ['Pocketwise', 'Cepte'], ['Fixr', 'Hallet']],
+      other: [['Nudgely', 'Dürtbi'], ['Orbit Labs', 'Yörünge Lab'], ['Pocketwise', 'Pocketwise'], ['Fixr', 'Fixr']],
+    },
+  },
+  games: {
+    name: 'Mobile game studio', pitch: 'Little games, big downloads', nameTr: 'Mobil oyun stüdyosu', pitchTr: 'Küçük oyunlar, büyük indirmeler', kindTr: 'mobil oyun stüdyosu', startCost: 7000, growth: 0.3, grossMargin: 0.7, volatility: 0.6, multiple: 6, staffCost: 55000, revPerHead: 220000, market: 1_200_000_000,
+    names: {
+      tr: [['Tiny Lantern', 'Minik Fener'], ['Pixel Kiln', 'Piksel Fırın'], ['Golden Goose Games', 'Altın Kaz Oyun'], ['Heirloom Interactive', 'Heirloom Interactive']],
+      other: [['Tiny Lantern', 'Minik Fener'], ['Pixel Kiln', 'Piksel Fırın'], ['Golden Goose Games', 'Altın Kaz Oyun'], ['Heirloom Interactive', 'Heirloom Interactive']],
+    },
+  },
 };
+
+/** The company-name list for a life in `countryId`: Turkish flavour only in Türkiye, local names where a country has them. */
+export function companyNames(ind: Industry, countryId: string): NamePair[] {
+  const n = INDUSTRIES[ind].names;
+  return countryId === 'tr' ? n.tr : ((n as Record<string, NamePair[] | undefined>)[countryId] ?? n.other);
+}
 
 export type Stage = 'garage' | 'startup' | 'scaleup' | 'public';
 export const STAGE_NAMES: Record<Stage, string> = { garage: 'Garage', startup: 'Startup', scaleup: 'Scale-up', public: 'Public' };
@@ -67,8 +121,12 @@ export interface Company {
   lines?: number;
   /** Year an exclusive deal with one big client was signed. */
   client?: number;
-  /** One-time milestones already celebrated: 'ten', 'fifty', 'portrait'. */
+  /** One-time milestones already celebrated: 'ten', 'fifty', 'portrait', 'firsthire'. */
   marks?: string[];
+  /** Person id of the child named in this company's succession plan (boss.successor). Cleared on hand-over. */
+  heirId?: string;
+  /** Year the board last asked for a successor and was told "not yet". */
+  heirAsked?: number;
 }
 
 export interface BossState {
@@ -76,7 +134,40 @@ export interface BossState {
   exits: number;
   bankruptcies: number;
   peakValuation: number;
+  /** Year the last company was sold or went bust (added in v0.8; older saves have none). */
+  lastEnd?: number;
 }
+
+/** Years before a new company can be founded after one ends: 8, then 11, then 14 (capped at 15), so serial flipping slows down. */
+export const refoundGap = (b: BossState) => Math.min(15, 5 + 3 * (b.exits + b.bankruptcies));
+/** A company needs a few years of track record before you can go looking for a buyer. */
+export const MIN_YEARS_TO_SELL = 3;
+
+/** Whether a new company may be founded this year (no company now, and the refound cooldown has passed). */
+export function canFound(p: Player, year: number): boolean {
+  const b = peekBoss(p);
+  if (!b) return true;
+  if (b.company) return false;
+  return b.lastEnd === undefined || year - b.lastEnd >= refoundGap(b);
+}
+
+/** The company is gone (sold or bankrupt): clear it and start the refound cooldown. */
+export function endCompany(p: Player, year: number) {
+  const b = bossState(p);
+  b.company = null;
+  b.lastEnd = year;
+}
+
+/** English indefinite article before a name: "an Orbit Labs", "an Heirloom Interactive", "a Fixr". */
+export function an(word: string): string {
+  const w = word.trim();
+  const vowel = /^[aeiouAEIOUİ]/.test(w) && !/^(uni|use|usu|eu|one|ur[aeiou])/i.test(w);
+  const silentH = /^(heir|hour|honest|honou?r)/i.test(w);
+  return `${vowel || silentH ? 'an' : 'a'} ${w}`;
+}
+
+/** Collapse a doubled full stop after a name that already ends in one ("Steep & Co.." → "Steep & Co."). Keeps ellipses. */
+export const tidy = (s: string) => s.replace(/(?<!\.)\.\.(?!\.)/g, '.');
 
 const KEY = 'boss';
 

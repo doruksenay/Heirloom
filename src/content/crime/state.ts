@@ -1,7 +1,7 @@
 import type { Ctx } from '../types';
 import type { Player } from '../../engine/types';
 import { getCountry } from '../../engine/world';
-import { aOrAn } from '../base/util';
+import { aOrAn, cap, kin, kinWord } from '../base/util';
 
 // Shared state and justice helpers for the Crime World pack.
 
@@ -179,14 +179,22 @@ export function convict(c: Ctx, years: number, crime: string, crimeTr: string): 
   const partner = c.h.partner();
   let extra = '';
   if (partner && c.rng.chance(0.4)) {
+    const married = partner.rel.kind === 'spouse';
     c.h.setKind(partner.person.id, 'ex');
-    extra = c.t(` ${partner.person.firstName} left you.`, ` ${partner.person.firstName} seni terk etti.`);
+    // always say who they are: a bare "Ben seni terk etti." reads as "I left you" in Turkish
+    const n = partner.person.firstName;
+    extra = married
+      ? c.t(` Your ${kinWord(partner.person, 'spouse')} ${n} filed for divorce.`, ` ${cap(kin(c, partner.person, 'spouse'))} ${n} boşanma davası açtı.`)
+      : c.t(` Your ${kinWord(partner.person, 'partner')} ${n} left you.`, ` Sevgilin ${n} seni terk etti.`);
   }
-  return c.t(
+  return tidy(c.t(
     `You were convicted of ${crime} and sentenced to ${years} year${years > 1 ? 's' : ''} in prison.${folded}${title ? ` You lost your job as ${aOrAn(title)}.` : ''}${extra}`,
     `${crimeTr} suçundan mahkûm oldun ve ${years} yıl hapis cezası aldın.${folded}${title ? ` ${title} olarak çalıştığın işten kovuldun.` : ''}${extra}`,
-  );
+  ));
 }
+
+/** A job title or name can end in a full stop; never print two. Keeps ellipses. */
+const tidy = (s: string) => s.replace(/(?<!\.)\.\.(?!\.)/g, '.');
 
 export const convictFor = (c: Ctx, k: CrimeKey, years: number) => convict(c, years, CRIMES[k].en, CRIMES[k].tr);
 

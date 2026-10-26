@@ -1,19 +1,23 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { acc, cap, dat, gen, kin, nm, single, wage, who, wth, officeJob } from './util';
+import { acc, cap, dat, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
 import { catName, syncFlagCat } from '../../engine/pets';
-import { byCountry, cityOf, didFor, He, him, his, markFor } from './events-flavour';
+import { byCountry, cityOf, didFor, He, him, his, markFor, settled } from './events-flavour';
 
 // v0.2 content: friends, pets, work, home, kids, old age, and events that create new heirlooms.
 
-/** Turkish forms of the friend_moves cities: [name, dative, locative]. */
-const CITY_TR: Record<string, [string, string, string]> = {
-  Berlin: ['Berlin', "Berlin'e", "Berlin'de"],
-  Toronto: ['Toronto', "Toronto'ya", "Toronto'da"],
-  Melbourne: ['Melbourne', "Melbourne'a", "Melbourne'da"],
-  Dubai: ['Dubai', "Dubai'ye", "Dubai'de"],
-  Lisbon: ['Lizbon', "Lizbon'a", "Lizbon'da"],
+/** The friend_moves cities: English name → Turkish name. The suffixes come from dat()/loc(), never by hand. */
+const CITY_TR: Record<string, string> = {
+  Berlin: 'Berlin',
+  Toronto: 'Toronto',
+  Sydney: 'Sidney',
+  Dubai: 'Dubai',
+  Lisbon: 'Lizbon',
+  Amsterdam: 'Amsterdam',
 };
-const cityTr = (en: string, form: 0 | 1 | 2) => CITY_TR[en]?.[form] ?? en;
+const cityTr = (en: string, form: 0 | 1 | 2) => {
+  const n = CITY_TR[en] ?? en;
+  return form === 1 ? dat(n) : form === 2 ? loc(n) : n;
+};
 
 const HABITS_EN = ['plays the drums at 2 a.m.', 'labels every item in the fridge', 'has a pet snake named Dave', 'is never, ever there'];
 const HABITS_TR = [
@@ -87,14 +91,15 @@ export const moreEvents: EventDef[] = [
   {
     id: 'base.friend_moves',
     category: 'random',
-    minAge: 10,
+    // an adult friend moving abroad for work: a ten-year-old's classmate does not emigrate alone
+    minAge: 18,
     maxAge: 60,
     once: true,
-    when: (c) => c.h.relatives('friend').some((f) => c.h.ageOf(f.person) <= 65),
+    when: (c) => c.h.relatives('friend').some((f) => c.h.ageOf(f.person) >= 18 && c.h.ageOf(f.person) <= 65),
     setup: (c) => {
-      c.vars.pid = c.h.relatives('friend').find((f) => c.h.ageOf(f.person) <= 65)!.person.id;
+      c.vars.pid = c.h.relatives('friend').find((f) => c.h.ageOf(f.person) >= 18 && c.h.ageOf(f.person) <= 65)!.person.id;
       // never "moving to Berlin" when you already live in Berlin
-      c.vars.city = c.rng.pick(['Berlin', 'Toronto', 'Melbourne', 'Dubai', 'Lisbon'].filter((x) => x !== c.p.city));
+      c.vars.city = c.rng.pick(['Berlin', 'Toronto', 'Sydney', 'Dubai', 'Lisbon', 'Amsterdam'].filter((x) => x !== c.p.city));
     },
     title: (c) =>
       c.t(`${nm(c)} is moving to ${c.vars.city}.`, `${nm(c)} ${cityTr(String(c.vars.city), 1)} taşınıyor.`),
@@ -265,7 +270,8 @@ export const moreEvents: EventDef[] = [
     minAge: 18,
     maxAge: 24,
     once: true,
-    when: (c) => c.p.school === 'university',
+    // a dorm room is for a student without a spouse, a partner at home or children
+    when: (c) => c.p.school === 'university' && !settled(c),
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ age: c.age, gender: c.p.gender }).id;
       c.vars.habit = c.rng.pick(HABITS_EN);
@@ -837,4 +843,154 @@ export const moreEvents: EventDef[] = [
       );
     },
   },
+
+  // ------------------------------------------------ losing a parent young (under 25), and growing up without them
+  {
+    id: 'base.grief_parent',
+    category: 'family',
+    minAge: 3,
+    maxAge: 25,
+    // the year of the loss and the one after, this is the story: the random-event pool weighs well over a
+    // thousand, so a big weight is what makes it (very likely) the event of one of those two years
+    weight: 3000,
+    cooldown: 1,
+    when: (c) => !!recentlyLostParent(c),
+    setup: (c) => {
+      const r = recentlyLostParent(c)!;
+      c.vars.pid = r.personId;
+      c.vars.kind = r.kind;
+      markFor(c, 'grief', r.personId);
+      c.h.flag(`lost_parent:${r.personId}`);
+    },
+    title: (c) =>
+      c.t(
+        `The house is different without your ${c.vars.kind === 'mother' ? 'mom' : 'dad'}, ${nm(c)}.`,
+        `${c.vars.kind === 'mother' ? 'Annen' : 'Baban'} ${nm(c)} olmadan ev bambaşka.`,
+      ),
+    text: (c) =>
+      c.age < 13
+        ? c.t('Everyone talks quietly. Someone keeps bringing you food you do not want.', 'Herkes alçak sesle konuşuyor. Biri sürekli istemediğin yemekler getiriyor.')
+        : c.age < 18
+          ? c.t('People at school do not know what to say, so they say nothing.', 'Okuldakiler ne diyeceklerini bilemiyor, o yüzden hiçbir şey demiyorlar.')
+          : c.t('You keep reaching for your phone to call. Then you remember.', 'Aramak için telefona uzanıp duruyorsun. Sonra hatırlıyorsun.'),
+    choices: [
+      {
+        id: 'talk',
+        label: (c) => c.t(`Talk about ${him(who(c))}`, 'Ondan bahset'),
+        resolve: (c) => {
+          const others = c.h.relatives(['mother', 'father', 'sibling', 'grandparent']);
+          c.h.stat('happiness', 2);
+          if (others.length) {
+            const o = others[0];
+            c.h.closeness(o.person.id, 8);
+            return c.t(
+              `You and ${o.person.firstName} sat up late telling stories about ${nm(c)}. You laughed once, felt guilty, then laughed again.`,
+              `${wth(o.person.firstName)} gece geç saatlere kadar ${nm(c)} hakkında hikâyeler anlattınız. Bir kez güldün, suçluluk duydun, sonra yine güldün.`,
+            );
+          }
+          return c.t(
+            `You told a friend everything about ${nm(c)}, from the beginning. It took all night. It helped.`,
+            `Bir arkadaşına ${nm(c)} hakkında her şeyi en başından anlattın. Bütün gece sürdü. İyi geldi.`,
+          );
+        },
+        tone: 'good',
+      },
+      {
+        id: 'keep',
+        label: (c) => c.t(`Keep something of ${his(who(c))}`, 'Ondan bir hatıra sakla'),
+        resolve: (c) => {
+          const i = c.rng.int(0, KEEPSAKES.length - 1);
+          c.h.stat('happiness', 1);
+          return c.t(
+            `You kept ${KEEPSAKES[i][0]}. It lives in your drawer. Some nights you take it out.`,
+            `${cap(KEEPSAKES[i][1])} sakladın. Çekmecende duruyor. Bazı geceler çıkarıp bakıyorsun.`,
+          );
+        },
+      },
+      {
+        id: 'busy',
+        label: (c) => c.t('Throw yourself into something', 'Kendini bir şeye ver'),
+        resolve: (c) => {
+          c.h.stat('smarts', 2);
+          c.h.stat('happiness', -2);
+          return c.age < 18
+            ? c.t('You threw yourself into school and football. It helped in the daytime.', 'Kendini derslere ve futbola verdin. Gündüzleri işe yaradı.')
+            : c.t('You threw yourself into work. It helped in the daytime. The evenings were another matter.', 'Kendini işe verdin. Gündüzleri işe yaradı. Akşamlar başka bir hikâye.');
+        },
+      },
+    ],
+  },
+  {
+    id: 'base.grief_later',
+    category: 'family',
+    minAge: 12,
+    maxAge: 45,
+    weight: 60,
+    cooldown: 6,
+    when: (c) => !!laterGrief(c),
+    setup: (c) => {
+      const id = laterGrief(c)!;
+      c.vars.pid = id;
+      c.vars.kind = c.p.relations.find((r) => r.personId === id)?.kind ?? 'mother';
+      markFor(c, 'grief_later', id);
+    },
+    text: '',
+    apply: (c) => {
+      const n = nm(c);
+      const k = c.vars.kind === 'mother';
+      const kEn = k ? 'mom' : 'dad';
+      const kTr = k ? 'Annen' : 'Baban';
+      c.h.stat('happiness', 2);
+      const baby = c.h.relatives('child').find((x) => c.h.ageOf(x.person) <= 1)?.person.firstName;
+      if (baby)
+        return c.t(
+          `Your ${kEn} ${n} never met ${baby}. You tell ${baby} about ${n} anyway, a little every night.`,
+          `${kTr} ${n}, ${acc(baby)} hiç göremedi. Sen yine de her gece ${dat(baby)} ondan biraz bahsediyorsun.`,
+        );
+      const sp = c.h.relatives('spouse').find((x) => c.s.year - x.rel.sinceYear <= 2);
+      if (sp)
+        return c.t(
+          `At your wedding you left one chair empty for your ${kEn}, ${n}. Everyone understood.`,
+          `Düğününde ${kTr.toLocaleLowerCase('tr')} ${n} için bir sandalyeyi boş bıraktın. Herkes anladı.`,
+        );
+      if (c.age >= 18)
+        return c.t(
+          `You caught yourself saying something exactly the way your ${kEn} ${n} used to. You did not mind at all.`,
+          `Bir şeyi tam ${c.vars.kind === 'mother' ? 'annen' : 'baban'} ${gen(n)} söylediği gibi söylediğini fark ettin. Hiç de rahatsız olmadın.`,
+        );
+      return c.t(
+        `On your ${kEn}'s birthday you made ${n}'s favourite dish, badly. It still counted.`,
+        `${kTr} ${gen(n)} doğum gününde en sevdiği yemeği yaptın; pek beceremedin ama yine de sayıldı.`,
+      );
+    },
+  },
 ];
+
+/** Things a child keeps of a parent who died: [English, Turkish accusative]. */
+const KEEPSAKES: [string, string][] = [
+  ['an old jumper that still smells right', 'hâlâ onun gibi kokan eski bir kazağı'],
+  ['a pair of reading glasses', 'bir okuma gözlüğünü'],
+  ['a chipped tea glass', 'kenarı kırık bir çay bardağını'],
+  ['a shopping list in that handwriting', 'o el yazısıyla yazılmış bir alışveriş listesini'],
+  ['a voicemail you will never delete', 'asla silmeyeceğin bir sesli mesajı'],
+];
+
+/** A parent who died this year or last while the player is under 25, not grieved yet. */
+function recentlyLostParent(c: Ctx) {
+  if (c.age > 25) return undefined;
+  return c.p.relations.find((r) => {
+    if (r.kind !== 'mother' && r.kind !== 'father') return false;
+    const d = c.s.people[r.personId]?.deathYear;
+    return d !== undefined && d >= c.s.year - 1 && !didFor(c, 'grief', r.personId);
+  });
+}
+
+/** A parent lost young, at least four years ago, whose "growing up without" beat has not come yet. */
+function laterGrief(c: Ctx): string | undefined {
+  const r = c.p.relations.find((x) => {
+    if (x.kind !== 'mother' && x.kind !== 'father') return false;
+    const y = c.p.flags[`lost_parent:${x.personId}`];
+    return y !== undefined && c.s.year - y >= 4 && !didFor(c, 'grief_later', x.personId);
+  });
+  return r?.personId;
+}

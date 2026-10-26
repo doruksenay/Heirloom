@@ -28,6 +28,22 @@ export function Summary({ app }: { app: AppApi }) {
       app.toast(T('New ribbon: {name}', { name: rName }));
     }
   }, [r.personId]);
+  // the end of a dynasty: a closing word for the whole family line when nobody is left to carry it on
+  const dyn = s.dynasty;
+  const fromYear = Math.min(dyn.startYear, ...dyn.lives.map((l) => l.birthYear));
+  const toYear = r.deathYear;
+  const lastItem = dyn.heirlooms[0]?.name;
+  const dynastyEnd =
+    kids.length === 0
+      ? [
+          Tn(dyn.generation, 'One generation, {from}–{to}.', '{n} generations, {from}–{to}.', { from: fromYear, to: toYear }),
+          lastItem
+            ? T('{item} went to the town museum, with a small card that tells the family story.', { item: lastItem })
+            : T('There is no one left to carry the name, but every one of these lives was lived in full.'),
+          T('Family legacy: {n}.', { n: fmtInt(dyn.legacyScore) }),
+          T('A new family can begin whenever you are ready.'),
+        ]
+      : [];
   const familyLine = Tn(r.children, '{n} child', '{n} children') + (r.grandchildren ? `, ${Tn(r.grandchildren, '{n} grandchild', '{n} grandchildren')}` : '');
   // [label, value, highlight]
   const rows: [string, string, boolean?][] = [
@@ -119,7 +135,13 @@ export function Summary({ app }: { app: AppApi }) {
             {grandkid.has(k.id) ? T('Continue as your grandchild {name}, {n}', { name: k.firstName, n: ageOf(s, k) }) : T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
           </button>
         ))}
-        {kids.length === 0 && <div class="banner">{T('No children to carry on. The {name} story ends here, but a new family can begin.', { name: s.dynasty.familyName })}</div>}
+        {kids.length === 0 && (
+          <div class="banner">
+            <strong>{T('The {name} family story ends here', { name: s.dynasty.familyName })}</strong>
+            {' '}
+            {dynastyEnd.join(' ')}
+          </div>
+        )}
         <button type="button" class="btn" onClick={share}>
           <Icon name="share" size={18} /> {r.gender === 'female' ? T('Share her story') : T('Share his story')}
         </button>

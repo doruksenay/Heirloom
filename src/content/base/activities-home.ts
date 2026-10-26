@@ -156,19 +156,47 @@ const RENT_TR: Record<string, [string, string, string]> = {
   villa: ['villa', 'villanın', 'villaya'],
 };
 /** The landlord in the lease line, by country: [English, Turkish]. */
-const LANDLORD: Record<string, [string, string]> = {
-  tr: ['Mr. Kemal', 'Kemal Bey'],
-  us: ['Mr. Novak', 'Bay Novak'],
-  uk: ['Mr. Pemberton', 'Bay Pemberton'],
-  de: ['Herr Becker', 'Herr Becker'],
-  br: ['Seu Jorge', 'Seu Jorge'],
+/** Landlords in the lease line, by country: [English, Turkish]. Several per country so a renting life meets more than one. */
+const LANDLORDS: Record<string, [string, string][]> = {
+  tr: [
+    ['Mr. Kemal', 'Kemal Bey'],
+    ['Mrs. Nermin', 'Nermin Hanım'],
+    ['Mr. Haluk', 'Haluk Bey'],
+    ['Mrs. Sevim', 'Sevim Hanım'],
+  ],
+  us: [
+    ['Mr. Novak', 'Bay Novak'],
+    ['Mrs. Delgado', 'Bayan Delgado'],
+    ['Mr. Whitfield', 'Bay Whitfield'],
+    ['Mrs. Kowalski', 'Bayan Kowalski'],
+  ],
+  uk: [
+    ['Mr. Pemberton', 'Bay Pemberton'],
+    ['Mrs. Ashworth', 'Bayan Ashworth'],
+    ['Mr. Okafor', 'Bay Okafor'],
+    ['Mrs. Tilley', 'Bayan Tilley'],
+  ],
+  de: [
+    ['Herr Becker', 'Herr Becker'],
+    ['Frau Lindner', 'Frau Lindner'],
+    ['Herr Albrecht', 'Herr Albrecht'],
+    ['Frau Kühn', 'Frau Kühn'],
+  ],
+  br: [
+    ['Dona Lúcia', 'Dona Lúcia'],
+    ['Seu Valdir', 'Seu Valdir'],
+    ['Dona Cida', 'Dona Cida'],
+    ['Seu Osvaldo', 'Seu Osvaldo'],
+  ],
 };
 function rentLine(c: Ctx, where: string): string {
   const i = c.rng.int(0, RENT_LINES.length - 1);
   const forms = RENT_TR[where] ?? [where, where, where];
   // Turkish needs a different case per line: için (nom.), kiraladın (acc. ≈ nom. here), anahtarları (gen.), taşındın (dat.)
   const trWord = [forms[0], forms[0], forms[1], forms[2]][i];
-  const [lEn, lTr] = LANDLORD[c.p.countryId] ?? ['Mr. Novak', 'Bay Novak'];
+  // the landlord follows the lease year (no extra rng call, so old seeds keep their stream)
+  const lords = LANDLORDS[c.p.countryId] ?? LANDLORDS.us;
+  const [lEn, lTr] = lords[(c.s.year + c.p.birthYear) % lords.length];
   return c.t(RENT_LINES[i][0].split('{w}').join(where).split('{L}').join(lEn), RENT_LINES[i][1].split('{W}').join(cap1(trWord)).split('{L}').join(lTr));
 }
 
@@ -282,13 +310,81 @@ export function homeOnInherit(prev: Player, next: Player, s: GameState): string 
   const tr = s.lang === 'tr';
   const names = pets.map((x) => displayName(x, s.lang));
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} ${tr ? 've' : 'and'} ${names[names.length - 1]}`;
-  if (tr)
-    return names.length === 1
-      ? `${list} evde kaldı ve artık seninle. İlk gece kapının önünde, ${gen(prev.firstName)} ayak seslerini bekledi.`
-      : `${list} evde kaldı ve artık seninle. İlk gece hepsi kapının önünde ${gen(prev.firstName)} ayak seslerini bekledi.`;
-  return names.length === 1
-    ? `${list} stayed with the house and is yours now. The first night, ${list} waited by the door for ${prev.firstName}'s footsteps.`
-    : `${list} stayed with the house and are yours now. The first night, they all waited by the door for ${prev.firstName}'s footsteps.`;
+  // a hand-over: the previous keeper is alive and still visits, so nobody waits for footsteps that will not come
+  const last = s.dynasty.lives[s.dynasty.lives.length - 1];
+  const handedOver = !!last && last.personId === prev.id && !!last.handedOver;
+  const head = tr
+    ? `${list} evde kaldı ve artık seninle.`
+    : `${list} stayed with the house and ${names.length === 1 ? 'is' : 'are'} yours now.`;
+  return `${head} ${inheritPetLine(pets, prev.firstName, tr, handedOver, s.year)}`;
+}
+
+type PetLine = (n: string, p: string) => [string, string];
+/** One line about the pets after the keeper changes, by pet kind: [death, hand-over]. */
+const INHERIT_LINES: Record<PetKind, { died: PetLine[]; handed: PetLine[] }> = {
+  dog: {
+    died: [
+      (n, p) => [`The first night, ${n} lay by the door waiting for ${p}'s footsteps.`, `İlk gece ${n} kapının önüne yattı, ${gen(p)} ayak seslerini bekledi.`],
+      (n, p) => [`${n} still brings ${p}'s slippers to the door every evening.`, `${n} her akşam ${gen(p)} terliklerini hâlâ kapıya getiriyor.`],
+    ],
+    handed: [
+      (n, p) => [`${n} still runs to the door every time ${p} visits, tail first.`, `${p} ne zaman uğrasa ${n} hâlâ kapıya koşuyor, önce kuyruğu.`],
+      (n, p) => [`${n} now has two people to beg from at Sunday lunch, and ${p} is the softer one.`, `${n} artık pazar yemeklerinde iki kişiden yemek dileniyor. ${p} hâlâ daha yufka yürekli olan.`],
+    ],
+  },
+  cat: {
+    died: [
+      (n, p) => [`${n} sleeps on ${p}'s chair now and will not discuss it.`, `${n} artık ${gen(p)} koltuğunda uyuyor ve bu konuyu konuşmak istemiyor.`],
+      (n, p) => [`The first week, ${n} checked every room for ${p}, then settled on your bed.`, `İlk hafta ${n} her odada ${acc(p)} aradı, sonra senin yatağına yerleşti.`],
+    ],
+    handed: [
+      (n, p) => [`${n} now ignores two people instead of one. ${p} is still the favourite.`, `${n} artık bir yerine iki kişiyi görmezden geliyor. Gözdesi hâlâ ${p}.`],
+      (n, p) => [`When ${p} visits, ${n} sits on ${p}'s lap to make a point.`, `${p} uğradığında ${n} bir mesaj vermek için gidip ${gen(p)} kucağına oturuyor.`],
+    ],
+  },
+  bird: {
+    died: [(n, p) => [`${n} still whistles the tune ${p} taught it. Some mornings it is hard to listen to.`, `${n} hâlâ ${gen(p)} öğrettiği ezgiyi ıslıkla çalıyor. Bazı sabahlar dinlemesi zor.`]],
+    handed: [(n, p) => [`${n} still whistles ${p}'s tune, to ${p}'s great pride.`, `${n} hâlâ ${gen(p)} ezgisini ıslıkla çalıyor. ${p} bununla çok gururlu.`]],
+  },
+  fish: {
+    died: [(n) => [`${n} swims its laps as always. Fish are good at carrying on.`, `${n} turlarını her zamanki gibi atıyor. Balıklar hayata devam etmeyi iyi biliyor.`]],
+    handed: [(n) => [`${n} has not noticed the change of management.`, `${n} yönetimin değiştiğini fark etmedi.`]],
+  },
+  rabbit: {
+    died: [(n, p) => [`${n} sat by ${p}'s empty chair for a while, then accepted a carrot from you.`, `${n} bir süre ${gen(p)} boş sandalyesinin yanında oturdu, sonra senden bir havuç kabul etti.`]],
+    handed: [(n) => [`${n} accepted the new management in exchange for a carrot.`, `${n} yeni yönetimi bir havuç karşılığında kabul etti.`]],
+  },
+  turtle: {
+    died: [(n) => [`${n} has outlived another keeper and is taking it slowly, as always.`, `${n} bir sahibini daha uğurladı ve bunu da her zamanki gibi ağırdan alıyor.`]],
+    handed: [(n) => [`${n} has seen a few handovers. It took this one slowly.`, `${n} birkaç devir teslim gördü. Bunu da ağırdan aldı.`]],
+  },
+  horse: {
+    died: [(n, p) => [`Every evening ${n} waits at the fence at the hour ${p} used to come.`, `${n} her akşam ${gen(p)} geldiği saatte çitin başında bekliyor.`]],
+    handed: [(n, p) => [`${p} still comes by on Sundays to brush ${n}. ${n} prefers ${p}'s way.`, `${p} pazarları hâlâ ${acc(n)} tımar etmeye geliyor. ${n} onun usulünü daha çok seviyor.`]],
+  },
+};
+
+/**
+ * The pet line after the keeper changes. Dogs and cats lead (they notice); "both" only when there are exactly
+ * two of them. No rng: the variant follows the year, so the inheritance does not shift the life's rng stream.
+ */
+export function inheritPetLine(pets: Pet[], prevName: string, tr: boolean, handedOver: boolean, year: number): string {
+  const lead = pets.find((x) => x.kind === 'dog') ?? pets.find((x) => x.kind === 'cat') ?? pets[0];
+  const same = pets.filter((x) => x.kind === lead.kind);
+  if (!handedOver && same.length === 2 && (lead.kind === 'dog' || lead.kind === 'cat')) {
+    const [a, b] = same.map((x) => displayName(x, tr ? 'tr' : 'en'));
+    return lead.kind === 'dog'
+      ? tr
+        ? `İlk gece ikisi de kapının önüne yattı, ${gen(prevName)} ayak seslerini beklediler.`
+        : `The first night, ${a} and ${b} both lay by the door waiting for ${prevName}'s footsteps.`
+      : tr
+        ? `İlk hafta ${a} ve ${b} her odada ${acc(prevName)} aradılar, sonra ikisi de senin yatağına yerleşti.`
+        : `The first week, ${a} and ${b} both checked every room for ${prevName}, then settled on your bed.`;
+  }
+  const set = INHERIT_LINES[lead.kind] ?? INHERIT_LINES.fish;
+  const lines = handedOver ? set.handed : set.died;
+  const [en, trl] = lines[year % lines.length](displayName(lead, tr ? 'tr' : 'en'), prevName);
+  return tr ? trl : en;
 }
 
 /** Extra Life-screen tiles from the home side. */

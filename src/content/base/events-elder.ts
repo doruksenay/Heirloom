@@ -6,7 +6,8 @@ import { acc, cap, dat, gen, kin, nm, single, wage, who, wth } from './util';
 import { catName } from '../../engine/pets';
 import { currentTier, homeTier, houseState } from '../../engine/home';
 import { tierPrice } from './activities-home';
-import { him, inTr } from './events-flavour';
+import { him, inTr, nearKids } from './events-flavour';
+import { nameOrOwn } from './heirloom-words';
 
 // Old age (58+): grandchildren, health, retirement life, love and loss, legacy.
 
@@ -294,12 +295,13 @@ export const elderEvents: EventDef[] = [
     minAge: 58,
     maxAge: 88,
     cooldown: 5,
-    when: (c) => grandkids(c).some((g) => gkAlive(c, g) && gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && c.h.relatives('child').some((k) => k.person.id === g.p)),
+    // only a child who lives nearby drops a grandchild off for the weekend
+    when: (c) => grandkids(c).some((g) => gkAlive(c, g) && gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && nearKids(c).some((k) => k.person.id === g.p)),
     setup: (c) => {
       const all = ensureGrandkids(c);
       const ok = all
         .map((g, i) => [g, i] as const)
-        .filter(([g]) => gkAlive(c, g) && gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && children(c).some((k) => k.person.id === g.p));
+        .filter(([g]) => gkAlive(c, g) && gkAge(c, g) >= 1 && gkAge(c, g) <= 10 && nearKids(c).some((k) => k.person.id === g.p));
       const [g, i] = ok[c.rng.int(0, ok.length - 1)];
       c.vars.gk = i;
       c.vars.pid = g.p;
@@ -322,8 +324,8 @@ export const elderEvents: EventDef[] = [
           if (c.h.hasHeirloom('quilt')) {
             const q = c.s.dynasty.heirlooms.find((x) => x.defId === 'quilt')!;
             return c.t(
-              `You followed every rule and tucked ${gkn(c)} in under ${q.name}. Lights out at eight, story until ten.`,
-              `Bütün kurallara uydun ve ${acc(gkn(c))} yadigâr yorganın altına yatırdın: ${q.name}. Işıklar sekizde söndü, masal ona kadar sürdü.`,
+              `You followed every rule and tucked ${gkn(c)} in under ${nameOrOwn(c, q)}. Lights out at eight, story until ten.`,
+              `Bütün kurallara uydun ve ${acc(gkn(c))} yadigâr yorganın altına yatırdın: ${nameOrOwn(c, q)}. Işıklar sekizde söndü, masal ona kadar sürdü.`,
             );
           }
           return c.t(
@@ -415,7 +417,7 @@ export const elderEvents: EventDef[] = [
           c.h.stat('happiness', -1);
           return c.t(
             `You said no. ${gkn(c)} took a weekend job and, annoyingly, loved it.`,
-            `Hayır dedin. ${gkn(c)} hafta sonları bir işe girdi ve sinir bozucu bir şekilde bayıldı.`,
+            `Hayır dedin. ${gkn(c)} hafta sonları bir işe girdi ve, ne sinir bozucu, işine bayıldı.`,
           );
         },
       },
@@ -510,8 +512,8 @@ export const elderEvents: EventDef[] = [
             book.story.push(c.t(`In ${c.s.year}, ${you} taught ${n} the ${d[0]} from these pages.`, `${c.s.year} yılında ${you}, bu sayfalardaki ${d[2]} ${dat(n)} öğretti.`));
             c.h.stat('happiness', 5);
             return c.t(
-              `You cooked together from ${book.name}. ${n} added a note in the margin: "less salt (don't tell)."`,
-              `Yadigâr defterden birlikte pişirdiniz: ${book.name}. ${n} sayfanın kenarına bir not düştü: "tuz az (kimseye söyleme)."`,
+              `You cooked together from ${nameOrOwn(c, book)}. ${n} added a note in the margin: "less salt (don't tell)."`,
+              `Yadigâr defterden birlikte pişirdiniz: ${nameOrOwn(c, book)}. ${n} sayfanın kenarına bir not düştü: "tuz az (kimseye söyleme)."`,
             );
           }
           if (c.rng.chance(0.35)) {
@@ -607,7 +609,7 @@ export const elderEvents: EventDef[] = [
             const ring = c.s.dynasty.heirlooms.find((x) => x.defId === 'ring')!;
             ring.story.push(c.t(`Worn by ${n}, ${c.p.firstName}'s grandchild, at the wedding in ${c.s.year}.`, `${c.s.year} yılında ${gen(c.p.firstName)} torunu ${n} düğününde taktı.`));
             c.h.stat('happiness', 8);
-            return c.t(`${n} got married wearing ${ring.name}. One ring, many fingers.`, `${n} yadigâr yüzükle evlendi: ${ring.name}. Tek yüzük, nice parmak.`);
+            return c.t(`${n} got married wearing ${nameOrOwn(c, ring)}. One ring, many fingers.`, `${n} yadigâr yüzükle evlendi: ${nameOrOwn(c, ring)}. Tek yüzük, nice parmak.`);
           }
           c.h.stat('happiness', 4);
           return c.t(
@@ -635,8 +637,8 @@ export const elderEvents: EventDef[] = [
         const q = c.s.dynasty.heirlooms.find((x) => x.defId === 'quilt')!;
         q.story.push(c.t(`In ${c.s.year}, it wrapped ${n}'s newborn, a fourth generation.`, `${c.s.year} yılında ${gen(n)} yeni doğan bebeğini, yani dördüncü kuşağı sardı.`));
         return c.t(
-          `${n} had a baby. You are a great-grandparent! You wrapped the newborn in ${q.name}.`,
-          `${n} bebek sahibi oldu. Artık ${c.p.gender === 'female' ? 'büyük ninesin' : 'büyük dedesin'}! Yeni doğanı yadigâr yorgana sardın: ${q.name}.`,
+          `${n} had a baby. You are a great-grandparent! You wrapped the newborn in ${nameOrOwn(c, q)}.`,
+          `${n} bebek sahibi oldu. Artık ${c.p.gender === 'female' ? 'büyük ninesin' : 'büyük dedesin'}! Yeni doğanı yadigâr yorgana sardın: ${nameOrOwn(c, q)}.`,
         );
       }
       return c.t(
@@ -932,7 +934,8 @@ export const elderEvents: EventDef[] = [
     cooldown: 8,
     weight: (c) => (c.h.has('elder_grab_bars') ? 2 : 6),
     setup: (c) => {
-      const kids = [...children(c)].sort((x, y) => y.rel.closeness - x.rel.closeness);
+      // the child who comes "in eleven minutes" has to live nearby
+      const kids = [...nearKids(c)].sort((x, y) => y.rel.closeness - x.rel.closeness);
       c.vars.pid = kids[0]?.person.id ?? '';
     },
     title: (c) => c.t('You slipped in the bathroom.', 'Banyoda ayağın kaydı.'),
@@ -1392,7 +1395,8 @@ export const elderEvents: EventDef[] = [
     minAge: 60,
     once: true,
     weight: 7,
-    title: (c) => c.t('The local choir is looking for new voices.', 'Semtin musiki korosu yeni sesler arıyor.'),
+    // a Turkish music society (musiki cemiyeti) only in Türkiye; a plain neighborhood choir elsewhere
+    title: (c) => c.t('The local choir is looking for new voices.', inTr(c) ? 'Semtin musiki korosu yeni sesler arıyor.' : 'Mahallenin korosu yeni sesler arıyor.'),
     text: (c) => c.t('Average age: 71. Average volume: very loud.', 'Yaş ortalaması 71. Ses ortalaması: çok yüksek.'),
     choices: [
       {

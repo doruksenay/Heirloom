@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ageUp, choose, doActivity, newGame } from '../src/engine/game';
 import { activitiesFor, allJobs, findEvent, PACKS } from '../src/content/registry';
-import { makeCtx } from '../src/engine/context';
+import { MIN_YEARS_PER_LEVEL, makeCtx, promoteAnyway } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { BASE_JOBS, EVENT_ONLY, NEW_JOB_IDS, salaryFor } from '../src/engine/careers';
 import { getCountry } from '../src/engine/world';
@@ -109,6 +109,57 @@ describe('yearly career logic', () => {
     const o = withJob(fresh(2), 45, 'officer', 0, 16);
     for (let i = 0; i < 5; i++) careerOnYear(makeCtx(o)), nextYear(o);
     expect(o.player.jobLevel).toBeGreaterThanOrEqual(3);
+  });
+
+  it('needs a few years at each level before an ordinary promotion (playtest 2: entry to top in five years)', () => {
+    const s = withJob(fresh(), 30, 'doctor');
+    s.player.jobId = null;
+    const c = makeCtx(s);
+    c.h.setJob('doctor');
+    // the hiring year may start you one rung up (setJob + promote), but only once
+    expect(c.h.promote()).toBe(true);
+    expect(s.player.jobLevel).toBe(1);
+    s.year++;
+    expect(makeCtx(s).h.promote()).toBe(false); // one year at the level
+    s.year += MIN_YEARS_PER_LEVEL - 1;
+    expect(makeCtx(s).h.promote()).toBe(true); // three years later
+    expect(s.player.jobLevel).toBe(2);
+    s.year++;
+    expect(makeCtx(s).h.promote()).toBe(false);
+    // structural jumps skip the wait, and the wait starts again after them
+    expect(promoteAnyway(makeCtx(s))).toBe(true);
+    expect(s.player.jobLevel).toBe(3);
+    // an old save without the record counts years in the job
+    const o = withJob(fresh(2), 40, 'teacher', 1, 6);
+    expect(makeCtx(o).h.promote()).toBe(true);
+    const n = withJob(fresh(3), 40, 'teacher', 1, 1);
+    expect(makeCtx(n).h.promote()).toBe(false);
+  });
+
+  it('takes careers well over a decade from entry title to the top', { timeout: 120_000 }, () => {
+    const spans: number[] = [];
+    for (let seed = 1; seed <= 80; seed++) {
+      let start: number | undefined;
+      let job: string | null = null;
+      play('en', seed, (s) => {
+        const p = s.player;
+        if (p.jobId !== job) {
+          job = p.jobId;
+          start = p.jobId && p.jobLevel === 0 ? s.year : undefined;
+          return;
+        }
+        const j = p.jobId ? allJobs(s.enabledPacks).find((x) => x.id === p.jobId) : undefined;
+        if (j && !j.ranked && start !== undefined && p.jobLevel === j.titles.length - 1) {
+          spans.push(s.year - start);
+          start = undefined;
+        }
+      });
+    }
+    const sorted = [...spans].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    console.log(`entry to top: median ${med} years (n=${spans.length})`);
+    expect(spans.length).toBeGreaterThan(5);
+    expect(med).toBeGreaterThanOrEqual(8);
   });
 
   it('grounds a pilot who fails the medical', () => {

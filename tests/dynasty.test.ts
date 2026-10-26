@@ -21,7 +21,7 @@ import { activitiesFor, allJobs, findEvent } from '../src/content/registry';
 import { makeCtx } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { assignGoals, BASE_GOALS, goalDef } from '../src/engine/goals';
-import { familyFirstNames } from '../src/content/base/util';
+import { familyFirstNames, kin } from '../src/content/base/util';
 import { ribbonFor } from '../src/engine/ribbons';
 import type { GameState, Lang, Person, Profile } from '../src/engine/types';
 import type { ActivityDef } from '../src/content/types';
@@ -128,10 +128,12 @@ describe('pass the torch', () => {
       continueAsChild(s, heir.id);
       expect(s.dead).toBeNull();
       expect(s.player.id).toBe(heir.id);
-      expect(s.player.money).toBe(50_000); // half now…
+      // half the savings is shared out now between the two children, the other half stays with the parent
+      // the heir's part now, after gift tax (Türkiye: allowance 30k × 0.45, 15% on the rest)…
+      expect(s.player.money).toBe(Math.round((50_000 - Math.round((50_000 - 13_500) * 0.15)) / 2));
       const mom = s.people[old.id];
       expect(mom.deathYear).toBeUndefined();
-      expect(mom.estate).toBe(50_000); // …half later
+      expect(mom.estate).toBe(25_000); // …and of what is left later
       const rel = s.player.relations.find((r) => r.personId === old.id)!;
       expect(rel.kind).toBe('mother');
       expect(s.player.log.some((l) => l.text.includes('handed the family over to you'))).toBe(true);
@@ -200,6 +202,147 @@ describe('pass the torch', () => {
       checked++;
     }
     expect(checked).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('inheritance and family history (playtest 2)', () => {
+  /** A 70-year-old who dies with savings, a home, two adult children and a spouse. */
+  function estate(seed: number, money = 200_000, homeValue = 50_000) {
+    const s = fresh(seed, false, 'en', 'us');
+    setAge(s, 70);
+    s.player.money = money;
+    s.player.home = { name: 'House', value: homeValue, owned: true, furniture: [] };
+    const c = makeCtx(s);
+    const a = c.h.newPerson({ age: 42, gender: 'female', lastName: 'Yılmaz' });
+    const b = c.h.newPerson({ age: 38, gender: 'male', lastName: 'Yılmaz' });
+    c.h.addRelation(a, 'child', 80);
+    c.h.addRelation(b, 'child', 60);
+    s.player.deathCause = 'old age';
+    finishLife(s);
+    return { s, a, b };
+  }
+
+  it('splits the estate between all children after a modest tax; the home counts towards the heir\'s part', () => {
+    const { s, a } = estate(1);
+    continueAsChild(s, a.id);
+    // US: wage factor 1, allowance $30k, 15% on the rest = $25.5k tax; two equal parts, the heir's includes the $50k home
+    expect(s.player.money).toBe(Math.round((200_000 - 25_500 + 50_000) / 2 - 50_000));
+    expect(s.player.home.owned).toBe(true);
+    expect(s.player.log.some((l) => l.text.includes('inheritance tax') && l.text.includes('2 children'))).toBe(true);
+    expect(s.player.log.some((l) => l.text.startsWith('You inherited') && l.text.includes('the family home'))).toBe(true);
+    // a home worth more than the heir's part: the heir takes the home, the siblings the savings
+    const big = estate(2, 100_000, 400_000);
+    continueAsChild(big.s, big.a.id);
+    expect(big.s.player.money).toBe(0);
+    expect(big.s.player.home.value).toBe(400_000);
+    expect(big.s.player.log.some((l) => l.text.includes('your brothers and sisters shared the savings'))).toBe(true);
+    // an only child keeps everything after tax
+    const s1 = fresh(3, false, 'en', 'us');
+    setAge(s1, 70);
+    s1.player.money = 100_000;
+    const only = makeCtx(s1).h.newPerson({ age: 40, lastName: 'Yılmaz' });
+    makeCtx(s1).h.addRelation(only, 'child', 80);
+    s1.player.deathCause = 'old age';
+    finishLife(s1);
+    continueAsChild(s1, only.id);
+    expect(s1.player.money).toBe(100_000 - 10_500);
+  });
+
+  it('backdates the spouse an adult heir already has', () => {
+    let seen = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const { s, a } = estate(seed);
+      continueAsChild(s, a.id);
+      const sp = s.player.relations.find((r) => r.kind === 'spouse');
+      if (!sp) continue;
+      seen++;
+      expect(s.year - sp.sinceYear, `seed ${seed}`).toBeGreaterThanOrEqual(5); // a 42-year-old's marriage is years old
+      expect(sp.sinceYear).toBeGreaterThanOrEqual(a.birthYear + 18);
+    }
+    expect(seen).toBeGreaterThan(5);
+  });
+
+  it("keeps the heir's real mother after the father remarries; the new wife is a stepmother", () => {
+    const s = fresh(4, false, 'tr', 'tr');
+    s.player.gender = 'male';
+    setAge(s, 30);
+    const c = makeCtx(s);
+    const mom = c.h.newPerson({ age: 29, gender: 'female' });
+    c.h.addRelation(mom, 'spouse', 80);
+    // the baby is born with mom as the other parent
+    s.pending = null;
+    openEvent(s, findEvent('base.baby_name')!.def);
+    choose(s, 'name0');
+    const kid = s.people[s.player.relations.find((r) => r.kind === 'child')!.personId];
+    expect(kid.coParentId).toBe(mom.id);
+    // divorce, remarry, and die when the child is grown up
+    c.h.setKind(mom.id, 'ex');
+    const step = c.h.newPerson({ age: 31, gender: 'female' });
+    c.h.addRelation(step, 'spouse', 80);
+    s.year += 30;
+    s.player.deathCause = 'old age';
+    finishLife(s);
+    continueAsChild(s, kid.id);
+    const rel = (id: string) => s.player.relations.find((r) => r.personId === id);
+    expect(rel(mom.id)?.kind).toBe('mother');
+    expect(rel(mom.id)?.step).toBeFalsy();
+    expect(rel(step.id)?.kind).toBe('mother');
+    expect(rel(step.id)?.step).toBe(true);
+    const c2 = makeCtx(s);
+    expect(c2.h.relatives('mother').map((r) => r.person.id)).toEqual([mom.id]); // events talk about the real mother
+    expect(kin(c2, step, 'mother')).toBe('üvey annen');
+    expect(kin(c2, mom, 'mother')).toBe('annen');
+  });
+
+  it('gives the founding heirloom a great-grandparent and a dated origin story, in both languages', () => {
+    const stories = new Set<string>();
+    for (let seed = 1; seed <= 40; seed++) {
+      const en = fresh(seed, false, 'en');
+      const tr = fresh(seed, false, 'tr');
+      expect(tr.rng).toBe(en.rng);
+      const [h] = en.dynasty.heirlooms;
+      const [ht] = tr.dynasty.heirlooms;
+      expect(h.name).toMatch(/^Great-grand(pa|ma) /);
+      expect(ht.name).toMatch(/ (Dede|Nine)'nin /);
+      expect(h.sinceYear).toBeLessThan(1980);
+      expect(h.story[0]).toContain(String(h.sinceYear));
+      expect(h.story[0]).toMatch(/^(Your great-grand|In )/);
+      expect(ht.story[0]).toMatch(/Büyük (deden|ninen)|büyük (deden|ninen)/);
+      expect(ht.story[0]).not.toMatch(/\d'/); // no suffix right after a year
+      expect(en.player.log.some((l) => l.text.includes(h.story[0]))).toBe(true);
+      stories.add(h.story[0].replace(/\d+/g, '#').replace(/\p{Lu}\p{Ll}+/gu, 'X'));
+    }
+    expect(stories.size).toBeGreaterThanOrEqual(8);
+  });
+
+  it('chooses final words only about heirlooms the family owns', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const { s } = estate(seed);
+      const types = new Set(s.dynasty.heirlooms.map((x) => x.defId));
+      const w = s.dead!.finalWords;
+      if (/clock/.test(w)) expect(types.has('clock'), w).toBe(true);
+      if (/ring/.test(w)) expect(types.has('ring'), w).toBe(true);
+      if (/quilt/.test(w)) expect(types.has('quilt'), w).toBe(true);
+      if (/recipe/.test(w)) expect(types.has('recipes'), w).toBe(true);
+    }
+  });
+
+  it('announces a new generation with the first child only', () => {
+    const s = fresh(5, false, 'en', 'us');
+    setAge(s, 30);
+    const c = makeCtx(s);
+    c.h.addRelation(c.h.newPerson({ age: 30, gender: 'male' }), 'spouse', 80);
+    const lines: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      openEvent(s, findEvent('base.baby_name')!.def);
+      const name = String(s.pending!.vars.name0);
+      choose(s, 'name0');
+      lines.push(s.player.log.find((l) => l.text.includes(`${name}!`))!.text);
+    }
+    expect(lines[0]).toContain('Gen 2 of the');
+    expect(lines[1]).not.toContain('Gen 2');
+    expect(lines[2]).not.toContain('Gen 2');
+    expect(lines[1]).toMatch(/little Yılmaz/);
   });
 });
 

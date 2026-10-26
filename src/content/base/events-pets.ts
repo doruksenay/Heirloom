@@ -2,7 +2,7 @@ import type { Ctx, EventDef } from '../types';
 import { MAX_PETS, addPet, displayName, findPet, nextNum, petAge, petDies, petKind, petNames, petState, petsOf, type Pet, type PetKind } from '../../engine/pets';
 import { currentTier, homeTier, type HomeTier } from '../../engine/home';
 import { acc, cap, dat, gen, wage, wth } from './util';
-import { coastal } from './events-flavour';
+import { coastal, inTr } from './events-flavour';
 import { say as sayLine, type Pair } from './lines';
 import {
   ADOPT_DECLINED,
@@ -122,11 +122,28 @@ function adoptChoice(i: number) {
       c.h.stat('happiness', 6);
       const [en, tr] = ADOPT_LINES[k];
       let out = say(c, pet, en, tr, age);
-      if (pet.num > 1) out += c.t(` The name has been in the family for ${pet.num} generations of pets now.`, ` Bu isim ailede artık ${pet.num} kuşaktır yaşıyor.`);
+      if (pet.num > 1) {
+        const [oEn, oTr] = ORDINALS[Math.min(pet.num, ORDINALS.length) - 1];
+        out += c.t(` This is the ${oEn} pet in the family to carry the name.`, ` Bu ismi taşıyan ${oTr} hayvan bu.`);
+      }
       return out;
     },
   };
 }
+
+/** Ordinals for the "this is the Nth pet with the name" line: [English, Turkish]. The last one covers anything beyond. */
+const ORDINALS: [string, string][] = [
+  ['first', 'ilk'],
+  ['second', 'ikinci'],
+  ['third', 'üçüncü'],
+  ['fourth', 'dördüncü'],
+  ['fifth', 'beşinci'],
+  ['sixth', 'altıncı'],
+  ['seventh', 'yedinci'],
+  ['eighth', 'sekizinci'],
+  ['ninth', 'dokuzuncu'],
+  ['tenth', 'onuncu'],
+];
 
 // ---------------------------------------------------------------- pet events
 
@@ -285,7 +302,7 @@ const petEventsOnly: EventDef[] = [
         resolve: (c) => {
           petCloser(petById(c), 4);
           if (c.rng.chance(0.5 + c.p.stats.smarts / 400))
-            return say(c, petById(c), '{n} now says "bless you" right after every swear word. Progress.', '{n} artık her küfürden sonra "maşallah" diyor. İlerleme var.');
+            return say(c, petById(c), '{n} now says "bless you" right after every swear word. Progress.', inTr(c) ? '{n} artık her küfürden sonra "maşallah" diyor. İlerleme var.' : '{n} artık her küfürden sonra "çok yaşa" diyor. İlerleme var.');
           return say(c, petById(c), 'Two weeks of lessons. {n} now says the swear word in your voice.', 'İki hafta ders verdin. {n} artık o küfrü senin sesinle söylüyor.');
         },
       },
@@ -806,7 +823,7 @@ export const LISTINGS_STAY: Pair[] = [
   ['The new places were tempting. Then you remembered your boiler actually works. You stayed.', 'Yeni evler cazipti. Sonra kombinin sorunsuz çalıştığını hatırladın. Kaldın.'],
   ['You viewed one flat, heard the neighbor through the wall and went home grateful.', 'Bir daireye bakmaya gittin, duvarın öbür yanındaki komşuyu duydun ve evine şükrederek döndün.'],
   ['You saved three listings "for later." Later never comes. Neither does the moving van.', 'Üç ilanı "Sonra bakarım" diye kaydettin. O sonra hiç gelmez. Nakliye kamyonu da.'],
-  ['Your neighbor heard you were looking and brought börek "so you will miss us." It worked.', 'Komşun ev baktığını duyunca "Gidersen bizi özlersin" diye börek getirdi. İşe yaradı.'],
+  ['Your neighbor heard you were looking and brought a cake "so you will miss us." It worked.', 'Komşun ev baktığını duyunca "Gidersen bizi özlersin" diye kek getirdi. İşe yaradı.'],
 ];
 
 const homeEvents: EventDef[] = [
@@ -913,7 +930,7 @@ const homeEvents: EventDef[] = [
     weight: 12,
     when: (c) => moved(c, 2) && currentTier(c.p) !== 'parents',
     title: (c) => c.t('Your new neighbors throw a party every Thursday.', 'Yeni komşuların her perşembe parti veriyor.'),
-    text: (c) => c.t('The bass comes up through your floor. Last week someone sang a ballad at 2 a.m.', 'Bas sesi yerden yükseliyor. Geçen hafta biri gece ikide arabesk söyledi.'),
+    text: (c) => c.t('The bass comes up through your floor. Last week someone sang a ballad at 2 a.m.', inTr(c) ? 'Bas sesi yerden yükseliyor. Geçen hafta biri gece ikide arabesk söyledi.' : 'Bas sesi yerden yükseliyor. Geçen hafta biri gece ikide avaz avaz aşk şarkısı söyledi.'),
     choices: [
       {
         id: 'join',

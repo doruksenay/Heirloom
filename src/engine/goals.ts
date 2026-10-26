@@ -121,5 +121,9 @@ function wealthAmount(s: GameState, lang?: string): string {
   return v >= 1e6 ? `${sym}${n(v / 1e6)}M` : `${sym}${n(Math.round(v / 1000))}K`;
 }
 
-/** Lower-cases the first letter only, so "Zekân 100 olsun" and names inside a label survive. */
-const lowerFirst = (t: string, lang?: string) => (t ? t[0].toLocaleLowerCase(lang === 'tr' ? 'tr' : 'en') + t.slice(1) : t);
+/**
+ * Lower-cases the first letter only, so "Zekân 100 olsun" and names inside a label survive.
+ * A label that opens with money keeps its currency symbol as written: "R$550 binlik", "US$", "₺4,5 milyonluk".
+ */
+export const lowerFirst = (t: string, lang?: string) =>
+  !t || /^\p{L}{0,2}\p{Sc}/u.test(t) ? t : t[0].toLocaleLowerCase(lang === 'tr' ? 'tr' : 'en') + t.slice(1);

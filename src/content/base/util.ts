@@ -9,13 +9,13 @@ export { gen, acc, dat, loc, abl, wth } from '../../i18n/tr-grammar';
 export const who = (c: Ctx, key = 'pid'): Person => c.h.person(String(c.vars[key]));
 export const nm = (c: Ctx, key = 'pid'): string => who(c, key)?.firstName ?? 'someone';
 
-export const kinWord = (p: Person, kind: string): string => {
+export const kinWord = (p: Person, kind: string, step = false): string => {
   const f = p.gender === 'female';
   switch (kind) {
     case 'mother':
-      return 'mom';
+      return step ? 'stepmom' : 'mom';
     case 'father':
-      return 'dad';
+      return step ? 'stepdad' : 'dad';
     case 'sibling':
       return f ? 'sister' : 'brother';
     case 'child':
@@ -66,13 +66,14 @@ export function oneOf<T>(c: Ctx, list: readonly T[]): T {
 
 /** Localized kinship word: kin(c, person, 'sibling') → "sister" / "kız kardeş". */
 export function kin(c: Ctx, p: Person, kind: string): string {
-  if (c.lang !== 'tr') return kinWord(p, kind);
+  const step = isStep(c, p);
+  if (c.lang !== 'tr') return kinWord(p, kind, step);
   const f = p.gender === 'female';
   switch (kind) {
     case 'mother':
-      return 'annen';
+      return step ? 'üvey annen' : 'annen';
     case 'father':
-      return 'baban';
+      return step ? 'üvey baban' : 'baban';
     case 'sibling':
       // Turkish names older siblings differently: ablan / ağabeyin
       return olderThanPlayer(c, p) ? (f ? 'ablan' : 'ağabeyin') : f ? 'kız kardeşin' : 'erkek kardeşin';
@@ -89,6 +90,9 @@ export function kin(c: Ctx, p: Person, kind: string): string {
   }
 }
 
+/** True when the player's relation to this person is a step-parent (a parent's later spouse). */
+export const isStep = (c: Ctx, p: Person): boolean => c.p.relations.some((r) => r.personId === p.id && !!r.step);
+
 /** Capitalize the first letter, Turkish-aware (i → İ). */
 export function cap(s: string): string {
   if (!s) return s;
@@ -100,7 +104,7 @@ export function cap(s: string): string {
 export const olderThanPlayer = (c: Ctx, p: Person) => p.birthYear < c.p.birthYear;
 
 /** English indefinite article: aOrAn('Associate') → "an Associate", aOrAn('Pilot') → "a Pilot". */
-export const aOrAn = (word: string) => (/^[aeiou]/i.test(word) || /^hon/i.test(word) ? `an ${word}` : `a ${word}`);
+export const aOrAn = (word: string) => (/^[aeiou]/i.test(word) || /^(hon|hour|heir)/i.test(word) ? `an ${word}` : `a ${word}`);
 
 /**
  * First names already used in the player's family: the player, every relation (living or dead),

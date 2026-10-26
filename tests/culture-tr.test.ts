@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ageUp, choose, doActivity, newGame, openEvent } from '../src/engine/game';
+import { makeCtx } from '../src/engine/context';
 import { activitiesFor } from '../src/content/registry';
 import { cultureTrPack } from '../src/content/culture-tr';
 import { allRibbons } from '../src/engine/ribbons';
@@ -109,7 +110,9 @@ describe('Türkiye culture pack', () => {
         worth += s.dead.netWorth;
       }
     }
-    const missing = cultureTrPack.events.map((e) => e.id).filter((id) => !fired.has(id));
+    // a grandchild's wedding needs a 60-year-old with grandchildren over 22; the bot rarely gets there, so it has its own test below
+    const RARE = new Set(['tr.torun_dugun']);
+    const missing = cultureTrPack.events.map((e) => e.id).filter((id) => !fired.has(id) && !RARE.has(id));
     expect(missing).toEqual([]);
     const idle = (cultureTrPack.activities ?? []).map((a) => a.id).filter((id) => !ran.has(id));
     expect(idle).toEqual([]);
@@ -184,6 +187,38 @@ describe('Türkiye culture pack', () => {
       expect(Object.keys(s.player.eventLastAge).filter((id) => id.startsWith('tr.'))).toEqual([]);
       expect(activitiesFor(s.enabledPacks).some((a) => a.id.startsWith('tr_'))).toBe(false);
       expect((s.player.goals ?? []).filter((g) => g.id.startsWith('tr_'))).toEqual([]);
+    }
+  });
+
+  it("fires the grandchild's wedding for a grandparent with grown grandchildren", () => {
+    const def = cultureTrPack.events.find((e) => e.id === 'tr.torun_dugun')!;
+    for (const lang of ['tr', 'en'] as const) {
+      const s = newGame({ firstName: 'Ada', lastName: 'Kaya', gender: 'female', countryId: 'tr', city: 'Bursa', seed: 5 }, profile([cultureTrPack.entitlement!], lang));
+      s.year += 72;
+      const c = makeCtx(s);
+      const kid = c.h.newPerson({ age: 50, lastName: 'Kaya' });
+      kid.kids = 2;
+      c.h.addRelation(kid, 'child', 80);
+      expect(def.when!(makeCtx(s))).toBe(true);
+      expect(openEvent(s, def)).toBe(true);
+      const n = s.player.log.length;
+      choose(s, s.pending!.choices.find((x) => !x.disabled)!.id);
+      const out = s.player.log.slice(n).map((e) => e.text);
+      expect(out.length).toBeGreaterThan(0);
+      if (lang === 'tr') for (const t of out) expect(english(t), t).toBe(false);
+      // each grandchild marries once: after both have, the event is done
+      expect(s.player.flags && Object.keys(s.player.flags).some((f) => f.startsWith('gkwed:'))).toBe(true);
+    }
+  });
+
+  it('only commutes by ferry in İstanbul and İzmir', () => {
+    const def = cultureTrPack.events.find((e) => e.id === 'tr.rent')!;
+    const move = def.choices!.find((x) => x.id === 'move')!;
+    for (const [city, ferry] of [['İstanbul', true], ['İzmir', true], ['Antalya', false], ['Trabzon', false], ['Ankara', false]] as const) {
+      const s = newGame({ firstName: 'Ada', lastName: 'Kaya', gender: 'female', countryId: 'tr', city, seed: 2 }, profile([cultureTrPack.entitlement!]));
+      const line = move.resolve(makeCtx(s));
+      expect(line.includes('vapur'), `${city}: ${line}`).toBe(ferry);
+      if (!ferry) expect(line).toContain('iki otobüs bir minibüs');
     }
   });
 

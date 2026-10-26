@@ -1,5 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { abl, acc, cap, dat, gen, loc, wage, who, wth } from './util';
+import { getCountry } from '../../engine/world';
 import { byCountry, cityOf, he, He, him, his, inTr, type ByCountry } from './events-flavour';
 
 // Childhood, ages 1–12: toddler chaos, kindergarten, primary school and the last years before the teens.
@@ -927,7 +928,7 @@ export const childEvents: EventDef[] = [
     title: (c) => {
       const i = Number(c.vars.obj);
       const en = ['the TV remote', 'the window seat', 'the last piece of pastry', 'the good pillow'][i];
-      const tr = ['kumanda', 'cam kenarı', 'son börek dilimi', 'güzel yastık'][i];
+      const tr = ['kumanda', 'cam kenarı', inTr(c) ? 'son börek dilimi' : 'son kek dilimi', 'güzel yastık'][i];
       return c.t(`You and ${rk(c, 'sid')} are fighting over ${en}.`, `${cap(rk(c, 'sid', 'wth'))} ${tr} için kavga ediyorsunuz.`);
     },
     text: (c) => c.t('There can be only one.', 'Kazanan tek kişi olabilir.'),
@@ -1915,7 +1916,7 @@ export const childEvents: EventDef[] = [
             );
           }
           c.h.stat('happiness', -1);
-          return c.t(`${n} walked away from the deal. No shiny things for bad negotiators.`, `${n} pazarlıktan çekildi. Pazarlığı beceremeyene parlak kart yok.`);
+          return c.t(`${n} walked away from the deal. No shiny things for bad negotiators.`, `${n} pazarlıktan çekildi. Pazarlık bilmeyene parlak kart da yok.`);
         },
       },
       {
@@ -1942,7 +1943,13 @@ export const childEvents: EventDef[] = [
     once: true,
     weight: 7,
     setup: (c) => {
-      c.vars.tid = c.h.newPerson({ age: c.rng.int(45, 60) }).id;
+      const t = c.h.newPerson({ age: c.rng.int(45, 60) });
+      // "Mrs. Wood" teaching a Wood reads like a relative: give the teacher another surname (no extra rng call)
+      if (t.lastName === c.p.lastName) {
+        const last = getCountry(c.p.countryId).names.last.filter((n) => n !== c.p.lastName);
+        if (last.length) t.lastName = last[c.s.year % last.length];
+      }
+      c.vars.tid = t.id;
     },
     title: (c) => {
       const t = who(c, 'tid');
