@@ -191,7 +191,8 @@ describe('pass the torch', () => {
         ageUp(s);
         settle(s);
       }
-      if (s.dead || !(kid.kids ?? 0)) continue;
+      // a child who died in these fifteen years cannot take over, so that seed proves nothing
+      if (s.dead || kid.deathYear !== undefined || !(kid.kids ?? 0)) continue;
       expect(kid.childIds?.length).toBe(kid.kids);
       for (const id of kid.childIds!) expect(s.people[id]).toBeDefined();
       s.player.deathCause = 'old age';

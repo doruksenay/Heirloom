@@ -62,7 +62,15 @@ How to write events and activities. Read this before adding to `src/content/`.
 - Do not create infinite money or stat loops. `tests/sim.test.ts` checks that 1000 lives stay sane.
 - Use `tone: 'good' | 'bad' | 'big'` on choices or events where it fits.
 - Death: `c.h.kill(cause)` only with a cause already in `CAUSE_TR` in `src/engine/game.ts`. Ask the lead to add new causes.
-- Heirlooms: `c.h.addHeirloom(defId, name, storyLine)` with defId one of clock, ring, piano, quilt, recipes, trophy, painting. Name and story are both `c.t(...)`. Keep heirloom drops rare.
+- Heirlooms: `c.h.addHeirloom(defId, name, storyLine)` with defId one of the kinds in `src/engine/heirlooms.ts` (`HEIRLOOM_TYPES`: clock, ring, piano, quilt, recipes, trophy, painting, radio, saz, tavla, cezve, album, pen). Name and story are both `c.t(...)`. Keep heirloom drops rare: the engine lets at most one heirloom join the family per calendar year, and a family keeps one item per kind (check `c.h.hasHeirloom(kind)` in `when`).
+
+### Adding a heirloom kind
+
+1. Add one entry to `SPECS` in `src/engine/heirlooms.ts`: icon, the one-line effect (EN and TR), the noun with its Turkish case forms, declarative passives (a small stat effect, optionally inside an age window, or slower cooling of relationships), valuation factor, whether it is portable, and the keeper's last words. Passives never use the random stream, so they cannot change a seed's life.
+2. If the icon is new, draw it in `src/ui/icons.tsx` (the catalog test checks it exists).
+3. Fill in `HeirloomTexts` in a new file in `src/content/base/keepsakes/` (see `types.ts`, which documents the frame every line slots into) and register it in `keepsakes/index.ts`. The compiler lists what is missing. Never name another kind's noun in English; `tests/base-content.test.ts` checks this.
+4. Add an `Offer` to `src/content/base/events-keepsakes.ts` so a family can come by it. Keep the weight low and run a few hundred lives: the whole game should hand out roughly one heirloom per life.
+5. Add the noun to the `NOUN` map in `tests/base-content.test.ts`.
 - Every event needs an `id` with a pack prefix (`base.`, `crime.`) that never clashes with an existing id (grep first), a `category` from the Category type, and an age window.
 
 ## Checks before you finish

@@ -1,8 +1,10 @@
 import type { Ctx, EventDef } from '../types';
 import type { HeirloomInstance, LifeRecord } from '../../engine/types';
 import { inMourning } from '../../engine/context';
+import { HEIRLOOMS, HEIRLOOM_TYPES, heirloomDef } from '../../engine/heirlooms';
 import { cap, da, dat, gen, wage, wth } from './util';
 import { byCountry, him, nearKids } from './events-flavour';
+import { keepsakeTexts, type Pair, type Repair, type Scare } from './keepsakes';
 import {
   addStory,
   entries,
@@ -40,7 +42,6 @@ import {
 
 // ------------------------------------------------ helpers
 
-type Pair = [string, string];
 type PerType<T> = Record<HeirloomType, T>;
 
 /** Flag (year) of the last heirloom beat in this life; spaces the beats out to about one a decade. */
@@ -101,6 +102,7 @@ const inYear = (y: number): Pair => [`in ${y}`, `${y} yılında`];
 
 /** A tall tale to tell a child. */
 const TALL_TALE: PerType<Pair> = {
+  ...keepsakeTexts((t) => t.tallTale),
   clock: ['it once stopped a bullet in a war (it did not)', 'bir savaşta kurşunu durdurduğunu (durdurmadı)'],
   ring: ['a queen lost it to your family in a card game', 'bir kraliçenin onu iskambilde ailene kaybettiğini'],
   piano: ['a famous composer once played it, badly', 'ünlü bir bestecinin bir zamanlar onu çaldığını, hem de kötü'],
@@ -111,6 +113,7 @@ const TALL_TALE: PerType<Pair> = {
 };
 /** A small mishap when a child holds it. */
 const KID_MISHAP: PerType<Pair> = {
+  ...keepsakeTexts((t) => t.kidMishap),
   clock: ['dropped it on the rug. It still ticks, a little smugly.', 'halının üstüne düşürdü. Hâlâ çalışıyor, biraz da kendini beğenmiş bir tik takla.'],
   ring: ['rolled it under the fridge. It took a broom, a torch and forty minutes.', 'buzdolabının altına yuvarladı. Bir süpürge, bir el feneri ve kırk dakika sürdü.'],
   piano: ['found the one key that sticks and played only that one, for an hour.', 'takılan tek tuşu buldu ve bir saat boyunca sadece onu çaldı.'],
@@ -122,6 +125,7 @@ const KID_MISHAP: PerType<Pair> = {
 
 /** Someone wants to borrow it: [what they ask, how it came back], and who could be asking (by age). */
 const BORROW: PerType<{ ask: (n: string) => Pair; back: (n: string) => Pair; ages: [number, number] }> = {
+  ...keepsakeTexts((t) => t.borrow),
   clock: {
     ages: [20, 60],
     ask: (n) => [`${n} asks to borrow the pocket watch for a job interview. "For luck."`, `${n} iş görüşmesi için cep saatini ödünç istiyor. "Uğur getirsin diye."`],
@@ -161,6 +165,7 @@ const BORROW: PerType<{ ask: (n: string) => Pair; back: (n: string) => Pair; age
 
 /** The family ritual around it. */
 const RITUAL: PerType<Pair> = {
+  ...keepsakeTexts((t) => t.ritual),
   clock: ['the family winds the pocket watch together at the table, oldest to youngest', 'aile sofrada cep saatini sırayla, en büyükten en küçüğe kuruyor'],
   ring: ['the ring goes round the table and everyone makes a wish on it', 'yüzük sofrada elden ele dolaşıyor ve herkes onunla bir dilek tutuyor'],
   piano: ['someone plays the piano and everyone sings, badly and loudly', 'biri piyano çalıyor ve herkes kötü ama bağıra bağıra şarkı söylüyor'],
@@ -171,6 +176,7 @@ const RITUAL: PerType<Pair> = {
 };
 /** Where a previous keeper hid a note. */
 const NOTE_PLACE: PerType<Pair> = {
+  ...keepsakeTexts((t) => t.notePlace),
   clock: ["Inside the pocket watch's back cover", 'Cep saatinin arka kapağının içinde'],
   ring: ["Under the velvet in the ring's little box", 'Yüzüğün küçük kutusunda, kadifenin altında'],
   piano: ["Under the piano's lid", 'Piyanonun kapağının altında'],
@@ -182,6 +188,7 @@ const NOTE_PLACE: PerType<Pair> = {
 
 /** How to look after it: [title clause, how the lesson went]. */
 const LESSON: PerType<{ how: Pair; done: (n: string) => Pair }> = {
+  ...keepsakeTexts((t) => t.lesson),
   clock: {
     how: ['Twelve turns of the crown, never thirteen, always in the morning.', 'Kurma kolu on iki tur çevrilir, asla on üç değil, hep sabahları.'],
     done: (n) => [`You taught ${n} to wind the watch. ${n} counted out loud, twelve, and stopped exactly.`, `${dat(n)} saati kurmayı öğrettin. ${n} yüksek sesle saydı, on iki, ve tam yerinde durdu.`],
@@ -214,6 +221,7 @@ const LESSON: PerType<{ how: Pair; done: (n: string) => Pair }> = {
 
 /** A copy for a sibling who wants the heirloom: [what the copy is]. */
 const COPY: PerType<Pair> = {
+  ...keepsakeTexts((t) => t.copy),
   clock: ['a watch of the same make, found after a month of searching', 'bir ay arayıp bulduğun aynı marka bir saat'],
   ring: ['a copy from the jeweller, nearly perfect', 'kuyumcudan neredeyse kusursuz bir kopya'],
   piano: ['a small keyboard and the promise of Sunday visits', 'küçük bir org ve pazar ziyaretleri sözü'],
@@ -225,6 +233,7 @@ const COPY: PerType<Pair> = {
 
 /** How you sit with it at night, in Turkish (you do not pick up a piano): "piyanonun başına", "yorgana sarınıp". */
 const SIT_TR: PerType<string> = {
+  ...keepsakeTexts((t) => t.sitTr),
   clock: 'cep saatini avucuna alıp',
   ring: 'yüzüğü avucuna alıp',
   piano: 'piyanonun başına',
@@ -235,18 +244,8 @@ const SIT_TR: PerType<string> = {
 };
 
 
-/** Something wrong with it that needs mending: three troubles per type, each with its own fixes. */
-interface Repair {
-  title: Pair;
-  text: Pair;
-  /** A specialist fixed it. */
-  pro: Pair;
-  /** You fixed it yourself, well. */
-  ok: Pair;
-  /** You fixed it yourself, more or less. */
-  bad: Pair;
-}
 const REPAIRS: PerType<Repair[]> = {
+  ...keepsakeTexts((t) => t.repairs),
   clock: [
     {
       title: ['The pocket watch has stopped.', 'Cep saati durdu.'],
@@ -410,13 +409,8 @@ const REPAIRS: PerType<Repair[]> = {
   ],
 };
 
-/** A scare: [what happened, how you got it back by searching, how the reward brought it back]. Four per type. */
-interface Scare {
-  what: Pair;
-  search: Pair;
-  reward: Pair;
-}
 const SCARES: PerType<Scare[]> = {
+  ...keepsakeTexts((t) => t.scares),
   clock: [
     {
       what: ['You left the pocket watch in a taxi.', 'Cep saatini taksite unuttun.'],
@@ -575,6 +569,7 @@ const SCARES: PerType<Scare[]> = {
 
 /** Something new added to the ritual (two per type, used in turn). */
 const RITUAL_NEW: PerType<Pair[]> = {
+  ...keepsakeTexts((t) => t.ritualNew),
   clock: [
     ['This year everyone also said one thing they want to do before the watch is wound again.', 'Bu yıl herkes saat bir daha kurulmadan önce yapmak istediği bir şeyi de söyledi.'],
     ['This year the youngest wound it while everyone counted out loud, twelve turns, never thirteen.', 'Bu yıl saati en küçük kurdu; herkes yüksek sesle saydı: on iki tur, asla on üç değil.'],
@@ -607,6 +602,7 @@ const RITUAL_NEW: PerType<Pair[]> = {
 
 /** What a partner wants to change: [what they say, how giving in turned out]. Two per type, used in turn. */
 const PARTNER_IDEA: PerType<{ idea: (n: string) => Pair; yes: Pair }[]> = {
+  ...keepsakeTexts((t) => t.partnerIdea),
   clock: [
     {
       idea: (n) => [`${n} says the pocket watch ticks too loudly at night and wants it out of the bedroom.`, `${n}, cep saatinin gece çok gürültülü çalıştığını söylüyor ve yatak odasından çıkmasını istiyor.`],
@@ -681,6 +677,7 @@ const PARTNER_IDEA: PerType<{ idea: (n: string) => Pair; yes: Pair }[]> = {
 
 /** A teenager borrowing it in secret: [the plan, how it went well, how it went wrong]. Two per type, used in turn. */
 const SNEAK: PerType<{ plan: Pair; ok: Pair; bad: Pair }[]> = {
+  ...keepsakeTexts((t) => t.sneak),
   clock: [
     {
       plan: ['You want to wear the pocket watch to the school dance.', 'Okul balosuna cep saatini takmak istiyorsun.'],
@@ -769,6 +766,7 @@ const SNEAK: PerType<{ plan: Pair; ok: Pair; bad: Pair }[]> = {
 
 /** Sitting with it at night: what you notice (three per type, used in turn). */
 const QUIET: PerType<Pair[]> = {
+  ...keepsakeTexts((t) => t.quiet),
   clock: [
     ['The ticking filled the dark kitchen.', 'Karanlık mutfağı tik takları doldurdu.'],
     ['You opened the back and read the engraving by the lamp. Someone, long ago, chose those words very carefully.', 'Arka kapağını açıp lambanın ışığında içindeki yazıyı okudun. Biri, çok uzun zaman önce, o kelimeleri özenle seçmiş.'],
@@ -824,7 +822,7 @@ const borrowers = (c: Ctx, it: HeirloomInstance) => {
   return c.h.relatives(['sibling', 'friend']).filter((r) => c.h.ageOf(r.person) >= lo && c.h.ageOf(r.person) <= hi && !lent.has(r.person.firstName));
 };
 /** Heirlooms you can carry out of the house. */
-const PORTABLE: HeirloomType[] = ['clock', 'ring', 'quilt', 'recipes', 'trophy', 'painting'];
+const PORTABLE: HeirloomType[] = HEIRLOOM_TYPES.filter((id) => HEIRLOOMS[id].portable);
 
 // dynasty-wide spacing: the same heirloom is not nearly lost again within 25 years, and the family as a whole
 // has at most one scare every 12 years (a new heir no longer replays the parent's scare the next decade)
@@ -1074,7 +1072,7 @@ export const heirloomEvents: EventDef[] = [
     setup: (c) => {
       pickFrom(c, appraiseReady(c));
       const it = item(c);
-      const factor = it.defId === 'painting' ? 2 : it.defId === 'piano' || it.defId === 'ring' ? 1.4 : 1;
+      const factor = heirloomDef(it.defId).valueFactor;
       c.vars.amt = wage(c, Math.round((600 + Math.min(8, it.generations) * c.rng.int(500, 1500) + yearsIn(c, it) * 30) * factor));
     },
     title: (c) => c.t('An antiques expert is valuing family treasures at the community centre.', 'Semt merkezine bir antika uzmanı gelmiş, ailelerin hazinelerine değer biçiyor.'),

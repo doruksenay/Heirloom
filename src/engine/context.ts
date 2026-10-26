@@ -259,6 +259,7 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
         generations: 1,
         story: [storyLine],
       });
+      s.dynasty.lastHeirloomYear = s.year;
     },
     achieve(id) {
       if (!p.achievements.includes(id)) p.achievements.push(id);

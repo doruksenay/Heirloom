@@ -80,6 +80,50 @@ const PATHS: Record<string, JSX.Element> = {
       <path d="m3 16 5-5 4 4 3-3 6 6" />
     </>
   ),
+  radio: (
+    <>
+      <rect x="3" y="8" width="18" height="12" rx="2" />
+      <path d="m7 8 9-5" />
+      <circle cx="9" cy="14" r="2.5" />
+      <path d="M15 12.5h3M15 15.5h3" />
+    </>
+  ),
+  saz: (
+    <>
+      <ellipse cx="8" cy="16" rx="4.5" ry="5.5" transform="rotate(45 8 16)" />
+      <path d="m11.5 12.5 8-8" />
+      <path d="m18 3 3 3" />
+      <path d="M8 16h.01" />
+    </>
+  ),
+  dice: (
+    <>
+      <rect x="2" y="3" width="9" height="9" rx="2" />
+      <rect x="13" y="12" width="9" height="9" rx="2" />
+      <path d="M5.5 6.5h.01M7.5 8.5h.01M16 15h.01M19 15h.01M16 18h.01M19 18h.01" />
+    </>
+  ),
+  cup: (
+    <>
+      <path d="M9 5h5l2.2 12.5A1.5 1.5 0 0 1 14.7 19H8.3a1.5 1.5 0 0 1-1.5-1.5z" />
+      <path d="m15 8 6-3" />
+      <path d="M11 1.5c0 1 1 1 1 2" />
+    </>
+  ),
+  album: (
+    <>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <rect x="8" y="7" width="8" height="6" rx="1" />
+      <path d="M8 17h5" />
+    </>
+  ),
+  pen: (
+    <>
+      <path d="M8 3h8l1 7-5 12-5-12z" />
+      <path d="M12 12.5V19" />
+      <circle cx="12" cy="10" r="1.2" />
+    </>
+  ),
   share: (
     <>
       <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
@@ -107,6 +151,9 @@ const PATHS: Record<string, JSX.Element> = {
   ),
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
 };
+
+/** Every drawing the Icon component knows (the heirloom catalog is checked against this in tests). */
+export const ICON_NAMES: readonly string[] = Object.keys(PATHS);
 
 export function Icon({ name, size = 22, label }: { name: string; size?: number; label?: string }) {
   return (

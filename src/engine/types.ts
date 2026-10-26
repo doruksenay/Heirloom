@@ -126,6 +126,8 @@ export interface Dynasty {
   lives: LifeRecord[];
   heirlooms: HeirloomInstance[];
   legacyScore: number;
+  /** Calendar year in which the latest heirloom joined the family; limits heirloom events to one a year. Older saves have none. */
+  lastHeirloomYear?: number;
   /** Recently used line indices per text pool, shared by every life of the dynasty (content/base/lines.ts). Older saves start empty. */
   lineMemory?: Record<string, number[]>;
 }

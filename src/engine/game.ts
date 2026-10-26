@@ -10,6 +10,7 @@ import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
 import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, inheritanceTax, safetyNet, yearBudget } from './economy';
 import { cityName } from './places';
+import { applyYearlyPassives, closenessBonus, heirloomArrivedThisYear, heirloomDef, isHeirloomType } from './heirlooms';
 import { ensureGrandkids, type Grandkid } from '../content/base/events-elder';
 import { say, type Pair } from '../content/base/lines';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
@@ -368,10 +369,8 @@ function yearlyTick(c: Ctx): string | null {
   h.stat('happiness', Math.round((60 - p.stats.happiness) * 0.08) + rng.int(-3, 3));
   if (p.money < 0 && age >= 18) h.stat('happiness', -4);
 
-  // --- heirloom effects
-  if (h.hasHeirloom('piano') && age < 18) h.stat('smarts', 1);
-  if (h.hasHeirloom('quilt') && age >= 60) h.stat('health', 1);
-  if (h.hasHeirloom('trophy')) h.stat('happiness', 1);
+  // --- heirloom effects (data: src/engine/heirlooms.ts)
+  applyYearlyPassives(c);
 
   // --- jail
   if (p.jailYears > 0) {
@@ -463,12 +462,13 @@ function yearlyTick(c: Ctx): string | null {
   for (const pack of enabledPacks(s.enabledPacks)) pack.onYear?.(c);
 
   // --- relatives
+  const heirloomCloseness = closenessBonus(s);
   let loss: { person: Person; kind: 'child' | 'spouse' } | undefined;
   for (const rel of p.relations) {
     const person = s.people[rel.personId];
     if (!person || person.deathYear !== undefined) continue;
     const pa = ageOf(s, person);
-    if (rel.kind !== 'child') rel.closeness = clamp(rel.closeness - rng.int(0, 2) + (h.hasHeirloom('recipes') ? 1 : 0));
+    if (rel.kind !== 'child') rel.closeness = clamp(rel.closeness - rng.int(0, 2) + heirloomCloseness);
     if (rel.kind === 'child' && pa >= 24 && pa <= 42 && rng.chance(0.07)) {
       // "You're a grandparent!" only for the first grandchild; later ones are "another" (playtest 2)
       const firstGrandkid = ensureGrandkids(c).length === 0;
@@ -679,6 +679,8 @@ function eligible(c: Ctx, def: EventDef): boolean {
     if (age - last < (def.cooldown ?? 4)) return false;
   }
   if (p.jailYears > 0 && def.category !== 'crime') return false;
+  // one heirloom a year at most: once a treasure has arrived, the year's heirloom events are over
+  if (def.category === 'heirloom' && heirloomArrivedThisYear(c.s)) return false;
   return def.when ? def.when(c) : true;
 }
 
@@ -850,17 +852,6 @@ export function furniturePrice(s: GameState, id: string): number {
 
 // ---------------------------------------------------------------- end of life & generations
 
-/** Last words about a heirloom, used only when the family owns one of that type (playtest 2: "Wind the clock" without a clock). */
-const HEIRLOOM_WORDS: Record<string, [string, string]> = {
-  clock: ['Wind the clock, {heir}.', 'Saati kurmayı unutma, {heir}.'],
-  ring: ['Give the ring to someone who makes you laugh, {heir}.', 'Yüzüğü seni güldüren birine tak, {heir}.'],
-  piano: ['Keep the piano tuned, {heir}. Play it badly, but often.', 'Piyanonun akordunu bozma, {heir}. Kötü çal ama sık çal.'],
-  quilt: ['Use the quilt, {heir}. It was made for cold nights, not for cupboards.', 'Yorganı dolapta saklama, {heir}. O soğuk geceler için dikildi.'],
-  recipes: ['Page twelve of the recipe book, {heir}. Use less salt than it says.', 'Tarif defterinin on ikinci sayfası, {heir}. Yazandan az tuz koy.'],
-  trophy: ['Polish the trophy, {heir}. And tell them I was fast.', 'Kupayı parlat, {heir}. Bir de herkese ne kadar hızlı olduğumu anlat.'],
-  painting: ['Never sell the painting, {heir}. Unless you really must.', 'Tabloyu satma, {heir}. Gerçekten mecbur kalmadıkça.'],
-};
-
 const FINAL_WORDS: [string, string][] = [
   ["Don't fight over the furniture.", 'Eşyalar için kavga etmeyin.'],
   ['I regret nothing. Well, almost nothing.', 'Hiçbir şeyden pişman değilim. Yani, neredeyse hiçbir şeyden.'],
@@ -1005,9 +996,9 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
       ? c.t('University graduate', 'Üniversite mezunu')
       : c.t('No career', 'Kariyeri yok');
   // heirloom words only for the types the family really owns, and only with someone to say them to
-  const owned = [...new Set(s.dynasty.heirlooms.map((x) => x.defId))].filter((id) => HEIRLOOM_WORDS[id]);
+  const owned = [...new Set(s.dynasty.heirlooms.map((x) => x.defId))].filter(isHeirloomType);
   const aboutHeirloom = c.rng.chance(0.35) && !handover && !!heir && owned.length > 0;
-  const words = handover ? HANDOVER_WORDS : aboutHeirloom ? owned.map((id) => HEIRLOOM_WORDS[id]) : FINAL_WORDS;
+  const words = handover ? HANDOVER_WORDS : aboutHeirloom ? owned.map((id) => heirloomDef(id).lastWords) : FINAL_WORDS;
   const picked = c.rng.pick(words);
   const finalWords = c.t(picked[0], picked[1]).replace('{heir}', heir?.firstName ?? '');
   const record: LifeRecord = {

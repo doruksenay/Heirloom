@@ -1,38 +1,19 @@
 import type { Ctx } from '../types';
 import type { HeirloomInstance, LifeRecord } from '../../engine/types';
 import { gen } from '../../i18n/tr-grammar';
+import { HEIRLOOMS, HEIRLOOM_TYPES, isHeirloomType, type HeirloomType, type HeirloomWords } from '../../engine/heirlooms';
 
 // Shared wording for events about the family heirlooms: the noun for each heirloom type with its Turkish
 // case forms, "your own ..." when the heirloom carries the player's name, and the real people who kept it.
 // Everything here is pure (no rng).
 
-export type HeirloomType = 'clock' | 'ring' | 'piano' | 'quilt' | 'recipes' | 'trophy' | 'painting';
-export const HEIRLOOM_TYPES: HeirloomType[] = ['clock', 'ring', 'piano', 'quilt', 'recipes', 'trophy', 'painting'];
+// The kinds, their nouns and every Turkish case form live in the catalog (src/engine/heirlooms.ts); re-exported here so
+// content keeps one import for everything about heirloom wording.
+export { HEIRLOOM_TYPES, type HeirloomType, type HeirloomWords };
 
-export interface HeirloomWords {
-  /** English noun: "pocket watch". */
-  en: string;
-  /** Turkish forms of the bare noun: nominative, accusative, dative, genitive. */
-  nom: string;
-  acc: string;
-  dat: string;
-  gen: string;
-  /** Turkish "your X" (nominative) and its accusative: "yorganın", "yorganını". */
-  poss: string;
-  possAcc: string;
-}
+export const HEIRLOOM_WORDS: Record<HeirloomType, HeirloomWords> = Object.fromEntries(HEIRLOOM_TYPES.map((id) => [id, HEIRLOOMS[id].words])) as Record<HeirloomType, HeirloomWords>;
 
-export const HEIRLOOM_WORDS: Record<HeirloomType, HeirloomWords> = {
-  clock: { en: 'pocket watch', nom: 'cep saati', acc: 'cep saatini', dat: 'cep saatine', gen: 'cep saatinin', poss: 'cep saatin', possAcc: 'cep saatini' },
-  ring: { en: 'ring', nom: 'yüzük', acc: 'yüzüğü', dat: 'yüzüğe', gen: 'yüzüğün', poss: 'yüzüğün', possAcc: 'yüzüğünü' },
-  piano: { en: 'piano', nom: 'piyano', acc: 'piyanoyu', dat: 'piyanoya', gen: 'piyanonun', poss: 'piyanon', possAcc: 'piyanonu' },
-  quilt: { en: 'quilt', nom: 'yorgan', acc: 'yorganı', dat: 'yorgana', gen: 'yorganın', poss: 'yorganın', possAcc: 'yorganını' },
-  recipes: { en: 'recipe book', nom: 'tarif defteri', acc: 'tarif defterini', dat: 'tarif defterine', gen: 'tarif defterinin', poss: 'tarif defterin', possAcc: 'tarif defterini' },
-  trophy: { en: 'trophy', nom: 'kupa', acc: 'kupayı', dat: 'kupaya', gen: 'kupanın', poss: 'kupan', possAcc: 'kupanı' },
-  painting: { en: 'painting', nom: 'tablo', acc: 'tabloyu', dat: 'tabloya', gen: 'tablonun', poss: 'tablon', possAcc: 'tablonu' },
-};
-
-export const isType = (id: string): id is HeirloomType => (HEIRLOOM_TYPES as string[]).includes(id);
+export const isType = isHeirloomType;
 /** The words for an heirloom (unknown types read as a pocket watch, which never happens in practice). */
 export const words = (item: HeirloomInstance): HeirloomWords => HEIRLOOM_WORDS[isType(item.defId) ? item.defId : 'clock'];
 
