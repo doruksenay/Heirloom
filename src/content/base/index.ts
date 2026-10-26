@@ -14,6 +14,7 @@ import { careerActivities, careerOnYear } from './activities-careers';
 import { petEvents } from './events-pets';
 import { heirloomEvents } from './events-heirloom';
 import { keepsakeEvents } from './events-keepsakes';
+import { expansionEvents } from './events-expansion';
 import { homeActivities, homeOnInherit, homeOnYear, homeTiles } from './activities-home';
 import { griefEvents } from './events-grief';
 import { adoptionActivities, adoptionEvents } from './adoption';
@@ -36,6 +37,7 @@ export const basePack: ContentPack = {
     ...petEvents,
     ...heirloomEvents,
     ...keepsakeEvents,
+    ...expansionEvents,
     ...scheduledEvents,
     ...griefEvents,
     ...adoptionEvents,
