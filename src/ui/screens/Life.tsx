@@ -10,6 +10,8 @@ import { Icon } from '../icons';
 import { T, badgeText } from '../../i18n/ui';
 import { track } from '../../platform/analytics';
 import { Tip, tipSeen } from '../Tip';
+import { DailyStrip, dateLabel } from './Daily';
+import { resultFor, todayKey } from '../../engine/daily';
 
 const MILESTONES = [1, 3, 6, 12, 18, 25, 40, 60, 80, 100];
 
@@ -41,14 +43,36 @@ export function Life({ app }: { app: AppApi }) {
   return (
     <div class="screen fill">
       <div class="row between">
-        <div class="row eyebrow" style={{ gap: '8px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
-          {T('{name} family · Gen {n}', { name: s.dynasty.familyName, n: s.dynasty.generation })}
-        </div>
+        {s.daily ? (
+          <div class="row eyebrow" style={{ gap: '8px' }}>
+            <Icon name="calendar" size={16} />
+            {T('Daily Challenge')} · {dateLabel(s.daily.date, app.lang)}
+          </div>
+        ) : (
+          <div class="row eyebrow" style={{ gap: '8px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
+            {T('{name} family · Gen {n}', { name: s.dynasty.familyName, n: s.dynasty.generation })}
+          </div>
+        )}
         <div class="row" style={{ gap: '4px' }}>
           <span class="muted num" style={{ fontSize: '13px', fontWeight: 600 }}>
             {s.year}
           </span>
+          {s.daily ? (
+            <button type="button" class="btn small ghost" style={{ border: 'none', padding: '0 8px' }} onClick={() => app.backToFamily()}>
+              {app.family ? T('My family') : T('Exit')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              class={`btn small ghost daily-btn${resultFor(app.profile, todayKey()) ? '' : ' new'}`}
+              style={{ border: 'none', padding: '0 8px' }}
+              aria-label={T('Daily Challenge')}
+              onClick={() => app.go('daily')}
+            >
+              <Icon name="calendar" size={20} />
+            </button>
+          )}
           <button type="button" class="btn small ghost" style={{ border: 'none', padding: '0 8px' }} aria-label={T('Settings')} onClick={() => app.go('settings')}>
             <Icon name="gear" size={20} />
           </button>
@@ -69,6 +93,8 @@ export function Life({ app }: { app: AppApi }) {
           </div>
         </div>
       </div>
+
+      {s.daily && <DailyStrip app={app} />}
 
       <div class="tiles">
         <div class="tile">
@@ -175,7 +201,7 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
       </Tip>
     );
   }
-  if (age >= TORCH_AGE && canPassTorch(s) && !seen('torch')) {
+  if (age >= TORCH_AGE && canPassTorch(s) && !s.daily && !seen('torch')) {
     return (
       <Tip app={app} id="torch" icon="family" action={{ label: T('Open Family'), run: () => app.go('family') }}>
         {T('You can now pass the torch: hand the family to an adult child or grandchild and play on as them. You will stay in their life.')}

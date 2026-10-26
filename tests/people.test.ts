@@ -350,3 +350,22 @@ describe('round 2 people fixes', () => {
     for (const c of COUNTRIES) expect([...c.names.male, ...c.names.female]).not.toContain('Ben');
   });
 });
+
+describe('strangers never borrow a close relative\'s name (playtest 3 §2.15)', () => {
+  it('nameClashesWithFamily sees the player and living close family, not the dead or friends', async () => {
+    const { nameClashesWithFamily } = await import('../src/engine/context');
+    const s = newGame(
+      { firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed: 4 },
+      { entitlements: [], settings: { themeId: 'evening', adultContent: false, sound: true, language: 'tr' } },
+    );
+    const father = s.people[s.player.relations.find((r) => r.kind === 'father')!.personId];
+    expect(nameClashesWithFamily(s, 'Ada')).toBe(true);
+    expect(nameClashesWithFamily(s, father.firstName)).toBe(true);
+    father.deathYear = s.year;
+    expect(nameClashesWithFamily(s, father.firstName)).toBe(false);
+    const c = makeCtx(s);
+    const friend = c.h.newPerson({ age: 1 });
+    c.h.addRelation(friend, 'friend', 50);
+    expect(nameClashesWithFamily(s, friend.firstName)).toBe(false);
+  });
+});

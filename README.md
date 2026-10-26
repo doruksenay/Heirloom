@@ -2,7 +2,27 @@
 
 Nesiller boyu süren bir hayat simülasyonu. Bir hayat yaşarsın, sonra çocuğunla devam edersin; ev, aile yadigârları ve seçimlerin bir sonraki nesle geçer.
 
-Sürüm: **v0.6 (çıkış adayı, test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+Sürüm: **v0.8 (çıkış adayı, test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+
+### v0.8'de neler var
+- **Günün Hayatı (Daily Challenge)** (`src/engine/daily.ts`, `src/ui/screens/Daily.tsx`):
+  - Her gün dünyadaki herkes aynı kişi olarak doğar (UTC tarihten tohum). O hayat 3 kategoride puanlanır: servet, uzun ömür, kalabalık aile, hayvansever, kariyer zirvesi, sevilen; bazı günler Şöhret ya da Patron.
+  - Her kategoride bronz/gümüş/altın madalya, seri sayacı ve emojili paylaşım metni.
+  - Bazı günler bir ücretli paket herkese açıktır. Satın almalar ve Heirloom+ challenge'ı etkilemez.
+  - Ayrı kayıtta durur; aileye dokunmaz.
+  - Madalya eşikleri `npx vite-node scripts/daily-par.ts` ile yeniden hesaplanır.
+- **3. bağımsız okumanın düzeltmeleri:**
+  - Ofis dışı mesleklere kendi iş cümleleri (`work-lines.ts`); ofis olayları yalnızca masa başı işlerde.
+  - İlişkiye özel konuşma havuzları (`people-lines.ts`); tekrar hafızası artık bütün hanedanda ortak.
+  - Yadigârlar geçmişini hatırlıyor: kayıp korkusu, tamir, ritüel ve düğün metinleri önceki kuşakları anıyor.
+  - Çocuk ve eş için yas olayları; yas yılında şaka satırı çıkmıyor.
+  - Evlat edinme ve yeğen varis; varissiz biten aileler %14'ten %6–7'ye indi.
+  - Ölüm nedenleri yaşa göre; torun varis metinleri ve kuşak numaraları düzeldi.
+  - Patron serveti dengelendi (ücretsiz oyunun 3–4 katı). Şöhret satırları ölmüş akrabayı anmıyor. Kariyer fuarı ve kafa avcısı düşük pozisyon teklif etmiyor. Suç dengesi düzeldi.
+  - `da()` eki ("Gizem de", "Pamuk da") ve 25 Türkçe düzeltme.
+- **Tekrar ölçümü:** hayat içi kalıp tekrarı %6,4'ten %2,5'e; hayatların dörtte birinde geçen satır payı %10'dan %3,4'e indi.
+- **v0.7:** marka paleti, yeni logo, ikon ve açılış ekranı; bayrağı devretme, torunlar ve üvey ebeveynler; 2. okumanın düzeltmeleri.
+- Testler: 17 dosya, 188 test.
 
 ### v0.6'da neler var (ilk çıkış adayı)
 - **Ana oyuna 72 yeni olay ve 7 aktivite:**

@@ -1,4 +1,5 @@
 import type { ContentPack } from '../types';
+import type { Player } from '../../engine/types';
 import { loc } from '../base/util';
 import { cityName } from '../../engine/places';
 import { crimeActivities } from './activities';
@@ -21,6 +22,14 @@ import { crimeState, localMoney, peekCrime, yearsServed } from './state';
 
 export const CRIME_ENTITLEMENT = 'pack.crime_world';
 export { convict } from './state';
+
+/** A parent the town still talks about: three or more years sentenced or three convictions, the last within 30 years. */
+export function infamous(prev: Player, year: number): boolean {
+  const st = peekCrime(prev);
+  const big = (st?.sentenced ?? 0) >= 3 || prev.criminalRecord >= 3;
+  const recent = !!st && st.lastCrimeYear > 0 && year - st.lastCrimeYear <= 30;
+  return big && recent;
+}
 
 export const crimePack: ContentPack = {
   id: 'crime_world',
@@ -84,8 +93,11 @@ export const crimePack: ContentPack = {
     if (!secret) return;
     // a parent who got away with something big may have left a little something behind
     const stash = st?.coldCase && st.bigScore > 0 ? Math.min(Math.round(st.bigScore * 0.25), localMoney(prev, 20000)) : 0;
-    crimeState(next).legacy = { name: prev.firstName, record: prev.criminalRecord, stash, id: prev.id };
+    crimeState(next).legacy = { name: prev.firstName, record: prev.criminalRecord, stash, id: prev.id, famous: infamous(prev, s.year) };
     if (prev.criminalRecord === 0) return; // the secret waits in the attic
+    // the whole town only remembers a real reputation: years inside or a long record, not too long ago
+    // (playtest 3 §2.14: one shoplifting conviction at 20, 45 years earlier, was "the trial everyone remembers")
+    if (!infamous(prev, s.year)) return;
     next.stats.happiness = Math.max(0, next.stats.happiness - 3);
     const tr = s.lang === 'tr';
     return tr

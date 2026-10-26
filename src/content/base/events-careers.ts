@@ -22,6 +22,10 @@ function fire(c: Ctx): void {
 }
 
 const CLUBS = ['Atlas FC', 'Porto Verde', 'Northbridge United', 'Kartal SK', 'Real Montaña'];
+/** Clubs of a Turkish league for lives in Türkiye (same length as CLUBS: one index, picked once). */
+const CLUBS_TR = ['Atlas FK', 'Poyraz SK', 'Kuzeyspor', 'Kartal SK', 'Ege Yıldızı'];
+/** The club in vars.ci for this country (older saves kept the name in vars.club). */
+const club = (c: Ctx) => (c.vars.ci === undefined ? String(c.vars.club) : (c.p.countryId === 'tr' ? CLUBS_TR : CLUBS)[Number(c.vars.ci)] ?? CLUBS[0]);
 
 /** What a patrol partner is eating: [English, Turkish genitive-possessive "…in yarısında"]. */
 const PATROL_SNACK: ByCountry<[string, string]> = {
@@ -132,7 +136,7 @@ export const careerEvents: EventDef[] = [
     weight: 6,
     when: (c) => canEnlist(c) && !c.p.jobId && !c.p.retired,
     title: (c) =>
-      c.t('The recruitment officer looks you up and down.', inTr(c) ? 'Askerlik şubesindeki subay seni tepeden tırnağa süzüyor.' : 'Ordunun asker alma bürosundaki subay seni tepeden tırnağa süzüyor.'),
+      c.t('At the army recruitment stand, a sergeant looks you up and down.', 'Ordunun tanıtım standındaki astsubay seni tepeden tırnağa süzüyor.'),
     text: (c) =>
       c.t('Steady pay, free boots and a haircut you did not ask for.', 'Düzenli maaş, bedava postal ve senin istemediğin bir saç tıraşı.'),
     choices: [
@@ -146,7 +150,7 @@ export const careerEvents: EventDef[] = [
           c.h.stat('health', 3);
           return c.t(
             `You signed up. Basic training was cold, loud and early. Your rank: ${c.h.jobTitle()}.`,
-            `İmzayı attın. Temel eğitim soğuk, gürültülü ve çok erkendi. Artık rütben: ${c.h.jobTitle()}.`,
+            `İmzayı attın. Temel eğitim soğuk, gürültülü ve çok erkendi. ${c.h.jobTitle() === 'Sözleşmeli Er' ? 'Artık Sözleşmeli Ersin.' : `Artık ${c.h.jobTitle()} olarak görevdesin.`}`,
           );
         },
         tone: 'big',
@@ -252,10 +256,10 @@ export const careerEvents: EventDef[] = [
     cooldown: 5,
     when: (c) => isJob(c, 'athlete') && c.p.jobLevel >= 1,
     setup: (c) => {
-      c.vars.club = c.rng.pick(CLUBS);
+      c.vars.ci = c.rng.int(0, CLUBS.length - 1);
       c.vars.fee = wage(c, c.rng.int(15, 60) * 1000);
     },
-    title: (c) => c.t(`${c.vars.club} wants to sign you.`, `${c.vars.club} seni transfer etmek istiyor.`),
+    title: (c) => c.t(`${club(c)} wants to sign you.`, `${club(c)} seni transfer etmek istiyor.`),
     text: (c) =>
       c.t(
         `Their offer comes with a signing bonus of ${c.h.fmt(Number(c.vars.fee))} and a very shiny pen.`,
@@ -271,8 +275,8 @@ export const careerEvents: EventDef[] = [
           c.h.stat('happiness', 5);
           return (
             c.t(
-              `You joined ${c.vars.club}. The bonus cleared on Monday.`,
-              `${c.vars.club} ile anlaştın. İmza parası pazartesi hesabına yattı.`,
+              `You joined ${club(c)}. The bonus cleared on Monday.`,
+              `${club(c)} ile anlaştın. İmza parası pazartesi hesabına yattı.`,
             ) + promo(c)
           );
         },

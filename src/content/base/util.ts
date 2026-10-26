@@ -1,10 +1,10 @@
-import type { Ctx } from '../types';
+import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { EDUCATION_RANK } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { getCountry } from '../../engine/world';
-import { familyFirstNames as familyNamesOf } from '../../engine/context';
-export { gen, acc, dat, loc, abl, wth } from '../../i18n/tr-grammar';
+import { familyFirstNames as familyNamesOf, inMourning } from '../../engine/context';
+export { gen, acc, dat, loc, abl, wth, da } from '../../i18n/tr-grammar';
 
 export const who = (c: Ctx, key = 'pid'): Person => c.h.person(String(c.vars[key]));
 export const nm = (c: Ctx, key = 'pid'): string => who(c, key)?.firstName ?? 'someone';
@@ -54,11 +54,60 @@ export function eligibleJobs(c: Ctx) {
   );
 }
 
-/** Jobs without an office, a boss or a pay review (athletes, soldiers, farmers…). Generic office events skip them. */
-const NON_OFFICE = new Set(['athlete', 'coach', 'soldier', 'officer', 'artist', 'farmer', 'fisher', 'taxi']);
+/**
+ * What a working day looks like, for work lines and job-gated events:
+ * - office: desks, inboxes, meetings, HR (office and tech jobs, plus a few desk-bound creative and campus jobs)
+ * - trade: hands and tools (miner, electrician, mechanic, farmer, fisher)
+ * - service: shifts and customers (barista, retail, taxi, cabin crew, chef)
+ * - health: patients and night shifts (nurse, doctor, vet, dentist)
+ * - uniform: public safety and the forces (police, firefighter, soldier, officer)
+ * - school: a classroom or a training pitch (teacher, coach)
+ * - studio: work alone or on the field (artist, athlete, pilot)
+ * - none: no job, retired, or the player is the owner (nobody above them)
+ */
+export type WorkKind = 'office' | 'trade' | 'service' | 'health' | 'uniform' | 'school' | 'studio' | 'none';
 
-/** Has a regular job with a boss and colleagues. */
-export const officeJob = (c: Ctx) => !!c.p.jobId && !c.p.retired && !NON_OFFICE.has(c.p.jobId);
+/** Desk jobs outside the office/tech fields; pilots are 'tech' but fly, not sit. */
+const OFFICE_EXTRA = new Set(['designer', 'journalist', 'architect', 'academic', 'research']);
+const BY_ID: Record<string, WorkKind> = {
+  pilot: 'studio',
+  artist: 'studio',
+  athlete: 'studio',
+  coach: 'school',
+  teacher: 'school',
+  chef: 'service',
+  police: 'uniform',
+  firefighter: 'uniform',
+  soldier: 'uniform',
+  officer: 'uniform',
+};
+const BY_FIELD: Record<string, WorkKind> = { office: 'office', tech: 'office', trade: 'trade', service: 'service', health: 'health', public: 'uniform', creative: 'studio' };
+
+/** The player owns the place they work: the top "… Owner" rung of a ladder, or a company of their own (Boss pack). */
+export function ownsWork(c: Ctx): boolean {
+  const boss = c.p.ext?.boss as { company?: unknown } | undefined;
+  if (boss?.company) return true;
+  const job = c.p.jobId ? c.h.job() : undefined;
+  if (!job) return false;
+  const top = job.titles[Math.min(c.p.jobLevel, job.titles.length - 1)] ?? '';
+  return /\bOwner\b/.test(top);
+}
+
+/** What kind of working day the player has (see WorkKind). 'none' without a job, when retired, or for an owner. */
+export function workKind(c: Ctx): WorkKind {
+  if (!c.p.jobId || c.p.retired || ownsWork(c)) return 'none';
+  const id = c.p.jobId;
+  if (BY_ID[id]) return BY_ID[id];
+  if (OFFICE_EXTRA.has(id)) return 'office';
+  const field = c.h.job()?.field;
+  return (field && BY_FIELD[field]) || 'service';
+}
+
+/** Has a job with a boss above them (any kind of work), not retired, not the owner. */
+export const employee = (c: Ctx) => !!c.p.jobId && !c.p.retired && !ownsWork(c);
+
+/** Has a desk job with a boss, colleagues, emails and an HR department. Office events and office lines need this. */
+export const officeJob = (c: Ctx) => workKind(c) === 'office';
 
 export function oneOf<T>(c: Ctx, list: readonly T[]): T {
   return c.rng.pick(list);
@@ -112,3 +161,20 @@ export const aOrAn = (word: string) => (/^[aeiou]/i.test(word) || /^(hon|hour|he
  * Delegates to familyFirstNames in engine/context.ts.
  */
 export const familyFirstNames = (c: Ctx): Set<string> => familyNamesOf(c.s);
+
+/** Light events that stand aside in a year of mourning (a child, spouse or partner died this year). */
+const LIGHT_CATEGORIES = new Set(['random', 'heirloom']);
+const LIGHT_IDS = new Set(['base.reunion', 'base.elder_reunion', 'base.band_reunion', 'base.party', 'base.coworker_birthday', 'base.office_rumor', 'base.business_trip']);
+
+/**
+ * Keeps comic and quiet events out of a mourning year (engine flag `mourning`, see inMourning): random events,
+ * heirloom beats and a few named parties and reunions. Mutates the definitions' `when` in place.
+ */
+export function quietInMourning(defs: EventDef[]): EventDef[] {
+  for (const d of defs) {
+    if (!LIGHT_CATEGORIES.has(d.category) && !LIGHT_IDS.has(d.id)) continue;
+    const when = d.when;
+    d.when = (c: Ctx) => !inMourning(c.s) && (when ? when(c) : true);
+  }
+  return defs;
+}

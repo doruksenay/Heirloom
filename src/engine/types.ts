@@ -126,6 +126,8 @@ export interface Dynasty {
   lives: LifeRecord[];
   heirlooms: HeirloomInstance[];
   legacyScore: number;
+  /** Recently used line indices per text pool, shared by every life of the dynasty (content/base/lines.ts). Older saves start empty. */
+  lineMemory?: Record<string, number[]>;
 }
 
 export interface PendingChoice {
@@ -162,6 +164,30 @@ export interface Profile {
   ribbons?: string[]; // collected end-of-life ribbons
   introSeen?: boolean; // first-launch "how it works" pages
   tips?: string[]; // one-time coaching tips already dismissed
+  daily?: DailyProfile; // Daily Challenge streak and results (see engine/daily.ts)
+}
+
+/** A finished Daily Challenge, kept on the profile. */
+export interface DailyResult {
+  date: string; // YYYY-MM-DD (UTC day the challenge belongs to)
+  scores: Record<string, number>; // category id -> raw value
+  medals: Record<string, 0 | 1 | 2 | 3>; // category id -> none/bronze/silver/gold
+}
+
+export interface DailyProfile {
+  streak: number;
+  bestStreak: number;
+  lastDate?: string;
+  results: DailyResult[]; // newest last, trimmed to the last 30
+}
+
+/** Marks a save as today's Daily Challenge life rather than a family saga. */
+export interface DailyMeta {
+  date: string;
+  categories: string[];
+  featuredPack?: string;
+  /** Highest values reached during the life, for categories measured at their peak. */
+  peak: Record<string, number>;
 }
 
 export interface GameState {
@@ -177,4 +203,5 @@ export interface GameState {
   enabledPacks: string[]; // content packs active in this save (resolved from entitlements + settings)
   perks?: string[]; // premium perks from the profile, e.g. 'plus'
   lang?: Lang; // language new story text is written in (copied from settings)
+  daily?: DailyMeta; // set only for a Daily Challenge life
 }

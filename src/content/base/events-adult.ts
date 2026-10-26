@@ -1,19 +1,29 @@
 import type { Ctx, EventDef } from '../types';
-import { titleFor } from '../../engine/careers';
-import { abl, acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, officeJob } from './util';
+import { isCareerUpgrade, titleFor } from '../../engine/careers';
+import { abl, acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, employee, officeJob, workKind, quietInMourning } from './util';
+import { BURNOUT, LAYOFF } from './work-lines';
 import { byCountry, him, he, type ByCountry } from './events-flavour';
 import { promoteAnyway } from '../../engine/context';
 import { catName, syncFlagCat } from '../../engine/pets';
 import { divorceTerms, divorcedLine, yearsWith } from './relationships';
-import { isOwnHeirloom, nameOrOwn } from './heirloom-words';
+import { hlCaseTr, isOwnHeirloom, nameOrOwn } from './heirloom-words';
 
 const TOPICS_EN = ['the dishes', 'your phone screen time', 'whose family to visit for the holidays', 'money', 'the thermostat'];
 const TOPICS_TR = ['bulaşıklar', 'telefona gömülmen', 'bayramda kimin ailesine gidileceği', 'para', 'kombinin derecesi'];
 const topicTr = (en: string) => TOPICS_TR[TOPICS_EN.indexOf(en)] ?? en;
 
 /** Headhunters place office and professional jobs, not farmers, fishers or footballers. */
-const NOT_HEADHUNTED = new Set(['athlete', 'coach', 'soldier', 'officer', 'artist', 'farmer', 'fisher', 'taxi']);
-const headhunted = (c: Ctx) => eligibleJobs(c).filter((j) => !NOT_HEADHUNTED.has(j.id));
+const NOT_HEADHUNTED = new Set(['athlete', 'coach', 'soldier', 'officer', 'artist', 'farmer', 'fisher', 'taxi', 'police', 'firefighter']);
+/**
+ * Roles a headhunter would offer: the same field as the current job (a fire chief is not poached into the police,
+ * a mine supervisor not into software), and only a real step up at the offered level (careers.isCareerUpgrade).
+ * Owners are not headhunted.
+ */
+const headhunted = (c: Ctx) => {
+  const cur = c.h.job();
+  if (!cur || !employee(c) || NOT_HEADHUNTED.has(cur.id)) return [];
+  return eligibleJobs(c).filter((j) => !NOT_HEADHUNTED.has(j.id) && j.field === cur.field && isCareerUpgrade(c, j, 1));
+};
 
 /** base.flu lines by life stage; every bucket has three, so the rng call is the same at every age. */
 const FLU: { upTo: number; lines: [string, string][] }[] = [
@@ -350,7 +360,7 @@ export const adultEvents: EventDef[] = [
         );
       return c.t(
         `You cooked a feast from ${book.name}. The whole family came, and nobody argued. A miracle.`,
-        `Aile tarif defterinden (${book.name}) koca bir sofra kurdun. Bütün aile geldi ve kimse kavga etmedi. Mucize.`,
+        `${hlCaseTr(book.name, 'abl')} koca bir sofra kurdun. Bütün aile geldi ve kimse kavga etmedi. Mucize.`,
       );
     },
   },
@@ -438,23 +448,19 @@ export const adultEvents: EventDef[] = [
     minAge: 20,
     weight: 5,
     cooldown: 8,
-    when: (c) => officeJob(c) && !!c.p.jobId && !c.p.retired,
+    // employees whose work can be cut: not owners, soldiers, police, teachers or footballers
+    when: (c) => employee(c) && !!LAYOFF[workKind(c)],
     text: '',
     apply: (c) => {
+      const lines = LAYOFF[workKind(c)] ?? LAYOFF.office!;
       if (c.rng.chance(0.4)) {
-        const title = c.h.jobTitle();
+        const [en, tr] = lines.lost(c.h.jobTitle() ?? '');
         c.h.setJob(null);
         c.h.stat('happiness', -10);
-        return c.t(
-          `Your company announced layoffs. You lost your job as ${title}.`,
-          `Şirketin işten çıkarma açıkladı. ${title} koltuğun da gitti.`,
-        );
+        return c.t(en, tr);
       }
       c.h.stat('happiness', -2);
-      return c.t(
-        'Your company announced layoffs. You survived, but your desk neighbor did not.',
-        'Şirketin işten çıkarma açıkladı. Sen kurtuldun ama yan masadaki kurtulamadı.',
-      );
+      return c.t(lines.kept[0], lines.kept[1]);
     },
     tone: 'bad',
   },
@@ -504,7 +510,10 @@ export const adultEvents: EventDef[] = [
     maxAge: 62,
     when: (c) => !!c.p.jobId && !c.p.retired,
     title: (c) => c.t('You have worked 60-hour weeks for months.', 'Aylardır haftada 60 saat çalışıyorsun.'),
-    text: (c) => c.t('You fell asleep in a meeting. Twice.', 'Toplantıda uyuyakaldın. İki kere.'),
+    text: (c) => {
+      const [en, tr] = BURNOUT[workKind(c)];
+      return c.t(en, tr);
+    },
     choices: [
       {
         id: 'leave',
@@ -885,3 +894,5 @@ export const adultEvents: EventDef[] = [
     },
   },
 ];
+
+quietInMourning(adultEvents);

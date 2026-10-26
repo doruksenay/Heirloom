@@ -3,7 +3,7 @@ import type { Gender, GameState, Lang, Person, RelationKind, Tone } from './type
 import { createRng } from './rng';
 import { firstNames, getCountry } from './world';
 import { allJobs } from '../content/registry';
-import { titleFor } from './careers';
+import { CAREER_TOP_MIN_LEVELS, titleFor } from './careers';
 
 export const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(v)));
 
@@ -91,6 +91,23 @@ export function freshFirstNames(s: GameState, gender: Gender): string[] {
   }
   return pool;
 }
+
+/**
+ * Whether a first name belongs to the player or a living close relative (parent, grandparent, sibling, child,
+ * partner). Content that names a stranger from a fixed list (a landlord, a teacher) should skip such names
+ * (playtest 3: the landlord "Kemal Bey" had the player's father's name). No RNG.
+ */
+export function nameClashesWithFamily(s: GameState, firstName: string): boolean {
+  const p = s.player;
+  if (p.firstName === firstName) return true;
+  return p.relations.some((r) => FAMILY_KINDS.includes(r.kind) && s.people[r.personId]?.deathYear === undefined && s.people[r.personId]?.firstName === firstName);
+}
+
+/**
+ * The player lost a child, a spouse or a partner this calendar year (flag `mourning`, set by the engine in the
+ * year of the death). Comic and light lines should stand aside that year.
+ */
+export const inMourning = (s: GameState): boolean => s.player.flags.mourning === s.year;
 
 /** Extension state this module keeps on the player (p.ext is JSON-serializable and optional in old saves). */
 interface PeopleExt {
@@ -226,7 +243,8 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       ext.levelYear = s.year;
       p.jobLevel++;
       p.jobTitle = h.jobTitle();
-      if (p.jobLevel === j.titles.length - 1) h.achieve('top_job');
+      // the "career top" goal and ribbon need a real ladder: a three-step job (barista, nurse) tops out by 24 (playtest 3)
+      if (p.jobLevel === j.titles.length - 1 && j.titles.length >= CAREER_TOP_MIN_LEVELS) h.achieve('top_job');
       return true;
     },
     hasHeirloom(defId) {

@@ -1,11 +1,14 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import { MAX_HIRE_AGE, aOrAn, acc, dat, eligibleJobs, familyFirstNames, nm, wage, who, wth } from './util';
+import { da } from '../../i18n/tr-grammar';
 import { sayWith, type Pair } from './lines';
 import type { Person } from '../../engine/types';
 import { firstNames } from '../../engine/world';
 import { EDUCATION_RANK, titleFor, type JobDef } from '../../engine/careers';
 import { MAJORS, peekCampus } from '../campus/state';
 import { moveTo } from './activities-home';
+import { adoptChild, adoptTone, canAdopt } from './adoption';
+import { ringWeddingLine } from './heirloom-words';
 
 // Events opened by the engine at life-stage moments or by activities. They never fire at random.
 
@@ -81,7 +84,7 @@ const DATE_NO: DateLine[] = [
 /** You were not into it. */
 const DATE_PASS: DateLine[] = [
   (p) => [`You and ${p.firstName} split the bill and went your separate ways.`, `${wth(p.firstName)} hesabı bölüştünüz ve herkes kendi yoluna gitti.`],
-  (p) => [`You faked an urgent phone call. ${p.firstName} faked believing it.`, `Acil bir telefon gelmiş gibi yaptın. ${p.firstName} da inanmış gibi yaptı.`],
+  (p) => [`You faked an urgent phone call. ${p.firstName} faked believing it.`, `Acil bir telefon gelmiş gibi yaptın. ${da(p.firstName)} inanmış gibi yaptı.`],
   (p) => [`You and ${p.firstName} agreed, very politely, that there was no spark.`, `${wth(p.firstName)} çok kibar bir şekilde aranızda kıvılcım olmadığında anlaştınız.`],
   (p) => [`You said goodnight to ${p.firstName} at the bus stop and deleted the app on the way home.`, `Otobüs durağında ${dat(p.firstName)} iyi geceler dedin ve eve dönerken uygulamayı sildin.`],
   (p) => [`${p.firstName} was lovely. Lovely is not enough.`, `${p.firstName} çok tatlıydı. Ama tatlı yetmiyor.`],
@@ -175,11 +178,18 @@ const nameChoice = (i: number): ChoiceDef => ({
     const g = c.s.dynasty.generation + 1;
     const fam = c.s.dynasty.familyName;
     const f = gender === 'female';
+    // cousins born first already started that generation (playtest 3: a baby and its cousins were all "the first")
+    const cousins = c.p.relations.some((r) => r.kind === 'sibling' && (c.h.person(r.personId)?.childIds?.length ?? 0) > 0);
     if (!earlier.length)
-      return c.t(
-        `You had a baby ${f ? 'girl' : 'boy'}, ${n}! Gen ${g} of the ${fam} family has arrived.`,
-        `${f ? 'Bir kızın' : 'Bir oğlun'} oldu: ${n}! ${fam} ailesinin ${g}. kuşağı dünyaya geldi.`,
-      );
+      return cousins
+        ? c.t(
+            `You had a baby ${f ? 'girl' : 'boy'}, ${n}! ${f ? 'She' : 'He'} joins ${f ? 'her' : 'his'} cousins in Gen ${g} of the ${fam} family.`,
+            `${f ? 'Bir kızın' : 'Bir oğlun'} oldu: ${n}! Kuzenleriyle birlikte ${fam} ailesinin ${g}. kuşağına katıldı.`,
+          )
+        : c.t(
+            `You had a baby ${f ? 'girl' : 'boy'}, ${n}! Gen ${g} of the ${fam} family has arrived.`,
+            `${f ? 'Bir kızın' : 'Bir oğlun'} oldu: ${n}! ${fam} ailesinin ${g}. kuşağı dünyaya geldi.`,
+          );
     return sameSex
       ? c.t(`Another baby ${f ? 'girl' : 'boy'}: ${n}! One more little ${fam}.`, `${f ? 'Bir kızın' : 'Bir oğlun'} daha oldu: ${n}! ${fam} ailesinin ${g}. kuşağına ${f ? 'bir kız' : 'bir oğlan'} daha katıldı.`)
       : c.t(`It's a ${f ? 'girl' : 'boy'} this time: ${n}! Another little ${fam}.`, `Bu sefer ${f ? 'bir kızın' : 'bir oğlun'} oldu: ${n}! ${fam} ailesinin ${g}. kuşağına ilk ${f ? 'kız' : 'oğlan'} katıldı.`);
@@ -324,7 +334,8 @@ export const scheduledEvents: EventDef[] = [
           c.h.stat('happiness', -4);
           return sayWith(c, 'date.no', DATE_NO, them);
         },
-        tone: 'good',
+        // a yes is good news; a rejection is not (playtest 3: "went back to an ex" shown in green)
+        tone: (c) => (c.p.relations.some((r) => r.personId === String(c.vars.pid) && r.kind === 'partner') ? 'good' : 'bad'),
       },
       {
         id: 'no',
@@ -413,6 +424,16 @@ export const scheduledEvents: EventDef[] = [
           );
         },
         tone: 'good',
+      },
+      {
+        // a real way to start a family, not only something to read about (playtest 3 §2.11)
+        id: 'adopt',
+        label: (c) => c.t('Start the adoption papers', 'Evlat edinme başvurusu yap'),
+        badge: 'Big change',
+        requires: (c) => canAdopt(c) && c.p.money >= wage(c, 2500),
+        requiresLabel: 'Not enough money',
+        resolve: (c) => adoptChild(c, c.p.money < wage(c, 6000)),
+        tone: adoptTone,
       },
       {
         id: 'think',
@@ -520,11 +541,7 @@ function propose(c: Ctx, bonus: number, cost: number): string {
       // the ring's moment belongs to the first wedding of this life; a second marriage gets the plain line
       if (!c.h.has('ring_wedding')) {
         c.h.flag('ring_wedding');
-        ring.story.push(c.t(`Worn by ${nm(c)} at the wedding in ${c.s.year}.`, `${c.s.year} yılındaki düğünde ${nm(c)} taktı.`));
-        line = c.t(
-          `${nm(c)} said yes! At the wedding, ${ring.name} went onto ${nm(c)}'s finger. It had waited years for a new hand.`,
-          `${nm(c)} evet dedi! Nikâhta ${ring.name} takıldı; yüzük nihayet yeni bir parmağa kavuştu.`,
-        );
+        line = c.t(`${nm(c)} said yes! `, `${nm(c)} evet dedi! `) + ringWeddingLine(c, ring, nm(c));
       }
     }
     return line;

@@ -61,7 +61,7 @@ export interface CrimeState {
   trade: number;
   /** A parent's story, passed down to the heir. */
   /** `id` (added in v0.7) is the parent's person id: with "pass the torch" that parent may still be alive. */
-  legacy?: { name: string; record: number; stash: number; found?: boolean; id?: string };
+  legacy?: { name: string; record: number; stash: number; found?: boolean; id?: string; famous?: boolean };
 }
 
 const KEY = 'crime';

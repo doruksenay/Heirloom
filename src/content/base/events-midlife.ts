@@ -2,14 +2,14 @@ import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { salaryFor, titleFor } from '../../engine/careers';
 import { getCountry } from '../../engine/world';
-import { abl, acc, cap, dat, eligibleJobs, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
+import { abl, acc, cap, dat, eligibleJobs, employee, gen, kin, loc, nm, single, wage, who, wth, officeJob, workKind, quietInMourning } from './util';
 import { divorceTerms, divorcedLine } from './relationships';
 import { ABROAD_CITIES, abroadCity, bringHome, byCountry, cityOf, didFor, he, He, him, his, His, inTr, isAbroad, markFor, sendAbroad, type ByCountry } from './events-flavour';
 
 // Ages 25–64: work, kids, love, money, health and the small absurdities of the middle of life.
 
 // ------------------------------------------------ helpers
-// office-style work events: not for athletes, soldiers, farmers and the like
+// office-style work events (emails, HR, desks): office and tech jobs only, never owners
 const hasJob = officeJob;
 /** Living children in an age range who live nearby (an emigrated child is not in the kitchen). */
 const kidsAged = (c: Ctx, lo: number, hi: number) =>
@@ -257,7 +257,7 @@ export const midlifeEvents: EventDef[] = [
     maxAge: 48,
     once: true,
     weight: 4,
-    when: (c) => hasJob(c) && c.p.jobYears >= 3 && eligibleJobs(c).some((j) => j.field !== c.h.job()?.field),
+    when: (c) => employee(c) && c.p.jobYears >= 3 && eligibleJobs(c).some((j) => j.field !== c.h.job()?.field),
     setup: (c) => {
       const job = c.rng.pick(eligibleJobs(c).filter((j) => j.field !== c.h.job()?.field));
       c.vars.job = job.id;
@@ -438,7 +438,7 @@ export const midlifeEvents: EventDef[] = [
     maxAge: 62,
     weight: 4,
     cooldown: 8,
-    when: (c) => hasJob(c) && c.p.jobLevel >= 1,
+    when: (c) => (hasJob(c) || workKind(c) === 'health') && c.p.jobLevel >= 1,
     title: (c) => c.t('You have been asked to speak at a conference.', 'Bir konferansta konuşma yapman istendi.'),
     text: (c) =>
       c.t('Four hundred people. One microphone. Your knees are already shaking.', 'Dört yüz kişi. Tek mikrofon. Dizlerin şimdiden titriyor.'),
@@ -2006,7 +2006,9 @@ export const midlifeEvents: EventDef[] = [
           c.h.stat('happiness', 2);
           if (c.rng.chance(0.3)) {
             c.h.stat('health', -2);
-            return c.t('You slept. You also answered an email in your sleep and agreed to a meeting.', 'Uyudun. Ama uykunda bir maile cevap verip toplantı kabul etmişsin.');
+            return officeJob(c)
+              ? c.t('You slept. You also answered an email in your sleep and agreed to a meeting.', 'Uyudun. Ama uykunda bir maile cevap verip toplantı kabul etmişsin.')
+              : c.t('You slept. You also sent a message in your sleep that just said "yes, the blue one". Nobody knows the question.', 'Uyudun. Ama uykunda birine sadece "Evet, mavi olan" yazan bir mesaj atmışsın. Sorunun ne olduğunu kimse bilmiyor.');
           }
           return c.t('You slept nine hours and woke up a new person. A slightly groggy one.', 'Dokuz saat uyudun ve yepyeni biri olarak uyandın. Biraz sersem biri.');
         },
@@ -2323,3 +2325,5 @@ export const midlifeEvents: EventDef[] = [
     ],
   },
 ];
+
+quietInMourning(midlifeEvents);

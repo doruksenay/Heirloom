@@ -3,7 +3,7 @@ import { canMarryGrandkid, marryGrandkid } from '../base/events-elder';
 import type { GameState } from '../../engine/types';
 import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
-import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, single, wage, who, wth } from '../base/util';
+import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, officeJob, single, wage, who, wth } from '../base/util';
 import { isCoastal } from '../../engine/places';
 import { pickIndex, say, sayWith, type Pair } from '../base/lines';
 
@@ -1351,7 +1351,8 @@ const adult: EventDef[] = [
     category: 'work',
     minAge: 18,
     once: true,
-    when: (c) => inTR(c) && !!c.p.jobId && c.p.jailYears === 0,
+    // a tea kitchen, desks and four managers: office work only (not a miner, a nurse or the company's owner)
+    when: (c) => inTR(c) && officeJob(c) && c.p.jailYears === 0,
     setup: (c) => {
       c.vars.pid = c.h.newPerson({ gender: 'male', age: c.rng.int(48, 62) }).id;
     },

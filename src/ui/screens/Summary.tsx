@@ -17,7 +17,11 @@ export function Summary({ app }: { app: AppApi }) {
   const r = s.dead!;
   const kids = heirs(s);
   const handed = !!r.handedOver;
-  const grandkid = new Set(heirOptions(s).filter((o) => o.kind === 'grandchild').map((o) => o.person.id));
+  const options = heirOptions(s);
+  const grandkid = new Set(options.filter((o) => o.kind === 'grandchild').map((o) => o.person.id));
+  // a childless life can pass the family to a brother's or sister's child (playtest 3 §2.11)
+  const nibling = new Set(options.filter((o) => o.kind === 'nibling').map((o) => o.person.id));
+  const onlyNiblings = !handed && kids.length > 0 && kids.every((k) => nibling.has(k.id));
   const ribbon = getRibbon(r.ribbon);
   const tr = app.lang === 'tr';
   const rName = ribbon ? ribbonName(ribbon, app.lang) : '';
@@ -120,10 +124,15 @@ export function Summary({ app }: { app: AppApi }) {
         </div>
       </div>
 
-      {kids.length > 0 && !handed && (
+      {kids.length > 0 && !handed && !onlyNiblings && (
         <Tip app={app} id="continue" icon="family">
           {T('This is where Heirloom begins. Continue as one of your children: they inherit your home, your heirlooms and most of your money.')}
         </Tip>
+      )}
+      {onlyNiblings && (
+        <div class="banner">
+          {T('No child of your own is left, so a niece or nephew can carry the family on: they inherit your home, your heirlooms and your money.')}
+        </div>
       )}
       <div class="list" style={{ gap: '10px' }}>
         {kids.map((k) => (
@@ -132,7 +141,13 @@ export function Summary({ app }: { app: AppApi }) {
               app.act((g) => continueAsChild(g, k.id));
               app.go('life');
             }} style={{ minHeight: '58px' }}>
-            {grandkid.has(k.id) ? T('Continue as your grandchild {name}, {n}', { name: k.firstName, n: ageOf(s, k) }) : T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
+            {grandkid.has(k.id)
+              ? T('Continue as your grandchild {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+              : nibling.has(k.id)
+                ? k.gender === 'female'
+                  ? T('Continue as your niece {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+                  : T('Continue as your nephew {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+                : T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
           </button>
         ))}
         {kids.length === 0 && (

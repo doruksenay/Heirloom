@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ageUp, choose, doActivity, newGame } from '../src/engine/game';
-import { activitiesFor } from '../src/content/registry';
+import { activitiesFor, allJobs, eventsFor } from '../src/content/registry';
 import { createRng } from '../src/engine/rng';
-import { peekCampus } from '../src/content/campus/state';
+import { makeCtx } from '../src/engine/context';
+import { isCareerUpgrade } from '../src/engine/careers';
+import { campusState, companiesFor, peekCampus, type Major } from '../src/content/campus/state';
 import type { GameState, Lang, Profile } from '../src/engine/types';
 
 const profile = (entitlements: string[], language: Lang = 'en'): Profile => ({
@@ -104,4 +106,135 @@ describe('Campus v0.7 playtest fixes', () => {
       for (const l of s.player.log) expect(l.text).not.toMatch(/\ba [AEIOU][a-z]/);
     }
   }, 60_000);
+});
+
+describe('Campus round-3 playtest fixes', () => {
+  /** A university graduate of `major`, `age` years old, ready for the career fair. */
+  const grad = (lang: Lang, major: Major, seed = 5, countryId = 'tr') => {
+    const s = newGame({ firstName: 'Ada', lastName: 'Kaya', gender: 'female', countryId, city: countryId === 'tr' ? 'İzmir' : 'London', seed }, profile(['pack.campus'], lang));
+    s.year += 35;
+    s.player.education = 'university';
+    s.player.school = null;
+    s.player.stats.smarts = 95;
+    const st = campusState(s.player);
+    st.major = major;
+    st.gradYear = s.year - 10;
+    st.gradOffers = 2;
+    return s;
+  };
+  const fair = (s: GameState) => {
+    s.player.actionsThisYear = {};
+    doActivity(s, 'campus_career_fair');
+    const p = s.pending!;
+    expect(p.eventId).toBe('campus.career_fair');
+    return p;
+  };
+  const offered = (s: GameState) => [0, 1, 2].map((i) => s.pending!.vars[`job${i}`]).filter(Boolean).map(String);
+
+  it('never offers a downgrade to someone already working (a Dean is not recruited as a firefighter)', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const s = grad('en', 'education', seed);
+      s.player.jobId = 'academic';
+      s.player.jobLevel = 4; // Dean
+      // nothing at the fair beats being a Dean: the activity is greyed out and says why
+      const act = activitiesFor(s.enabledPacks).find((a) => a.id === 'campus_career_fair')!;
+      const c = makeCtx(s);
+      expect(act.available!(c)).toBe(false);
+      expect(typeof act.description === 'function' ? act.description(c) : act.description).toMatch(/No stand can beat/);
+      doActivity(s, 'campus_career_fair');
+      expect(s.pending).toBeNull();
+    }
+    for (let seed = 1; seed <= 20; seed++) {
+      const s = grad('tr', 'engineering', seed);
+      s.player.jobId = 'research';
+      s.player.jobLevel = 2; // Kıdemli Araştırmacı
+      fair(s);
+      const c = makeCtx(s);
+      for (const id of offered(s)) {
+        const j = allJobs(s.enabledPacks).find((x) => x.id === id)!;
+        expect(isCareerUpgrade(c, j, Number(s.pending!.vars[`lvl${offered(s).indexOf(id)}`])), id).toBe(true);
+        expect(String(s.pending!.vars[`title${offered(s).indexOf(id)}`])).not.toBe('Mühendis Adayı');
+      }
+      // a rival lab poaches the senior researcher one rung up
+      expect(offered(s)).toContain('research');
+      expect(String(s.pending!.vars[`title${offered(s).indexOf('research')}`])).toBe('Proje Yürütücüsü');
+      choose(s, 'none');
+    }
+    // a graduate pulling coffee does get real offers
+    let offers = 0;
+    for (let seed = 1; seed <= 10; seed++) {
+      const s = grad('en', 'law', seed);
+      s.player.jobId = 'barista';
+      s.player.jobLevel = 1;
+      fair(s);
+      offers += offered(s).length;
+      for (let i = 0; i < offered(s).length; i++) expect(Number(s.pending!.vars[`lvl${i}`])).toBeLessThanOrEqual(1);
+      choose(s, 'none');
+    }
+    expect(offers).toBeGreaterThan(10);
+  });
+
+  it('offers only jobs that fit the major, and not the same stands fair after fair', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const s = grad('en', 'education', seed);
+      fair(s);
+      const first = offered(s);
+      for (const id of first) expect(['teacher', 'academic', 'journalist']).toContain(id);
+      choose(s, 'none');
+      s.year++;
+      s.player.actionsThisYear = {};
+      // next year: other stands, or the fair is greyed out ("the same stands as last time")
+      const act = activitiesFor(s.enabledPacks).find((a) => a.id === 'campus_career_fair')!;
+      if (act.available!(makeCtx(s))) {
+        fair(s);
+        for (const id of offered(s)) expect(first).not.toContain(id);
+        choose(s, 'none');
+      } else expect(String(typeof act.description === 'function' ? act.description(makeCtx(s)) : '')).toMatch(/same stands/);
+      // two years on, the stands are back; but never more than three offers of one job in a life
+      const seen: Record<string, number> = {};
+      for (let y = 0; y < 12; y++) {
+        s.year++;
+        s.player.actionsThisYear = {};
+        if (!act.available!(makeCtx(s))) continue;
+        fair(s);
+        for (const id of offered(s)) seen[id] = (seen[id] ?? 0) + 1;
+        choose(s, 'none');
+      }
+      for (const id of first) seen[id] = (seen[id] ?? 0) + 1;
+      for (const [id, n] of Object.entries(seen)) expect(n, id).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('hires with field-appropriate lines and a lowercase major in Turkish', () => {
+    let hired = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = grad('tr', seed % 2 ? 'law' : 'medicine', seed);
+      fair(s);
+      const id = s.pending!.choices.find((x) => !x.disabled && x.id.startsWith('job'));
+      if (!id) continue;
+      choose(s, id.id);
+      const line = s.player.log[s.player.log.length - 1].text;
+      if (s.player.jobId) hired++;
+      expect(line).not.toMatch(/İK'cı [A-ZÇĞİÖŞÜ]/);
+      expect(line).not.toMatch(/Education|Probationary/);
+    }
+    expect(hired).toBeGreaterThan(10);
+  });
+
+  it('localises internship companies: Turkish names in Türkiye, international ones elsewhere (§2.15)', () => {
+    const tr = Object.values(companiesFor('tr')).flat();
+    const intl = Object.values(companiesFor('uk')).flat();
+    expect(tr).not.toContain('Mercy General');
+    expect(tr).not.toContain('Hartley & Stone');
+    for (const n of tr) expect(n).not.toMatch(/\b(General|Partners|Consulting|Media|Hotel|Construction|Foundation|Trust|Systems|Works)\b/);
+    for (const n of intl) expect(n).not.toMatch(/[çğıöşüÇĞİÖŞÜ]/);
+    for (let seed = 1; seed <= 20; seed++) {
+      const s = grad('tr', 'law', seed);
+      s.player.school = 'university';
+      const c = makeCtx(s);
+      const def = eventsFor(s.enabledPacks).find((e) => e.id === 'campus.internship')!;
+      def.setup!(c);
+      expect(tr).toContain(String(c.vars.company));
+    }
+  });
 });

@@ -19,6 +19,12 @@ export interface CampusState {
   internships: number;
   /** A company that wants the intern back after graduation. */
   internOffer: { company: string; field: JobDef['field'] } | null;
+  /** Job ids offered at the last career fair, so the next one shows other stands (added in v0.9). */
+  fairLast?: string[];
+  /** Year of the last career fair visit (added in v0.9). */
+  fairYear?: number;
+  /** How many times each job has been offered at career fairs in this life (added in v0.9). */
+  fairCount?: Record<string, number>;
   abroad: string | null; // city of the exchange semester
   cheated: number;
   probation: boolean;
@@ -158,14 +164,44 @@ export function majorJobs(c: Ctx, fields: JobDef['field'][], leeway = 10): JobDe
 export const ACADEMIC_JOBS = ['academic', 'research'];
 export const isAcademic = (c: Ctx) => !!c.p.jobId && ACADEMIC_JOBS.includes(c.p.jobId);
 
-/** Fictional company names per job field, for internships. */
-export const COMPANIES: Record<JobDef['field'], string[]> = {
-  tech: ['Byteforge', 'Kodlab', 'Nimbus Systems', 'Pixelmill'],
-  health: ['St. Aurelia Hospital', 'Şifa Medical Center', 'Mercy General'],
-  office: ['Hartley & Stone', 'Kaya Partners', 'Northbridge Consulting'],
-  creative: ['Studio Lumen', 'Mavi Ajans', 'Inkwell Media'],
-  // proper names only: they are dropped into both English and Turkish sentences
-  public: ['Meridian Foundation', 'Ankara Eğitim Vakfı', 'Northgate Library Trust'],
-  service: ['Grand Bosphorus Hotel', 'Café Republic'],
-  trade: ['Atlas Engineering Works', 'Demir Construction'],
+/**
+ * Fictional employers per job field, for internships and graduate offers. Lives in Türkiye get Turkish names and
+ * every other country international ones (playtest 3 §2.15: "Mercy General" and "Hartley & Stone" in İzmir).
+ * They are proper names, dropped unchanged into both English and Turkish sentences, and never take a suffix.
+ */
+export const COMPANIES_TR: Record<JobDef['field'], string[]> = {
+  tech: ['Kodhane Yazılım', 'Bulutsu Bilişim', 'Piksel Teknoloji', 'Kuantum Yazılım Evi'],
+  health: ['Ilgın Tıp Merkezi', 'Gelincik Hastanesi', 'Şifahane Sağlık Grubu'],
+  office: ['Kaya Hukuk Bürosu', 'Yıldız Danışmanlık', 'Akın Mali Müşavirlik'],
+  creative: ['Lacivert Ajans', 'Lale Tasarım Stüdyosu', 'Kırmızı Kalem Yayınevi'],
+  public: ['Yarınlar Eğitim Vakfı', 'Kitap Köprüsü Derneği', 'Mahalle Okuma Evi'],
+  service: ['Gümüşsu Otel', 'Çınaraltı Kafe'],
+  trade: ['Demir İnşaat', 'Atlas Makine Atölyesi'],
 };
+export const COMPANIES_INTL: Record<JobDef['field'], string[]> = {
+  tech: ['Byteforge', 'Nimbus Systems', 'Pixelmill', 'Orbitwise'],
+  health: ['St. Aurelia Hospital', 'Mercy General', 'Northfield Clinic'],
+  office: ['Hartley & Stone', 'Northbridge Consulting', 'Ashworth Partners'],
+  creative: ['Studio Lumen', 'Inkwell Media', 'Paper Crane Agency'],
+  public: ['Meridian Foundation', 'Northgate Library Trust', 'Open Doors Learning'],
+  service: ['Grand Harbour Hotel', 'Café Republic'],
+  trade: ['Atlas Engineering Works', 'Ironside Builders'],
+};
+/** The employer list for a life in `countryId`. */
+export const companiesFor = (countryId: string) => (countryId === 'tr' ? COMPANIES_TR : COMPANIES_INTL);
+/** Kept for older imports: the international list. */
+export const COMPANIES = COMPANIES_INTL;
+
+/**
+ * Jobs a career fair or a graduate offer can lead to, per major (playtest 3 §2.10: an Education graduate was
+ * recruited as a firefighter). Undeclared students are filed under Business. Pack jobs are listed by id.
+ */
+export const MAJOR_JOBS: Record<Major, string[]> = {
+  engineering: ['engineer', 'research', 'architect', 'pilot'],
+  medicine: ['doctor', 'nurse', 'dentist', 'vet', 'research'],
+  law: ['lawyer', 'accountant', 'journalist'],
+  business: ['accountant', 'realtor', 'journalist', 'engineer'],
+  arts: ['designer', 'architect', 'journalist', 'artist'],
+  education: ['teacher', 'academic', 'journalist'],
+};
+export const fitsMajor = (m: Major | null, jobId: string) => MAJOR_JOBS[m ?? 'business'].includes(jobId);

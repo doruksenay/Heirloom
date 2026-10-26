@@ -1,7 +1,36 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { acc, cap, dat, gen, kin, loc, nm, single, wage, who, wth, officeJob } from './util';
+import { acc, cap, da, dat, gen, kin, loc, nm, single, wage, who, wth, employee, workKind, type WorkKind, quietInMourning } from './util';
 import { catName, syncFlagCat } from '../../engine/pets';
+import { pickIndex } from './lines';
 import { byCountry, cityOf, didFor, He, him, his, markFor, settled } from './events-flavour';
+
+/** base.coworker_birthday: two cake lines for each kind of workplace. */
+const CAKE: Partial<Record<WorkKind, [string, string][]>> = {
+  office: [
+    ["You chipped in for a coworker's birthday cake. You still don't know her name.", 'Bir iş arkadaşının doğum günü pastası için para topladınız. Hâlâ adını bilmiyorsun.'],
+    ['The office threw a surprise party for your boss. You ate four slices of cake.', 'Ofiste patrona sürpriz parti yapıldı. Dört dilim pasta yedin.'],
+  ],
+  trade: [
+    ["You chipped in for the foreman's birthday. The cake was eaten off a toolbox lid and it was the best cake of the year.", 'Ustabaşının doğum günü için para topladınız. Pasta bir alet kutusunun kapağında yendi; yılın en güzel pastasıydı.'],
+    ['Someone brought a tray of pastries for a new baby in the family. The whole crew ate standing up, with dusty hands.', 'Biri ailesine yeni katılan bebek için bir tepsi poğaça getirdi. Bütün ekip tozlu ellerle ayakta yedi.'],
+  ],
+  service: [
+    ["You chipped in for a coworker's birthday cake and ate it in the back between two rushes.", 'Bir iş arkadaşının doğum günü pastası için para topladınız ve iki yoğunluk arasında arkada yediniz.'],
+    ['The staff sang happy birthday to the manager so loudly that the customers joined in.', 'Personel müdüre öyle yüksek sesle doğum günü şarkısı söyledi ki müşteriler de katıldı.'],
+  ],
+  health: [
+    ["You chipped in for a colleague's birthday cake. It sat in the staff room for six hours before anyone had time for a slice.", 'Bir meslektaşının doğum günü pastası için para topladınız. Biri bir dilim alacak vakit bulana kadar altı saat personel odasında bekledi.'],
+    ['The night shift had a birthday cake at four in the morning. Nobody sang. Everybody smiled.', 'Gece vardiyası sabahın dördünde doğum günü pastası kesti. Kimse şarkı söylemedi. Herkes gülümsedi.'],
+  ],
+  uniform: [
+    ['You chipped in for a birthday cake at the station. It was eaten in eight minutes, between two calls.', 'Görev yerindeki bir doğum günü pastası için para topladınız. İki çağrı arasında sekiz dakikada yendi.'],
+    ['The whole shift signed a card for the oldest of you. He pretended not to be moved, very badly.', 'Bütün vardiya en kıdemliniz için bir kart imzaladı. Duygulanmamış gibi yapmaya çalıştı; hiç beceremedi.'],
+  ],
+  school: [
+    ['You chipped in for a colleague\'s birthday cake in the staff room. A pupil smelled it from the corridor.', 'Öğretmenler odasındaki doğum günü pastası için para topladınız. Bir öğrenci kokusunu koridordan aldı.'],
+    ['The kids made the head a birthday card with forty signatures and one drawing of a horse. Nobody knows why the horse.', 'Çocuklar müdüre kırk imzalı bir doğum günü kartı yaptı; bir de at resmi. Atın neden orada olduğunu kimse bilmiyor.'],
+  ],
+};
 
 // v0.2 content: friends, pets, work, home, kids, old age, and events that create new heirlooms.
 
@@ -310,7 +339,8 @@ export const moreEvents: EventDef[] = [
     minAge: 22,
     maxAge: 64,
     cooldown: 6,
-    when: (c) => officeJob(c) && !!c.p.jobId && c.p.jobYears >= 2,
+    // anyone with a boss and a pay scale; ranked jobs (soldiers, officers) rise by years of service instead
+    when: (c) => employee(c) && !c.h.job()?.ranked && c.p.jobYears >= 2,
     title: (c) => c.t('You have not had a raise in two years.', 'İki yıldır zam görmedin.'),
     text: (c) => c.t('Your annual review is tomorrow.', 'Yıllık performans görüşmen yarın.'),
     choices: [
@@ -341,21 +371,15 @@ export const moreEvents: EventDef[] = [
     category: 'work',
     maxAge: 70,
     cooldown: 5,
-    when: officeJob,
+    // a workplace with colleagues (artists, footballers and pilots get no office cake)
+    when: (c) => employee(c) && !!CAKE[workKind(c)],
     text: '',
     apply: (c) => {
       c.h.money(-wage(c, 20));
-      const i = c.rng.int(0, 1);
-      return c.t(
-        [
-          "You chipped in for a coworker's birthday cake. You still don't know her name.",
-          'The office threw a surprise party for your boss. You ate four slices of cake.',
-        ][i],
-        [
-          'Bir iş arkadaşının doğum günü pastası için para topladınız. Hâlâ adını bilmiyorsun.',
-          'Ofiste patrona sürpriz parti yapıldı. Dört dilim pasta yedin.',
-        ][i],
-      );
+      // one rng call; the line memory keeps the same cake from coming round twice in a row
+      const list = CAKE[workKind(c)] ?? CAKE.office!;
+      const [en, tr] = list[pickIndex(c, `coworker_birthday.${workKind(c)}`, list.length)];
+      return c.t(en, tr);
     },
   },
   {
@@ -620,7 +644,7 @@ export const moreEvents: EventDef[] = [
           c.h.closeness(String(c.vars.pid), 2);
           return c.t(
             `You pretended you saw nothing. ${nm(c)} pretended too. A family tradition.`,
-            `Hiçbir şey görmemiş gibi yaptın. ${nm(c)} da öyle. Aile geleneği.`,
+            `Hiçbir şey görmemiş gibi yaptın. ${da(nm(c))} öyle. Aile geleneği.`,
           );
         },
       },
@@ -994,3 +1018,5 @@ function laterGrief(c: Ctx): string | undefined {
   });
   return r?.personId;
 }
+
+quietInMourning(moreEvents);

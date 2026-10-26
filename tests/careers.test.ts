@@ -239,3 +239,50 @@ describe('career lives', () => {
     }
   });
 });
+
+describe('career upgrades and the career top (playtest 3 §2.10)', () => {
+  const full = (seed = 1): GameState =>
+    newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed }, profile('en', true));
+  const job = (s: GameState, id: string) => allJobs(s.enabledPacks).find((j) => j.id === id)!;
+
+  it('isCareerUpgrade never offers a downgrade to someone already employed', async () => {
+    const { isCareerUpgrade } = await import('../src/engine/careers');
+    const s = withJob(full(), 55, 'academic', 4); // Dean
+    const c = makeCtx(s);
+    expect(isCareerUpgrade(c, job(s, 'firefighter'), 0)).toBe(false);
+    expect(isCareerUpgrade(c, 'firefighter')).toBe(false);
+    expect(isCareerUpgrade(c, job(s, 'doctor'), 3)).toBe(true); // Chief of Medicine pays more
+    // a senior scientist is not sent back to "Junior Engineer"
+    withJob(s, 40, 'research', 2);
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'engineer'), 0)).toBe(false);
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'engineer'), 3)).toBe(true);
+    // the same job: only a higher rung
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'research'), 2)).toBe(false);
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'research'), 3)).toBe(true);
+    // an entry-level barista can move to any better-paid entry job
+    withJob(s, 22, 'barista', 0);
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'engineer'), 0)).toBe(true);
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'retail'), 0)).toBe(false); // about the same pay: not a step up
+    // no job, or retired: every offer is fine
+    s.player.jobId = null;
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'barista'), 0)).toBe(true);
+    withJob(s, 66, 'teacher', 3);
+    s.player.retired = true;
+    expect(isCareerUpgrade(makeCtx(s), job(s, 'barista'), 0)).toBe(true);
+  });
+
+  it('counts the career top only on a ladder of four levels or more', () => {
+    const s = withJob(fresh(), 24, 'barista', 1, 5);
+    expect(promoteAnyway(makeCtx(s))).toBe(true);
+    expect(s.player.jobLevel).toBe(2); // Café Manager, the top of a three-step ladder
+    expect(s.player.achievements).not.toContain('top_job');
+    withJob(s, 40, 'police', 2, 5);
+    expect(promoteAnyway(makeCtx(s))).toBe(true);
+    expect(s.player.achievements).toContain('top_job');
+  });
+
+  it('calls the first army rank "Sözleşmeli Er" and the first painter rung "Meteliksiz Ressam" in Turkish', () => {
+    expect(BASE_JOBS.find((j) => j.id === 'soldier')!.titlesTr![0]).toBe('Sözleşmeli Er');
+    expect(BASE_JOBS.find((j) => j.id === 'artist')!.titlesTr![0]).toBe('Meteliksiz Ressam');
+  });
+});

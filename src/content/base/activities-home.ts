@@ -2,6 +2,7 @@ import type { ActivityDef, Ctx } from '../types';
 import type { GameState, Player, StatKey } from '../../engine/types';
 import { getCountry } from '../../engine/world';
 import { salaryFor } from '../../engine/careers';
+import { nameClashesWithFamily } from '../../engine/context';
 import { yearlyIncome } from '../../engine/economy';
 import { FURNITURE, STYLE_SETS, currentTier, setProgress, homeTier, houseState, type HomeTier, type HomeTierDef } from '../../engine/home';
 import {
@@ -196,7 +197,10 @@ function rentLine(c: Ctx, where: string): string {
   const trWord = [forms[0], forms[0], forms[1], forms[2]][i];
   // the landlord follows the lease year (no extra rng call, so old seeds keep their stream)
   const lords = LANDLORDS[c.p.countryId] ?? LANDLORDS.us;
-  const [lEn, lTr] = lords[(c.s.year + c.p.birthYear) % lords.length];
+  // step past a landlord who shares a first name with a living relative (playtest 3: "Kemal Bey" was the father)
+  let li = (c.s.year + c.p.birthYear) % lords.length;
+  for (let k = 0; k < lords.length && nameClashesWithFamily(c.s, lords[li][0].split(' ').pop() ?? ''); k++) li = (li + 1) % lords.length;
+  const [lEn, lTr] = lords[li];
   return c.t(RENT_LINES[i][0].split('{w}').join(where).split('{L}').join(lEn), RENT_LINES[i][1].split('{W}').join(cap1(trWord)).split('{L}').join(lTr));
 }
 
@@ -217,13 +221,13 @@ const DEATH_LINES: Record<PetKind, [string, string][]> = {
     ['{n} sang one last song this morning, then went quiet. You leave the cage door open out of habit.', '{n} bu sabah son bir şarkı söyledi, sonra sustu. Kafesin kapısını alışkanlıktan açık bırakıyorsun.'],
   ],
   fish: [
-    ['{n} the goldfish was found floating peacefully. {a} years is a long life in a bowl.', 'Japon balığın {n} fanusunda huzurla süzülürken bulundu. Bir fanus için {a} yıl uzun bir ömür.'],
+    ['{n} the goldfish was found floating peacefully. {a} years is a long life in a bowl.', 'Japon balığın {n} bir sabah fanusunda kıpırtısız bulundu. Bir fanus için {a} yıl uzun bir ömür.'],
   ],
   rabbit: [
-    ['{n} curled up in the hay one night and hopped off this world. Someone left a carrot by the hutch.', '{n} bir gece samanların arasında kıvrıldı ve bu dünyadan sekip gitti. Biri kafesin yanına bir havuç bırakmış.'],
+    ['{n} curled up in the hay one night and hopped off this world. Someone left a carrot by the hutch.', '{n} bir gece samanların arasında kıvrıldı ve sessizce bu dünyadan göçtü. Biri kafesin yanına bir havuç bırakmış.'],
   ],
   turtle: [
-    ['{n} the tortoise died at {a}. It outlived two sofas, three neighbors and most of your opinions.', 'Kaplumbağan {n}, {a} yaşında öldü. İki kanepeyi, üç komşuyu ve fikirlerinin çoğunu eskitti.'],
+    ['{n} the tortoise died at {a}. It outlived two sofas, three neighbors and most of your opinions.', 'Kaplumbağan {n}, {a} yaşında öldü. İki kanepe, üç komşu ve senin birçok fikrin eskidi; o hep yerindeydi.'],
   ],
   horse: [
     ['{n} lay down in the field at sunset and did not get up. You stayed until dark.', '{n} gün batımında tarlaya uzandı ve bir daha kalkmadı. Hava kararana kadar yanından ayrılmadın.'],

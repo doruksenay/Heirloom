@@ -4,7 +4,7 @@ import { makeCtx } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { activitiesFor } from '../src/content/registry';
 import { bossPack } from '../src/content/boss';
-import { companyOf, peekBoss, type Company, type Industry } from '../src/content/boss/state';
+import { DIVIDEND_TAX, bossState, companyOf, peekBoss, teamCapacity, valuate, type Company, type Industry } from '../src/content/boss/state';
 import type { GameState, Lang, Profile } from '../src/engine/types';
 
 const ORIGINAL = new Set([
@@ -364,5 +364,103 @@ describe('boss round-2 playtest fixes', () => {
         for (const l of s.player.log) expect(l.text, `${countryId}: ${l.text}`).not.toMatch(FLAVOUR);
       }
     }
+  });
+});
+
+describe('boss round-3 playtest fixes (playtest 3 §2.9)', () => {
+  const start = (lang: Lang, seed = 21) => {
+    const s = newGame({ firstName: 'Batuhan', lastName: 'Bulut', gender: 'male', countryId: 'tr', city: 'Rize', seed }, profile(lang));
+    s.year += 30;
+    s.player.money = 1_000_000;
+    return s;
+  };
+  /** A company that has been in the family since `founded`, run by generation `gen`. */
+  const company = (s: GameState, founded: number, gen: number, extra: Partial<Company> = {}): Company => {
+    const comp: Company = {
+      name: 'Tavşan Kanı Çay', industry: 'tea', founded, founderName: 'Emir', revenue: 200_000, cash: 50_000, employees: 0,
+      hype: 20, ownership: 1, stage: 'startup', valuation: 0, lastProfit: 1, gen, ...extra,
+    };
+    bossState(s.player).company = comp;
+    return comp;
+  };
+  const settle = (s: GameState) => {
+    for (let g = 0; g < 8 && s.pending; g++) choose(s, s.pending.choices.find((x) => !x.disabled)!.id);
+  };
+
+  it('titles an heir "Sahibi ve CEO\'su", not the founder', () => {
+    const tr = start('tr');
+    company(tr, tr.year - 40, 2);
+    ageUp(tr);
+    settle(tr);
+    expect(tr.player.jobTitle).toBe("Tavşan Kanı Çay Sahibi ve CEO'su");
+    const en = start('en');
+    company(en, en.year - 40, 2);
+    ageUp(en);
+    expect(en.player.jobTitle).toBe('Owner & CEO of Tavşan Kanı Çay');
+    // the founder keeps the founder's title
+    const f = start('tr');
+    company(f, f.year - 4, 1);
+    ageUp(f);
+    expect(f.player.jobTitle).toBe("Tavşan Kanı Çay Kurucusu ve CEO'su");
+  });
+
+  it('never calls the first hire of an old or inherited firm "a team of two"', () => {
+    const YOUNG = /İki kişilik bir ekip|Ekip artık iki kişi|ilk çalışanına kavuştu|ilk çalışanın pazartesi/;
+    for (const [gen, age] of [[2, 60], [1, 30]] as const) {
+      for (let seed = 1; seed <= 12; seed++) {
+        const s = start('tr', seed);
+        company(s, s.year - age, gen);
+        const n = s.player.log.length;
+        doActivity(s, 'boss_hire');
+        const line = s.player.log[n].text;
+        expect(line, line).not.toMatch(YOUNG);
+        if (gen === 2) expect(line).toMatch(/aile|Emir|akraba/i);
+      }
+    }
+  });
+
+  it('celebrates the 50th birthday in the founding year + 50, never at 66', () => {
+    const s = start('tr');
+    company(s, s.year + 1 - 50, 1); // turns 50 at the next birthday
+    ageUp(s);
+    settle(s);
+    expect(s.player.log.filter((l) => l.text.includes('50 yaşına girdi')).length).toBe(1);
+    const late = start('tr');
+    company(late, late.year + 1 - 66, 2); // an old save that never had its party
+    for (let y = 0; y < 3; y++) {
+      ageUp(late);
+      settle(late);
+    }
+    expect(late.player.log.some((l) => l.text.includes('50 yaşına girdi'))).toBe(false);
+    expect(companyOf(late.player)!.founded).toBe(late.year - 68);
+  });
+
+  it('the tenth birthday says when it is late', () => {
+    const s = start('en');
+    const comp = company(s, s.year - 11, 1);
+    const def = bossPack.events.find((e) => e.id === 'boss.anniversary10')!;
+    const c = makeCtx(s);
+    expect(def.when!(c)).toBe(true);
+    expect(typeof def.title === 'function' ? def.title(c) : def.title).toContain('last year');
+    comp.founded = s.year - 15;
+    expect(def.when!(makeCtx(s))).toBe(false);
+  });
+
+  it('a mature company is worth less per unit of revenue, and dividends are taxed', () => {
+    const young: Company = { name: 'X', industry: 'app', founded: 2000, founderName: 'A', revenue: 1_000_000, cash: 0, employees: 3, hype: 0, ownership: 1, stage: 'startup', valuation: 0, lastProfit: 1 };
+    expect(valuate(young, 2003)).toBeGreaterThan(valuate(young, 2045) * 2);
+    expect(valuate(young, 2003)).toBe(valuate(young)); // callers without a year: no discount
+    const s = start('en');
+    const comp = company(s, s.year - 5, 1, { cash: 100_000, ownership: 0.5 });
+    const before = s.player.money;
+    doActivity(s, 'boss_dividend');
+    expect(s.player.money - before).toBe(Math.round(30_000 * 0.5 * (1 - DIVIDEND_TAX)));
+    expect(comp.cash).toBe(70_000);
+  });
+
+  it('each hire adds a little less capacity than the last', () => {
+    expect(teamCapacity(0)).toBe(1);
+    expect(teamCapacity(7)).toBeLessThan(8);
+    expect(teamCapacity(50) - teamCapacity(49)).toBeLessThan(teamCapacity(1) - teamCapacity(0));
   });
 });

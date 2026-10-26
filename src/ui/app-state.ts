@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { GameState, Profile } from '../engine/types';
 import { refreshPacks } from '../engine/game';
-import { loadGame, loadProfile, saveGame, saveProfile } from '../platform/storage';
+import { loadDaily, loadGame, loadMode, loadProfile, saveDaily, saveGame, saveMode, saveProfile } from '../platform/storage';
+import { newDailyGame, todayKey, trackDaily } from '../engine/daily';
 import { applyTheme, getTheme, isThemeOwned, type ThemeDef } from '../themes/registry';
 import { AdMobProvider, type AdPlacement } from '../platform/ads';
 import { isNative, syncStatusBar } from '../platform/native';
@@ -9,10 +10,20 @@ import { setUiLang } from '../i18n/ui';
 import { configureAnalytics, track } from '../platform/analytics';
 import type { Lang } from '../engine/types';
 
-export type Tab = 'life' | 'activities' | 'home' | 'family' | 'store' | 'settings';
+export type Tab = 'life' | 'activities' | 'home' | 'family' | 'store' | 'settings' | 'daily';
 
 export interface AppApi {
+  /** The save on screen: the family saga, or today's Daily Challenge life. */
   game: GameState | null;
+  /** The family saga, even while a Daily Challenge is on screen. */
+  family: GameState | null;
+  /** The Daily Challenge life in progress or finished (any date), if any. */
+  daily: GameState | null;
+  mode: 'family' | 'daily';
+  /** Starts today's challenge, or resumes it if it is already under way. */
+  playDaily(): void;
+  /** Leaves the challenge screen for the family (the challenge stays saved). */
+  backToFamily(): void;
   profile: Profile;
   theme: ThemeDef;
   /** Interface language; T() from i18n/ui reads the same value. */
@@ -33,11 +44,23 @@ export interface AppApi {
 
 export function useApp(): AppApi {
   const [profile, setProfile] = useState<Profile>(loadProfile);
-  const [game, setGame] = useState<GameState | null>(() => {
+  const [family, setFamily] = useState<GameState | null>(() => {
     const g = loadGame();
     if (g) refreshPacks(g, loadProfile());
     return g;
   });
+  const [daily, setDaily] = useState<GameState | null>(() => {
+    const g = loadDaily();
+    if (g) refreshPacks(g, loadProfile());
+    return g;
+  });
+  const [mode, setModeState] = useState<'family' | 'daily'>(() => (loadMode() === 'daily' && loadDaily() ? 'daily' : 'family'));
+  const setMode = (m: 'family' | 'daily') => {
+    saveMode(m);
+    setModeState(m);
+  };
+  const game = mode === 'daily' ? daily : family;
+  const persist = (g: GameState | null) => (g?.daily || (g === null && mode === 'daily') ? saveDaily(g) : saveGame(g));
   const [, setVersion] = useState(0);
   const [tab, setTab] = useState<Tab>('life');
   const [toastMsg, setToast] = useState<string | null>(null);
@@ -62,14 +85,36 @@ export function useApp(): AppApi {
     (fn: (s: GameState) => void) => {
       if (!game) return;
       fn(game);
-      saveGame(game);
+      if (game.daily) trackDaily(game);
+      persist(game);
       setVersion((v) => v + 1);
     },
-    [game],
+    [game, mode],
   );
 
   return {
     game,
+    family,
+    daily,
+    mode,
+    playDaily() {
+      const today = todayKey();
+      if (daily && daily.daily?.date === today) {
+        setMode('daily');
+        setTab('life');
+        return;
+      }
+      const g = newDailyGame(today, profile);
+      track('daily_start', { date: today, country: g.player.countryId, featured: g.daily?.featuredPack ?? 'none' });
+      saveDaily(g);
+      setDaily(g);
+      setMode('daily');
+      setTab('life');
+    },
+    backToFamily() {
+      setMode('family');
+      setTab('life');
+    },
     profile,
     theme,
     lang,
@@ -82,24 +127,32 @@ export function useApp(): AppApi {
     start(g) {
       track('life_start', { country: g.player.countryId, packs: g.enabledPacks.length, first_family: !(profile.tips ?? []).length });
       saveGame(g);
-      setGame(g);
+      setFamily(g);
+      setMode('family');
       setTab('life');
     },
     endGame() {
+      if (mode === 'daily') {
+        // giving up on a challenge life: drop it and return to the family
+        saveDaily(null);
+        setDaily(null);
+        setMode('family');
+        setTab('life');
+        return;
+      }
       track('new_family', { gen: game?.dynasty.generation ?? 0, dead: !!game?.dead });
       saveGame(null);
-      setGame(null);
+      setFamily(null);
       setTab('life');
     },
     updateProfile(fn) {
       const next = fn(profile);
       saveProfile(next);
       setProfile(next);
-      if (game) {
-        refreshPacks(game, next);
-        saveGame(game);
-        setVersion((v) => v + 1);
-      }
+      for (const g of [family, daily]) if (g) refreshPacks(g, next);
+      if (family) saveGame(family);
+      if (daily) saveDaily(daily);
+      setVersion((v) => v + 1);
     },
     toast(msg) {
       setToast(msg);

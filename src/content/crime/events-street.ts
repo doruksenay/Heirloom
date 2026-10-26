@@ -1,5 +1,5 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { acc, cap, gen, nm, wage } from '../base/util';
+import { acc, cap, gen, nm, officeJob, wage } from '../base/util';
 import { companyOf } from '../boss/state';
 import { say, sayWith, type Pair } from '../base/lines';
 import { inTr } from '../base/events-flavour';
@@ -116,8 +116,8 @@ const HEIST_FORGET: Pair[] = [
   ['You drew a little house on the whiteboard instead of a vault and went home to it.', 'Yazı tahtasına kasa yerine küçük bir ev çizdin ve kendi evine döndün.'],
 ];
 
-const OFFICE_FIELDS = ['office', 'tech', 'public'];
-export const deskJob = (c: Ctx) => OFFICE_FIELDS.includes(c.h.job()?.field ?? '');
+/** Cooking the books needs an employer's books: an office job with an expense account (base officeJob: no owners, no uniforms). */
+export const deskJob = (c: Ctx) => officeJob(c);
 
 function heistChoice(i: number, label: [string, string], badge?: string): ChoiceDef {
   return {
@@ -126,6 +126,7 @@ function heistChoice(i: number, label: [string, string], badge?: string): Choice
     badge,
     resolve: (c) => {
       const st = crimeState(c.p);
+      st.lastHeistYear = c.s.year; // planning starts the cooldown, whatever happens to the plan
       const a = c.h.newPerson({ age: Math.max(20, c.age + c.rng.int(-6, 6)) });
       const b = c.h.newPerson({ gender: 'male', age: Math.max(20, c.age + c.rng.int(-6, 6)) });
       st.heist = { target: i, crew: [a.id, b.id], year: c.s.year };
@@ -316,8 +317,9 @@ export const streetEvents: EventDef[] = [
         label: (c) => c.t('Sell it to a guy who knows a guy', 'Birilerini tanıyan birine sat'),
         badge: 'Illegal',
         resolve: (c) => {
-          if (c.rng.chance(0.55 - heatOf(c) / 400)) {
-            const take = wage(c, c.rng.int(4000, 12000));
+          // a fence pays a fraction of what the car is worth, and stolen cars are tracked: risky money (playtest 3 §2.14)
+          if (c.rng.chance(0.5 - heatOf(c) / 300)) {
+            const take = wage(c, c.rng.int(2500, 7000));
             c.h.money(take);
             gotAway(c, 'car_theft', take, 25);
             return sayWith(c, 'crime.car_theft.sold', CAR_SOLD, c.h.fmt(take));
@@ -349,7 +351,14 @@ export const streetEvents: EventDef[] = [
       heistChoice(0, ['The jewelry store', 'Kuyumcu']),
       heistChoice(1, ["The casino's counting room", 'Kumarhanenin sayım odası'], 'Big money'),
       heistChoice(2, ['The charity gala', 'Yardım galası']),
-      { id: 'forget', label: (c) => c.t('Forget it', 'Boş ver'), resolve: (c) => say(c, 'crime.heist_plan.forget', HEIST_FORGET) },
+      {
+        id: 'forget',
+        label: (c) => c.t('Forget it', 'Boş ver'),
+        resolve: (c) => {
+          crimeState(c.p).lastHeistYear = c.s.year; // the crew does not call back next year either
+          return say(c, 'crime.heist_plan.forget', HEIST_FORGET);
+        },
+      },
     ],
   },
   {

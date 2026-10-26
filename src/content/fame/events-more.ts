@@ -2,7 +2,7 @@ import type { ChoiceDef, Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { acc, cap, dat, gen, kin, wage, wth } from '../base/util';
 import { fameState, gainFans, isPath, loseFans, peekFame, songTitle, type FameState } from './state';
-import { compact, fameOf, free, hasPath } from './util';
+import { compact, fameOf, free, hasPath, motherAlive } from './util';
 
 // Fame v0.7: 31 more events. Music, social media, acting, and the life around fame (dynasty included).
 
@@ -104,7 +104,9 @@ export const moreFameEvents: EventDef[] = [
         label: (c) => c.t('Turn it down', 'Geri çevir'),
         resolve: (c) => {
           c.h.stat('happiness', 2);
-          return c.t('You said no. Your mother still has not forgiven you.', 'Hayır dedin. Annen hâlâ seni affetmedi.');
+          return motherAlive(c)
+            ? c.t('You said no. Your mother still has not forgiven you.', 'Hayır dedin. Annen hâlâ seni affetmedi.')
+            : c.t('You said no. Your fan club still has not forgiven you.', 'Hayır dedin. Hayran kulübün hâlâ seni affetmedi.');
         },
       },
     ],
@@ -606,9 +608,10 @@ export const moreFameEvents: EventDef[] = [
     text: (c) => {
       const i = Number(c.vars.what);
       const v = compact(c, Number(c.vars.viewers));
+      const mom = motherAlive(c);
       return c.t(
-        `For forty minutes, ${v} people watched ${['you sing to your fridge', 'your mother ask loudly when you will get a real job', 'you argue with your router'][i]}.`,
-        `Kırk dakika boyunca ${v} kişi ${['buzdolabına şarkı söyleyişini', 'annenin "Ne zaman doğru dürüst bir iş bulacaksın?" diye bağırışını', 'modeminle kavganı'][i]} izledi.`,
+        `For forty minutes, ${v} people watched ${['you sing to your fridge', mom ? 'your mother ask loudly when you will get a real job' : 'your neighbour bang on the wall and shout "Some of us work in the morning!"', 'you argue with your router'][i]}.`,
+        `Kırk dakika boyunca ${v} kişi ${['buzdolabına şarkı söyleyişini', mom ? 'annenin "Ne zaman doğru dürüst bir iş bulacaksın?" diye bağırışını' : 'komşunun duvarı yumruklayıp "Sabah işe gidecek insanlar var!" diye bağırışını', 'modeminle kavganı'][i]} izledi.`,
       );
     },
     choices: [
@@ -1123,7 +1126,7 @@ export const moreFameEvents: EventDef[] = [
             const g = gainFans(c, f, f.fans * 0.08 + 5000);
             return c.t(
               `Your story about your grandmother's pressure cooker became a meme. ${compact(c, g)} new fans.`,
-              `Babaannenin düdüklü tenceresiyle ilgili hikâyen caps oldu. ${compact(c, g)} yeni hayran.`,
+              `Ninenin düdüklü tenceresiyle ilgili hikâyen caps oldu. ${compact(c, g)} yeni hayran.`,
             );
           }
           c.h.stat('happiness', -3);
@@ -1147,10 +1150,15 @@ export const moreFameEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 4);
           const g = gainFans(c, fs(c), fs(c).fans * 0.06);
-          return c.t(
-            `You talked about growing up. Your mother called the show live to correct three details. ${compact(c, g)} new fans.`,
-            `Çocukluğunu anlattın. Annen canlı yayına bağlanıp üç ayrıntıyı düzeltti. ${compact(c, g)} yeni hayran.`,
-          );
+          return motherAlive(c)
+            ? c.t(
+                `You talked about growing up. Your mother called the show live to correct three details. ${compact(c, g)} new fans.`,
+                `Çocukluğunu anlattın. Annen canlı yayına bağlanıp üç ayrıntıyı düzeltti. ${compact(c, g)} yeni hayran.`,
+              )
+            : c.t(
+                `You talked about growing up. Your old primary school teacher called the show live to correct three details. ${compact(c, g)} new fans.`,
+                `Çocukluğunu anlattın. İlkokul öğretmenin canlı yayına bağlanıp üç ayrıntıyı düzeltti. ${compact(c, g)} yeni hayran.`,
+              );
         },
         tone: 'good',
       },

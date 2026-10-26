@@ -50,11 +50,11 @@ export const BASE_JOBS: JobDef[] = [
   // ---- v0.7: offered only by events and activities (scouts, trials, the recruitment office)
   { id: 'athlete', titles: ['Academy Player', 'Pro Footballer', 'First-Team Star', 'National Team Player'], titlesTr: ['Altyapı Oyuncusu', 'Profesyonel Futbolcu', 'As Oyuncu', 'Milli Futbolcu'], education: 'none', minSmarts: EVENT_ONLY, baseSalary: 30000, field: 'creative', eventOnly: true, requires: (c) => c.age >= 16 && c.age <= 22 && c.p.stats.health >= 70 },
   { id: 'coach', titles: ['Youth Coach', 'Assistant Coach', 'Head Coach', 'National Team Coach'], titlesTr: ['Altyapı Antrenörü', 'Yardımcı Antrenör', 'Teknik Direktör', 'Milli Takım Teknik Direktörü'], education: 'none', minSmarts: EVENT_ONLY, baseSalary: 34000, field: 'public', eventOnly: true },
-  { id: 'soldier', titles: ['Private', 'Corporal', 'Sergeant', 'Master Sergeant', 'Sergeant Major'], titlesTr: ['Er', 'Onbaşı', 'Uzman Çavuş', 'Başçavuş', 'Kıdemli Başçavuş'], education: 'highschool', minSmarts: EVENT_ONLY, baseSalary: 30000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 18 && c.age <= 32 && c.p.stats.health >= 40 },
+  { id: 'soldier', titles: ['Private', 'Corporal', 'Sergeant', 'Master Sergeant', 'Sergeant Major'], titlesTr: ['Sözleşmeli Er', 'Onbaşı', 'Uzman Çavuş', 'Başçavuş', 'Kıdemli Başçavuş'], education: 'highschool', minSmarts: EVENT_ONLY, baseSalary: 30000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 18 && c.age <= 32 && c.p.stats.health >= 40 },
   { id: 'officer', titles: ['Lieutenant', 'Captain', 'Major', 'Colonel', 'General'], titlesTr: ['Teğmen', 'Yüzbaşı', 'Binbaşı', 'Albay', 'General'], education: 'university', minSmarts: EVENT_ONLY, baseSalary: 46000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 21 && c.age <= 32 && c.p.stats.health >= 40 },
 
   // ---- v0.7: offered through the regular job listings
-  { id: 'artist', titles: ['Struggling Painter', 'Working Artist', 'Gallery Artist', 'Renowned Painter'], titlesTr: ['Aç Ressam', 'Ressam', 'Galeri Sanatçısı', 'Ünlü Ressam'], education: 'none', minSmarts: 15, baseSalary: 13000, field: 'creative' },
+  { id: 'artist', titles: ['Struggling Painter', 'Working Artist', 'Gallery Artist', 'Renowned Painter'], titlesTr: ['Meteliksiz Ressam', 'Ressam', 'Galeri Sanatçısı', 'Ünlü Ressam'], education: 'none', minSmarts: 15, baseSalary: 13000, field: 'creative' },
   { id: 'farmer', titles: ['Farmhand', 'Farmer', 'Farm Owner'], titlesTr: ['Tarım İşçisi', 'Çiftçi', 'Çiftlik Sahibi'], education: 'none', minSmarts: 0, baseSalary: 21000, field: 'trade' },
   { id: 'fisher', titles: ['Deckhand', 'Fisher', 'Boat Captain'], titlesTr: ['Tayfa', 'Balıkçı', 'Balıkçı Reisi'], education: 'none', minSmarts: 0, baseSalary: 22000, field: 'trade' },
   { id: 'taxi', titles: ['Taxi Driver', 'Senior Driver', 'Medallion Owner'], titlesTr: ['Taksi Şoförü', 'Kıdemli Taksici', 'Plaka Sahibi'], education: 'none', minSmarts: 5, baseSalary: 25000, field: 'service' },
@@ -79,4 +79,33 @@ export function titleFor(job: JobDef, level: number, lang: 'en' | 'tr' = 'en'): 
 
 export function salaryFor(job: JobDef, level: number, wageFactor: number): number {
   return Math.round(job.baseSalary * (1 + 0.32 * level) * wageFactor);
+}
+
+/** Minimum number of title levels for a ladder to count as a "career top" (the goal and the top_job badge). */
+export const CAREER_TOP_MIN_LEVELS = 4;
+
+/**
+ * Whether taking `job` at `level` would be a step up for the player (playtest 3 §2.10: a Dean was offered
+ * "Probationary Firefighter", a senior researcher "Junior Engineer"). Use it to filter headhunter, career fair
+ * and recruiter offers. No RNG, language-independent.
+ *
+ * - No job, retired, or a job whose definition is unknown: any offer is fine (true).
+ * - The same job: only a higher level.
+ * - Another job: it must pay at least 10% more at the same wage factor, and someone already above the entry
+ *   rung never goes back to an entry title (level 0).
+ *
+ * Pass the JobDef for pack jobs; a string id is resolved against the base jobs and the player's current job only.
+ */
+export function isCareerUpgrade(c: Ctx, job: JobDef | string, level = 0): boolean {
+  const p = c.p;
+  if (!p.jobId || p.retired) return true;
+  const cur = c.h.job();
+  if (!cur) return true;
+  const target = typeof job === 'string' ? (job === cur.id ? cur : BASE_JOBS.find((j) => j.id === job)) : job;
+  if (!target) return false;
+  const lvl = Math.max(0, Math.min(level, target.titles.length - 1));
+  if (target.id === cur.id) return lvl > p.jobLevel;
+  if (p.jobLevel >= 1 && lvl === 0) return false;
+  const pay = (j: JobDef, l: number) => j.baseSalary * (1 + 0.32 * l);
+  return pay(target, lvl) >= pay(cur, p.jobLevel) * 1.1;
 }

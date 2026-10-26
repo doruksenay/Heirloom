@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { abl, acc, dat, gen, loc, wth, PRONOUNCED } from '../src/i18n/tr-grammar';
+import { abl, acc, da, dat, gen, loc, wth, PRONOUNCED } from '../src/i18n/tr-grammar';
 import { COUNTRIES } from '../src/engine/world';
 import { cityName } from '../src/engine/places';
 import { PET_KINDS, TURKISH_PET_NAMES, petNames } from '../src/engine/pets';
@@ -149,3 +149,11 @@ describe('turkish suffixes', () => {
   });
 });
 
+
+describe('de/da particle', () => {
+  it('follows vowel harmony and never softens', () => {
+    expect(['Gizem', 'Emre', 'Pamuk', 'Carlos', 'Alp', 'Charlotte', 'Berk', 'Ruby'].map(da)).toEqual([
+      'Gizem de', 'Emre de', 'Pamuk da', 'Carlos da', 'Alp de', 'Charlotte da', 'Berk de', 'Ruby de',
+    ]);
+  });
+});

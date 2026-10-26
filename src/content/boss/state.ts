@@ -19,6 +19,8 @@ export interface IndustryDef {
   staffCost: number; // per employee per year
   revPerHead: number; // revenue one person can carry
   market: number; // yearly revenue ceiling for the whole market you can win
+  /** Rent, admin, licences and marketing as a share of revenue, on top of staff (v0.9 economy pass). */
+  overhead: number;
   /**
    * Company names as [English, Turkish] pairs. `tr` is for lives in Türkiye (Turkish flavour: Rize, tavşan kanı,
    * ince belli); `other` is for every other country and carries no Turkish flavour; a country may add its own list.
@@ -33,7 +35,7 @@ const same = (...xs: string[]): NamePair[] => xs.map((x) => [x, x] as const);
 
 export const INDUSTRIES: Record<Industry, IndustryDef> = {
   cafe: {
-    name: 'Café', pitch: 'A cozy neighborhood café', nameTr: 'Kafe', pitchTr: 'Sıcacık bir mahalle kafesi', kindTr: 'mahalle kafesi', startCost: 9000, growth: 0.08, grossMargin: 0.5, volatility: 0.12, multiple: 1.5, staffCost: 18000, revPerHead: 70000, market: 4_000_000,
+    name: 'Café', pitch: 'A cozy neighborhood café', nameTr: 'Kafe', pitchTr: 'Sıcacık bir mahalle kafesi', kindTr: 'mahalle kafesi', startCost: 9000, growth: 0.08, grossMargin: 0.5, volatility: 0.12, multiple: 1.2, staffCost: 18000, revPerHead: 70000, market: 4_000_000, overhead: 0.1,
     names: {
       tr: [['Bean There', 'Köşe Kahve'], ['The Daily Grind', 'Demlik Kafe'], ['Kettle House', 'Bi Kahve Daha'], ['Second Cup Corner', 'Mahalle Kahvecisi']],
       other: [['Bean There', 'Bean There'], ['Corner Cup', 'Köşe Fincan'], ['Kettle House', 'Kettle House'], ['Morning Ritual', 'Sabah Ritüeli']],
@@ -42,7 +44,7 @@ export const INDUSTRIES: Record<Industry, IndustryDef> = {
     },
   },
   tea: {
-    name: 'Tea brand', pitch: 'Packaged tea for the whole country', nameTr: 'Çay markası', pitchTr: 'Bütün ülkeye paket çay', kindTr: 'çay markası', startCost: 6000, growth: 0.12, grossMargin: 0.58, volatility: 0.18, multiple: 3, staffCost: 22000, revPerHead: 120000, market: 80_000_000,
+    name: 'Tea brand', pitch: 'Packaged tea for the whole country', nameTr: 'Çay markası', pitchTr: 'Bütün ülkeye paket çay', kindTr: 'çay markası', startCost: 6000, growth: 0.12, grossMargin: 0.58, volatility: 0.18, multiple: 2, staffCost: 22000, revPerHead: 120000, market: 80_000_000, overhead: 0.22,
     names: {
       tr: [['Rize Gold', 'Rize Altını'], ['Rabbit Blood Tea', 'Tavşan Kanı Çay'], ['Leaf Republic', 'Yaprak Cumhuriyeti'], ['Tulip Glass Tea', 'İnce Belli Çay']],
       other: [['Steep & Co.', 'Steep & Co.'], ['Leaf Republic', 'Yaprak Cumhuriyeti'], ['Silver Kettle', 'Gümüş Çaydanlık'], ['Cloud Leaf', 'Bulut Yaprak']],
@@ -51,14 +53,14 @@ export const INDUSTRIES: Record<Industry, IndustryDef> = {
     },
   },
   fashion: {
-    name: 'Fashion label', pitch: 'Your own clothing line', nameTr: 'Moda markası', pitchTr: 'Kendi giyim markan', kindTr: 'giyim markası', startCost: 12000, growth: 0.15, grossMargin: 0.55, volatility: 0.3, multiple: 2.5, staffCost: 30000, revPerHead: 130000, market: 250_000_000,
+    name: 'Fashion label', pitch: 'Your own clothing line', nameTr: 'Moda markası', pitchTr: 'Kendi giyim markan', kindTr: 'giyim markası', startCost: 12000, growth: 0.15, grossMargin: 0.55, volatility: 0.3, multiple: 1.8, staffCost: 30000, revPerHead: 130000, market: 250_000_000, overhead: 0.17,
     names: {
       tr: [['Atelier North', 'Atölye Poyraz'], ['Loom & Thread', 'İğne İplik'], ['Velvet Riot', 'Kadife İsyan'], ['Plain Studio', 'Sade Stüdyo']],
       other: [['Atelier North', 'Atelier North'], ['Loom & Thread', 'İğne İplik'], ['Velvet Riot', 'Kadife İsyan'], ['Plain Studio', 'Sade Stüdyo']],
     },
   },
   food: {
-    name: 'Food delivery', pitch: 'Hot meals to doors in 20 minutes', nameTr: 'Yemek siparişi', pitchTr: '20 dakikada kapıya sıcak yemek', kindTr: 'yemek siparişi girişimi', startCost: 10000, growth: 0.25, grossMargin: 0.32, volatility: 0.35, multiple: 4, staffCost: 25000, revPerHead: 100000, market: 600_000_000,
+    name: 'Food delivery', pitch: 'Hot meals to doors in 20 minutes', nameTr: 'Yemek siparişi', pitchTr: '20 dakikada kapıya sıcak yemek', kindTr: 'yemek siparişi girişimi', startCost: 10000, growth: 0.25, grossMargin: 0.32, volatility: 0.35, multiple: 2.5, staffCost: 25000, revPerHead: 100000, market: 600_000_000, overhead: 0.02,
     names: {
       tr: [['Doorstep', 'Sıcak Sefer'], ['Hungry Fox', 'Aç Tilki'], ['Lunchbox', 'Sefer Tası'], ['Kapı Kapı', 'Kapı Kapı']],
       other: [['Doorstep', 'Kapıda'], ['Hungry Fox', 'Aç Tilki'], ['Lunchbox', 'Lunchbox'], ['Hot Plate', 'Sıcak Tabak']],
@@ -66,16 +68,17 @@ export const INDUSTRIES: Record<Industry, IndustryDef> = {
     },
   },
   app: {
-    name: 'Tech startup', pitch: 'An app that fixes something annoying', nameTr: 'Teknoloji girişimi', pitchTr: 'Sinir bozucu bir derde çare olan bir uygulama', kindTr: 'teknoloji girişimi', startCost: 5000, growth: 0.35, grossMargin: 0.85, volatility: 0.5, multiple: 8, staffCost: 60000, revPerHead: 260000, market: 2_500_000_000,
+    name: 'Tech startup', pitch: 'An app that fixes something annoying', nameTr: 'Teknoloji girişimi', pitchTr: 'Sinir bozucu bir derde çare olan bir uygulama', kindTr: 'teknoloji girişimi', startCost: 5000, growth: 0.35, grossMargin: 0.85, volatility: 0.5, multiple: 5, staffCost: 60000, revPerHead: 260000, market: 2_500_000_000, overhead: 0.45,
     names: {
       tr: [['Nudgely', 'Dürtbi'], ['Orbit Labs', 'Yörünge Lab'], ['Pocketwise', 'Cepte'], ['Fixr', 'Hallet']],
       other: [['Nudgely', 'Dürtbi'], ['Orbit Labs', 'Yörünge Lab'], ['Pocketwise', 'Pocketwise'], ['Fixr', 'Fixr']],
     },
   },
   games: {
-    name: 'Mobile game studio', pitch: 'Little games, big downloads', nameTr: 'Mobil oyun stüdyosu', pitchTr: 'Küçük oyunlar, büyük indirmeler', kindTr: 'mobil oyun stüdyosu', startCost: 7000, growth: 0.3, grossMargin: 0.7, volatility: 0.6, multiple: 6, staffCost: 55000, revPerHead: 220000, market: 1_200_000_000,
+    name: 'Mobile game studio', pitch: 'Little games, big downloads', nameTr: 'Mobil oyun stüdyosu', pitchTr: 'Küçük oyunlar, büyük indirmeler', kindTr: 'mobil oyun stüdyosu', startCost: 7000, growth: 0.3, grossMargin: 0.7, volatility: 0.6, multiple: 4, staffCost: 55000, revPerHead: 220000, market: 1_200_000_000, overhead: 0.35,
     names: {
-      tr: [['Tiny Lantern', 'Minik Fener'], ['Pixel Kiln', 'Piksel Fırın'], ['Golden Goose Games', 'Altın Kaz Oyun'], ['Heirloom Interactive', 'Heirloom Interactive']],
+      // "Heirloom" is "yadigâr": no English studio name in a life in Türkiye (playtest 3 §2.15)
+      tr: [['Tiny Lantern', 'Minik Fener'], ['Pixel Kiln', 'Piksel Fırın'], ['Golden Goose Games', 'Altın Kaz Oyun'], ['Yadigar Games', 'Yadigâr Oyun']],
       other: [['Tiny Lantern', 'Minik Fener'], ['Pixel Kiln', 'Piksel Fırın'], ['Golden Goose Games', 'Altın Kaz Oyun'], ['Heirloom Interactive', 'Heirloom Interactive']],
     },
   },
@@ -190,11 +193,19 @@ export function addMark(c: Company, m: string) {
 
 const STAGE_FACTOR: Record<Stage, number> = { garage: 0.6, startup: 1, scaleup: 1.3, public: 1.6 };
 
-export function valuate(c: Company): number {
+/**
+ * Buyers pay a growth premium for a young company; a mature one is priced more like a steady business.
+ * Full multiple for the first five years, then down 2% a year to 30% of it (playtest 3 §2.9). No RNG.
+ */
+export const maturity = (age: number) => Math.max(0.3, 1 - 0.02 * Math.max(0, age - 5));
+
+/** What the company is worth. Pass the current year so the age discount applies (older callers may omit it). */
+export function valuate(c: Company, year?: number): number {
   const ind = INDUSTRIES[c.industry];
   const profitable = c.lastProfit > 0 ? 1 : 0.6;
-  // cash counts only up to one year of revenue; beyond that investors assume it gets spent
-  return Math.max(0, Math.round(c.revenue * ind.multiple * profitable * STAGE_FACTOR[c.stage] + Math.max(0, Math.min(c.cash, c.revenue))));
+  const mature = year === undefined ? 1 : maturity(year - c.founded);
+  // cash counts only up to half a year of revenue; beyond that investors assume it gets spent
+  return Math.max(0, Math.round(c.revenue * ind.multiple * mature * profitable * STAGE_FACTOR[c.stage] + Math.max(0, Math.min(c.cash, c.revenue * 0.5))));
 }
 
 /**
@@ -203,6 +214,28 @@ export function valuate(c: Company): number {
  */
 export const SALE_KEEP = 0.8;
 export const saleShare = (price: number, ownership: number) => Math.round(price * ownership * SALE_KEEP);
+
+/**
+ * How many people's worth of sales a team of `employees` plus you can carry. Each hire adds a little less than the
+ * last (meetings, handovers, a second floor): 1 person = 1, 8 people ≈ 6.6, 51 people ≈ 32. No RNG.
+ */
+export const TEAM_EXPONENT = 0.9;
+export const teamCapacity = (employees: number) => Math.pow(Math.max(0, employees) + 1, TEAM_EXPONENT);
+
+/** Share of a dividend that goes to tax before it reaches your account. */
+export const DIVIDEND_TAX = 0.25;
+
+/**
+ * Diminishing returns on size (playtest 3 §2.9: boss lives ended about 8× richer than free lives): past about
+ * $200k a year in sales (US-baseline, scaled by the country's wage factor `wf`), every tenfold costs a few points
+ * of yearly growth. Small firms are untouched. No RNG.
+ */
+export const SCALE_DRAG = 0.08;
+export const SCALE_FROM = 200_000;
+export function scaleDrag(revenue: number, wf: number): number {
+  const big = revenue / (SCALE_FROM * wf);
+  return big > 1 ? Math.min(0.25, SCALE_DRAG * Math.log10(big)) : 0;
+}
 
 /**
  * Price ranges (percent of the current valuation) for each way a company can be sold.

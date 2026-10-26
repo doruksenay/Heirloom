@@ -1,10 +1,14 @@
-import type { EventDef } from '../types';
+import type { Ctx, EventDef } from '../types';
 import { aOrAn, cap, dat, eligibleJobs, gen, kin, nm, wage } from '../base/util';
 import { titleFor } from '../../engine/careers';
 import { arrest, crimeState, free, gotAway, goneStraight, heatOf, peekCrime, reform } from './state';
 
 // After prison: a record that follows you, kids who ask questions, old friends who want "one last job",
 // a way back, and secrets the next generation finds in the attic.
+
+/** What is in the attic box: clippings for a famous trial or a cold case, a court letter for a small record. */
+const papers = (c: Ctx): [string, string] =>
+  Number(c.vars.record) && !Number(c.vars.famous ?? 1) ? ['the papers', 'Kâğıtları'] : ['the clippings', 'Kupürleri'];
 
 export const afterEvents: EventDef[] = [
   {
@@ -244,6 +248,8 @@ export const afterEvents: EventDef[] = [
       c.vars.name = lg.name;
       c.vars.stash = lg.stash;
       c.vars.record = lg.record;
+      // a small record leaves a small trace; only a real reputation fills a box with clippings (older saves: 3+ convictions)
+      c.vars.famous = (lg.famous ?? lg.record >= 3) ? 1 : 0;
       // the parent handed over the torch and is still around (and can be asked)
       const parent = lg.id ? c.h.person(lg.id) : undefined;
       c.vars.alive = parent && parent.deathYear === undefined ? 1 : 0;
@@ -252,7 +258,9 @@ export const afterEvents: EventDef[] = [
     text: (c) => {
       const n = String(c.vars.name);
       const what = Number(c.vars.record)
-        ? c.t('newspaper clippings about the trial, every single one', 'davayla ilgili, tek tek kesilip saklanmış gazete kupürleri')
+        ? Number(c.vars.famous ?? 1)
+          ? c.t('newspaper clippings about the trial, every single one', 'davayla ilgili, tek tek kesilip saklanmış gazete kupürleri')
+          : c.t('an old court letter folded very small, and the receipt for a fine', 'çok küçük katlanmış eski bir mahkeme yazısı ve bir para cezası makbuzu')
         : c.t('newspaper clippings about an unsolved robbery, circled in red', 'çözülemeyen bir soygunla ilgili, kırmızı kalemle daire içine alınmış gazete kupürleri');
       return Number(c.vars.stash)
         ? c.t(`Under ${n}'s old coats: ${what}, and a bundle of cash wrapped in a tea towel.`, `${gen(n)} eski paltolarının altında ${what} ve bir mutfak bezine sarılmış bir tomar para var.`)
@@ -261,7 +269,7 @@ export const afterEvents: EventDef[] = [
     choices: [
       {
         id: 'keep',
-        label: (c) => (Number(c.vars.stash) ? c.t('Keep the money', 'Parayı al') : c.t('Keep the clippings', 'Kupürleri sakla')),
+        label: (c) => (Number(c.vars.stash) ? c.t('Keep the money', 'Parayı al') : c.t(`Keep ${papers(c)[0]}`, `${papers(c)[1]} sakla`)),
         resolve: (c) => {
           const lg = crimeState(c.p).legacy!;
           lg.found = true;
@@ -273,13 +281,13 @@ export const afterEvents: EventDef[] = [
           }
           if (Number(c.vars.alive)) {
             return c.t(
-              `You put the clippings back exactly where you found them. You have not said a word to ${c.vars.name}. Yet.`,
-              `Kupürleri bulduğun yere, aynen bulduğun gibi geri koydun. ${dat(String(c.vars.name))} henüz tek kelime etmedin.`,
+              `You put ${papers(c)[0]} back exactly where you found them. You have not said a word to ${c.vars.name}. Yet.`,
+              `${papers(c)[1]} bulduğun yere, aynen bulduğun gibi geri koydun. ${dat(String(c.vars.name))} henüz tek kelime etmedin.`,
             );
           }
           return c.t(
-            `You put the clippings in a drawer. Sometimes you read them and wonder who ${c.vars.name} really was.`,
-            `Kupürleri bir çekmeceye koydun. Bazen okuyup ${gen(String(c.vars.name))} aslında kim olduğunu düşünüyorsun.`,
+            `You put ${papers(c)[0]} in a drawer. Sometimes you read them and wonder who ${c.vars.name} really was.`,
+            `${papers(c)[1]} bir çekmeceye koydun. Bazen okuyup ${gen(String(c.vars.name))} aslında kim olduğunu düşünüyorsun.`,
           );
         },
       },
@@ -299,7 +307,7 @@ export const afterEvents: EventDef[] = [
       },
       {
         id: 'donate',
-        label: (c) => (Number(c.vars.stash) ? c.t('Give the money away', 'Parayı bağışla') : c.t('Burn the clippings', 'Kupürleri yak')),
+        label: (c) => (Number(c.vars.stash) ? c.t('Give the money away', 'Parayı bağışla') : c.t(`Burn ${papers(c)[0]}`, `${papers(c)[1]} yak`)),
         resolve: (c) => {
           crimeState(c.p).legacy!.found = true;
           const n = String(c.vars.name);
@@ -308,7 +316,7 @@ export const afterEvents: EventDef[] = [
             return c.t(`You gave every note to the children's hospital, anonymously. It seemed like the least ${n} owed the world.`, `Paranın tamamını isimsiz olarak çocuk hastanesine bağışladın. ${gen(n)} dünyaya olan borcunun en azı buydu.`);
           }
           c.h.stat('happiness', -1);
-          return c.t('You burned the clippings in the garden. Some stories should end with you.', 'Kupürleri bahçede yaktın. Bazı hikâyeler seninle bitmeli.');
+          return c.t(`You burned ${papers(c)[0]} in the garden. Some stories should end with you.`, `${papers(c)[1]} bahçede yaktın. Bazı hikâyeler seninle bitmeli.`);
         },
       },
     ],

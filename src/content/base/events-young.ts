@@ -1,5 +1,5 @@
 import type { EventDef } from '../types';
-import { cap, dat, gen, kin, nm, wage, who, wth } from './util';
+import { cap, da, dat, gen, kin, nm, wage, who, wth, quietInMourning } from './util';
 import { coastal, He, he, him } from './events-flavour';
 import { catName, syncFlagCat } from '../../engine/pets';
 
@@ -355,7 +355,7 @@ export const youngEvents: EventDef[] = [
             c.h.stat('happiness', 10);
             return c.t(
               `${nm(c)} said ${he(who(c))} likes you too. You held hands at the bus stop.`,
-              `${nm(c)} da senden hoşlandığını söyledi. Otobüs durağında el ele tutuştunuz.`,
+              `${da(nm(c))} senden hoşlandığını söyledi. Otobüs durağında el ele tutuştunuz.`,
             );
           }
           c.h.stat('happiness', -7);
@@ -389,10 +389,16 @@ export const youngEvents: EventDef[] = [
     minAge: 15,
     maxAge: 24,
     title: (c) => c.t('You are invited to the biggest party of the year.', 'Yılın en büyük partisine davetlisin.'),
-    text: (c) =>
-      c.age < 18
-        ? c.t('Your parents said absolutely not.', 'Ailen "Kesinlikle olmaz" dedi.')
-        : c.t('You have work early tomorrow.', 'Yarın sabah erkenden işe gideceksin.'),
+    // the catch fits the player's week: parents, an early shift, a lecture, or nothing at all
+    text: (c) => {
+      if (c.age < 18) return c.t('Your parents said absolutely not.', 'Ailen "Kesinlikle olmaz" dedi.');
+      if (c.p.jobId && !c.p.retired) return c.t('You have work early tomorrow.', 'Yarın sabah erkenden işe gideceksin.');
+      if (c.p.school === 'university') return c.t('You have a nine o\'clock lecture tomorrow.', 'Yarın sabah dokuzda dersin var.');
+      const released = (c.p.ext?.crime as { releasedYear?: number } | undefined)?.releasedYear ?? 0;
+      if (released > 0 && c.s.year - released <= 1)
+        return c.t('You only got out recently. A quiet night in would be the sensible choice.', 'Daha yeni çıktın. Akıllıca olan, evde sakin bir gece geçirmek.');
+      return c.t('You have nothing on tomorrow. That is either freedom or a warning sign.', 'Yarın hiçbir işin yok. Bu ya özgürlük ya da bir uyarı işareti.');
+    },
     choices: [
       {
         id: 'go',
@@ -516,3 +522,5 @@ export const youngEvents: EventDef[] = [
     ],
   },
 ];
+
+quietInMourning(youngEvents);

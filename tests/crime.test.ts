@@ -5,7 +5,7 @@ import { makeCtx } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { getCountry } from '../src/engine/world';
 import { crimePack } from '../src/content/crime';
-import { arrest, MAX_JAIL, peekCrime } from '../src/content/crime/state';
+import { arrest, crimeState, MAX_JAIL, peekCrime } from '../src/content/crime/state';
 import type { Lang, Profile } from '../src/engine/types';
 
 /** Crime only by default, so the money checks measure crime and not company sales. */
@@ -133,17 +133,38 @@ describe('Crime World expansion', () => {
     expect(tried).toBeGreaterThan(5);
   });
 
-  it('a convicted parent leaves a story for the heir', () => {
+  /** A parent with a record dies; returns the heir's state. `years` sentenced, last crime `ago` years before death. */
+  function heirOf(record: number, years: number, ago: number) {
     const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed: 9 }, crimeProfile('tr'));
-    s.year += 40;
+    s.year += 60;
     const c = makeCtx(s);
     c.h.addRelation(c.h.newPerson({ age: 15, lastName: 'Yılmaz' }), 'child', 90);
-    s.player.criminalRecord = 2;
+    s.player.criminalRecord = record;
+    const st = crimeState(s.player);
+    st.sentenced = years;
+    st.lastCrimeYear = s.year - ago;
     s.player.deathCause = 'old age';
     finishLife(s);
     continueAsChild(s, heirs(s)[0].id);
+    return s;
+  }
+
+  it('a parent with a real reputation leaves a story the whole town remembers', () => {
+    const s = heirOf(3, 6, 8);
     expect(peekCrime(s.player)?.legacy?.name).toBe('Ada');
+    expect(peekCrime(s.player)?.legacy?.famous).toBe(true);
     expect(s.player.log.some((l) => l.text.includes('Ada Yılmaz davasını'))).toBe(true);
+  });
+
+  it('one old shoplifting conviction is not "the trial everyone remembers" (playtest 3 §2.14)', () => {
+    const s = heirOf(1, 1, 45);
+    // the secret still waits in the attic, as a small court letter rather than a box of clippings
+    expect(peekCrime(s.player)?.legacy?.name).toBe('Ada');
+    expect(peekCrime(s.player)?.legacy?.famous).toBe(false);
+    expect(s.player.log.some((l) => l.text.includes('davasını hâlâ hatırlıyor'))).toBe(false);
+    // a long record from long ago is not remembered either
+    const old = heirOf(4, 8, 45);
+    expect(old.player.log.some((l) => l.text.includes('davasını hâlâ hatırlıyor'))).toBe(false);
   });
 });
 
@@ -176,5 +197,80 @@ describe('crime round-2 playtest fixes', () => {
     const s = newGame({ firstName: 'Ada', lastName: 'Silva', gender: 'female', countryId: 'br', city: 'Curitiba', seed: 3 }, crimeProfile('tr'));
     const text = typeof def.text === 'function' ? def.text(makeCtx(s)) : def.text;
     expect(text).not.toMatch(/mercimek/i);
+  });
+});
+
+describe('crime round-3 balance (playtest 3 §2.14)', () => {
+  const adult = (seed: number, age = 25) => {
+    const s = newGame({ firstName: 'Uğur', lastName: 'Korkmaz', gender: 'male', countryId: 'tr', city: 'Konya', seed }, crimeProfile('tr'));
+    s.year += age;
+    s.player.stats.health = 100;
+    return s;
+  };
+  const canDo = (s: ReturnType<typeof adult>, id: string) => {
+    const a = activitiesFor(s.enabledPacks).find((x) => x.id === id)!;
+    return !a.available || a.available(makeCtx(s));
+  };
+
+  it('a first or second shoplifting never ends in prison; a long record can', () => {
+    for (let seed = 1; seed <= 300; seed++) {
+      const s = adult(seed);
+      doActivity(s, 'shoplift');
+      expect(s.player.jailYears, `seed ${seed}`).toBe(0);
+    }
+    let jailed = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const s = adult(seed);
+      s.player.criminalRecord = 3;
+      doActivity(s, 'shoplift');
+      if (s.player.jailYears > 0) jailed++;
+    }
+    expect(jailed).toBeGreaterThan(5);
+    expect(jailed).toBeLessThan(60); // about 30% of the 30% who get caught
+  });
+
+  it('a stolen car sells for a fraction of its worth, and often ends in an arrest', () => {
+    const wf = getCountry('tr').wageFactor;
+    let sold = 0;
+    let arrested = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const s = adult(seed);
+      doActivity(s, 'crime_car');
+      const before = s.player.money;
+      choose(s, 'sell');
+      const gain = s.player.money - before;
+      if (gain > 0) {
+        sold++;
+        expect(gain).toBeLessThanOrEqual(Math.round(7000 * wf));
+      } else arrested++;
+    }
+    expect(sold).toBeGreaterThan(60);
+    expect(arrested).toBeGreaterThan(60);
+  });
+
+  it('plans at most one heist every five years, even when the plan is called off', () => {
+    const s = adult(4, 30);
+    expect(canDo(s, 'crime_heist')).toBe(true);
+    doActivity(s, 'crime_heist');
+    expect(s.pending?.eventId).toBe('crime.heist_plan');
+    choose(s, 'forget');
+    for (let y = 1; y < 5; y++) {
+      s.year++;
+      s.player.actionsThisYear = {};
+      expect(canDo(s, 'crime_heist'), `year ${y}`).toBe(false);
+    }
+    s.year++;
+    expect(canDo(s, 'crime_heist')).toBe(true);
+  });
+
+  it('cooking the books needs an office job, not a uniform or your own company', () => {
+    const s = adult(5, 35);
+    s.player.education = 'university';
+    s.player.jobId = 'accountant';
+    expect(canDo(s, 'crime_embezzle')).toBe(true);
+    s.player.jobId = 'firefighter';
+    expect(canDo(s, 'crime_embezzle')).toBe(false);
+    s.player.jobId = 'police';
+    expect(canDo(s, 'crime_embezzle')).toBe(false);
   });
 });

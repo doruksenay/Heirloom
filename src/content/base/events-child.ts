@@ -1,5 +1,5 @@
 import type { Ctx, EventDef } from '../types';
-import { abl, acc, cap, dat, gen, loc, wage, who, wth } from './util';
+import { abl, acc, cap, da, dat, gen, loc, wage, who, wth, quietInMourning } from './util';
 import { getCountry } from '../../engine/world';
 import { byCountry, cityOf, he, He, him, his, inTr, type ByCountry } from './events-flavour';
 
@@ -80,18 +80,24 @@ function kb(c: Ctx, key = 'pid', form: Form = 'nom'): string {
   return c.t(`your ${en}${form === 'gen' ? "'s" : ''}`, trPoss(tr, form));
 }
 
-/** Grandparent on the side of the parent in vars.gs, gender in vars.gg: anneannen / babaannen / deden. */
+/**
+ * Grandparent, gender in vars.gg: deden, or a grandmother. Turkish names a grandmother by her side (anneanne,
+ * babaanne) only when the event says which parent she belongs to (vars.gsn = 1, side in vars.gs); otherwise she
+ * is "ninen", which fits either side.
+ */
 function gp(c: Ctx, form: Form = 'nom'): string {
   const male = c.vars.gg === 'm';
-  const tr = male ? 'deden' : c.vars.gs === 'mother' ? 'anneannen' : 'babaannen';
+  const tr = male ? 'deden' : Number(c.vars.gsn) !== 1 ? 'ninen' : c.vars.gs === 'mother' ? 'anneannen' : 'babaannen';
   return c.t(`your ${male ? 'grandpa' : 'grandma'}${form === 'gen' ? "'s" : ''}`, trPoss(tr, form));
 }
 const GP = (c: Ctx, form: Form = 'nom') => cap(gp(c, form));
 
-function pickGrandparent(c: Ctx, male?: boolean) {
+/** Picks a grandparent through a living parent (one rng call for the parent, one for the gender unless given). sideNamed: the event names that parent. */
+function pickGrandparent(c: Ctx, male?: boolean, sideNamed = false) {
   pickParent(c);
   c.vars.gs = String(c.vars.pidk ?? 'mother');
   c.vars.gg = male ?? c.rng.chance(0.5) ? 'm' : 'f';
+  c.vars.gsn = sideNamed ? 1 : 0;
 }
 
 /** Heirloom words with their Turkish case forms. */
@@ -294,7 +300,7 @@ export const childEvents: EventDef[] = [
         ],
         [
           'You escaped mid-bath and ran naked through the living room while the guests were having tea.',
-          'Banyonun ortasında kaçıp misafirler çay içerken salonda çırılçıplak koşturdun.',
+          'Banyonun ortasında kaçtın ve misafirler çay içerken salonda çırılçıplak koşturdun.',
         ],
       ]);
     },
@@ -381,7 +387,8 @@ export const childEvents: EventDef[] = [
     once: true,
     weight: 8,
     when: hasParent,
-    setup: (c) => pickGrandparent(c),
+    // the text names the parent whose rules do not apply, so the grandmother's side is known
+    setup: (c) => pickGrandparent(c, undefined, true),
     title: (c) => c.t(`${GP(c)} is babysitting you today.`, `Bugün sana ${gp(c)} bakıyor.`),
     text: (c) =>
       c.t(`${cap(kb(c, 'pid', 'gen'))} rules do not apply here.`, `${cap(kb(c, 'pid', 'gen'))} koyduğu kurallar burada geçmez.`),
@@ -968,7 +975,7 @@ export const childEvents: EventDef[] = [
             c.h.stat('happiness', 2);
             return c.t(
               `You told on ${rk(c, 'sid')}. You got your way and ${s} got a long lecture. ${s} will remember this.`,
-              `${cap(rk(c, 'sid', 'acc'))} şikâyet ettin. Dediğin oldu, ${s} de uzun bir nutuk yedi. Bunu unutmayacak.`,
+              `${cap(rk(c, 'sid', 'acc'))} şikâyet ettin. Dediğin oldu, ${da(s)} uzun bir nutuk yedi. Bunu unutmayacak.`,
             );
           }
           c.h.stat('happiness', -2);
@@ -1782,8 +1789,7 @@ export const childEvents: EventDef[] = [
     when: hasParent,
     setup: (c) => pickGrandparent(c),
     title: (c) => {
-      const trSide = c.vars.gs === 'mother' ? 'anneannenlerin' : 'babaannenlerin';
-      return c.t("You're spending the summer at your grandparents' place in the countryside.", `Yazı ${trSide} köyünde geçiriyorsun.`);
+      return c.t("You're spending the summer at your grandparents' place in the countryside.", 'Yazı köyde, ninenlerde geçiriyorsun.');
     },
     text: (c) => c.t('There are chickens, a cranky donkey and no internet.', 'Tavuklar var, huysuz bir eşek var; internet yok.'),
     choices: [
@@ -3185,3 +3191,5 @@ export const childEvents: EventDef[] = [
     ],
   },
 ];
+
+quietInMourning(childEvents);

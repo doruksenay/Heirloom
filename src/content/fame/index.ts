@@ -2,7 +2,7 @@ import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../type
 import type { GameState, Player } from '../../engine/types';
 import { aOrAn, cap, gen, wage } from '../base/util';
 import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, pathOrLast, payingFans, peekFame, songTitle, type FamePath } from './state';
-import { compact, fameOf, free, hasPath } from './util';
+import { compact, fameOf, free, hasPath, motherAlive } from './util';
 import { moreFameEvents } from './events-more';
 import { moreFameActivities } from './activities-more';
 import { pickIndex, say, sayWith, type Pair } from '../base/lines';
@@ -334,7 +334,7 @@ const events: EventDef[] = [
             c.h.stat('happiness', 15);
             return c.t(
               `You won! You forgot everyone's name in your speech except your grandmother's. The ${trophy} goes on the family shelf.`,
-              `Kazandın! Konuşmanda babaannen dışında herkesin adını unuttun. ${cap(trophyTr)} artık ailenin vitrininde.`,
+              `Kazandın! Konuşmanda ninen dışında herkesin adını unuttun. ${cap(trophyTr)} artık ailenin vitrininde.`,
             );
           }
           c.h.stat('happiness', -3);
@@ -589,6 +589,8 @@ const POSTS: Pair[] = [
   ['a prank on your own mother', 'Annene şaka yaptığın bir video'],
   ['a review of every crisp flavour in the corner shop', 'Bakkaldaki bütün cips çeşitlerini tek tek denediğin bir video'],
 ];
+const PRANK = POSTS.findIndex(([en]) => en === 'a prank on your own mother');
+const PRANK_FRIEND: Pair = ['a prank on your best friend', 'En yakın arkadaşına şaka yaptığın bir video'];
 const PRACTICE: Pair[] = [
   ['You practiced scales until your fingers hurt.', 'Parmakların acıyana kadar gam çalıştın.'],
   ['You learned a song you hate. You play it perfectly now.', 'Nefret ettiğin bir şarkıyı öğrendin. Artık kusursuz çalıyorsun.'],
@@ -788,7 +790,9 @@ const activities: ActivityDef[] = [
         return c.t(`Your video went massively viral. ${compact(c, g)} new followers overnight.`, `Videon fena patladı. Bir gecede ${compact(c, g)} yeni takipçi.`);
       }
       const g = gainFans(c, f, (50 + c.p.stats.looks * 6 + f.fans * 0.08) * (0.4 + roll));
-      const [what, whatTr] = POSTS[pickIndex(c, 'fame_post', POSTS.length)];
+      const pi = pickIndex(c, 'fame_post', POSTS.length);
+      // the prank needs a living mother; otherwise the best friend gets it (same slot, same RNG)
+      const [what, whatTr] = pi === PRANK && !motherAlive(c) ? PRANK_FRIEND : POSTS[pi];
       return c.t(`You posted ${what}. ${compact(c, g)} new followers.`, `${whatTr} paylaştın. ${compact(c, g)} yeni takipçi.`);
     },
   },

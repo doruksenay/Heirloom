@@ -2,7 +2,7 @@ import type { ActivityDef, Ctx } from '../types';
 import { wage } from '../base/util';
 import { say } from '../base/lines';
 import { fameState, gainFans, isPath, loseFans, peekFame } from './state';
-import { compact, fameOf, free, hasPath } from './util';
+import { compact, fameOf, free, grandmaAlive, hasPath, motherAlive } from './util';
 
 // Fame v0.7: six more things to do with your fame.
 
@@ -89,7 +89,10 @@ export const moreFameActivities: ActivityDef[] = [
         ['You and your guest laughed so hard that most of the episode is just wheezing. People loved it.', 'Konuğunla o kadar güldünüz ki bölümün çoğu hırıltıdan ibaret. İnsanlar bayıldı.'],
         ['You recorded inside a wardrobe for better sound. It worked. You may live there now.', 'Daha iyi ses için gardıropta kayıt yaptın. İşe yaradı. Artık orada yaşayabilirsin.'],
         ['You argued with a guest about ketchup on pizza for a whole episode.', 'Bir konukla bütün bölüm boyunca pizzaya ketçap konur mu diye tartıştın.'],
-        ['Your grandmother called in and stole the show.', 'Babaannen yayına bağlandı ve bütün ilgiyi üstüne çekti.'],
+        // a grandmother only if there is one; otherwise the oldest listener calls in (same slot, same RNG)
+        grandmaAlive(c)
+          ? ['Your grandmother called in and stole the show.', 'Ninen yayına bağlandı ve bütün ilgiyi üstüne çekti.']
+          : ['Your oldest listener, a lady of ninety-one, called in and stole the show.', 'En yaşlı dinleyicin, doksan bir yaşında bir teyze, yayına bağlandı ve bütün ilgiyi üstüne çekti.'],
         ['You recorded a whole episode with the microphone switched off.', 'Bütün bir bölümü mikrofon kapalıyken kaydettin.'],
       ]);
       return pay
@@ -118,7 +121,11 @@ export const moreFameActivities: ActivityDef[] = [
         ['You fell asleep live for ten minutes. It is your most-watched stream ever.', 'Canlı yayında on dakika uyuyakaldın. Şimdiye kadarki en çok izlenen yayının oldu.'],
         ['Your cat walked across the keyboard live and ended the stream. The clip went everywhere.', 'Canlı yayında kedin klavyenin üstünden geçip yayını kapattı. O an her yere yayıldı.'],
         ['You read your comments out loud in funny voices. The comments got much nicer, oddly.', 'Yorumları komik seslerle yüksek sesle okudun. Yorumlar tuhaf bir şekilde çok daha nazikleşti.'],
-        ['You did a live Q&A with your grandmother. She answered every question. You answered none.', 'Babaannenle canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.'],
+        grandmaAlive(c)
+          ? ['You did a live Q&A with your grandmother. She answered every question. You answered none.', 'Ninenle canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.']
+          : motherAlive(c)
+            ? ['You did a live Q&A with your mother. She answered every question, including three about your childhood nobody asked.', 'Annenle canlı soru-cevap yaptın. Bütün soruları o cevapladı; çocukluğunla ilgili kimsenin sormadığı üç soruyu da.']
+            : ["You did a live Q&A with your building's caretaker. He answered every question. You answered none.", 'Apartmanın kapıcısıyla canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.'],
         ['You tried to learn a song live with the chat as your teacher. Two thousand teachers, zero agreement.', 'Sohbet kısmını öğretmen yapıp canlı yayında şarkı öğrenmeye çalıştın. İki bin öğretmen, sıfır uzlaşma.'],
       ]);
       const gifts = wage(c, Math.min(20000, 20 + f.fans * 0.004));
@@ -196,7 +203,9 @@ export const moreFameActivities: ActivityDef[] = [
         ['Your stylist chose a colour palette for you called "autumn dusk". You are autumn dusk now.', 'Stilistin sana "sonbahar alacakaranlığı" adında bir renk paleti seçti. Artık sen de bir sonbahar alacakaranlığısın.'],
         ['Your stylist sent you down a red carpet in shoes you cannot walk in. You stood very still and looked mysterious.', 'Stilistin seni içinde yürüyemediğin ayakkabılarla kırmızı halıya gönderdi. Kıpırdamadan durup gizemli göründün.'],
         ['Your stylist called your haircut "brave". It was not a compliment.', 'Stilistin saç kesimine "cesur" dedi. İltifat değildi.'],
-        ['You got a whole new look. Your own mother walked past you in the street.', 'Baştan aşağı yeni bir tarzın oldu. Öz annen sokakta yanından geçip gitti.'],
+        motherAlive(c)
+          ? ['You got a whole new look. Your own mother walked past you in the street.', 'Baştan aşağı yeni bir tarzın oldu. Öz annen sokakta yanından geçip gitti.']
+          : ['You got a whole new look. Your oldest friend walked straight past you in the street.', 'Baştan aşağı yeni bir tarzın oldu. En eski arkadaşın sokakta yanından geçip gitti.'],
       ]);
       return c.t(`${what} It cost ${c.h.fmt(cost)}.`, `${what} Masrafı ${c.h.fmt(cost)} tuttu.`);
     },

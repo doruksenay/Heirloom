@@ -5,6 +5,7 @@ import { COUNTRIES, getCountry, firstNames } from '../../engine/world';
 import { newGame } from '../../engine/game';
 import { Logo, Scene, Wordmark } from '../brand/Brand';
 import { T } from '../../i18n/ui';
+import { DailyCard } from './Daily';
 
 export function NewLife({ app }: { app: AppApi }) {
   const [gender, setGender] = useState<Gender>('female');
@@ -68,6 +69,8 @@ export function NewLife({ app }: { app: AppApi }) {
       <button type="button" class="btn primary" onClick={quickStart} style={{ minHeight: '56px' }}>
         {T('Start a random life')}
       </button>
+
+      <DailyCard app={app} />
 
       <div class="card" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <div class="section-head">

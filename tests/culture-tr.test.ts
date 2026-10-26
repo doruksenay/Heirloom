@@ -230,3 +230,25 @@ describe('Türkiye culture pack', () => {
     for (const id of ['tr_muhtar', 'tr_memleket']) expect(goalDef(id)?.labelTr).toBeTruthy();
   });
 });
+
+describe('Türkiye culture pack, round-3 fixes', () => {
+  it('the tea man (çay ocağı) only works in offices: not for a miner, a nurse or a company owner', () => {
+    const def = cultureTrPack.events.find((e) => e.id === 'tr.cay_ocagi')!;
+    const s = newGame({ firstName: 'Ada', lastName: 'Kaya', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed: 3 }, profile([cultureTrPack.entitlement!, 'pack.boss']));
+    s.year += 35;
+    s.player.education = 'university';
+    const ok = (jobId: string) => {
+      s.player.jobId = jobId;
+      return def.when!(makeCtx(s));
+    };
+    expect(ok('accountant')).toBe(true);
+    expect(ok('engineer')).toBe(true);
+    expect(ok('miner')).toBe(false);
+    expect(ok('nurse')).toBe(false);
+    expect(ok('firefighter')).toBe(false);
+    // the owner of a company has no tea man above the boss: the boss is them
+    s.player.jobId = 'accountant';
+    s.player.ext = { ...(s.player.ext ?? {}), boss: { company: { name: 'Köşe Kahve' }, exits: 0, bankruptcies: 0, peakValuation: 0 } };
+    expect(def.when!(makeCtx(s))).toBe(false);
+  });
+});

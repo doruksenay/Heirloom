@@ -16,6 +16,13 @@ const PATHS: Record<string, JSX.Element> = {
       <path d="M12 7.5V12M5 16.5V12h14v4.5" />
     </>
   ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+      <path d="m12 12.6.9 1.9 2 .3-1.5 1.4.4 2-1.8-1-1.8 1 .4-2-1.5-1.4 2-.3z" />
+    </>
+  ),
   bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
   bag: (
     <>

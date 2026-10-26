@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import type { Person, RelationKind } from '../../engine/types';
-import { acc, cap, dat, eligibleJobs, gen, kinWord, nm, olderThanPlayer, single, wage, who, wth } from './util';
+import { acc, cap, dat, eligibleJobs, gen, kinWord, nm, olderThanPlayer, single, wage, who, wth, quietInMourning } from './util';
 import { atParents, he, him, his, inTr, settled } from './events-flavour';
 import { homeTitle } from './activities-home';
 import { houseState } from '../../engine/home';
@@ -1716,7 +1716,7 @@ export const teenEvents: EventDef[] = [
     maxAge: 24,
     once: true,
     weight: 7,
-    title: (c) => c.t('You joined a gym and it is now your entire personality.', 'Spor salonuna yazıldın ve artık tek kişilik özelliğin bu.'),
+    title: (c) => c.t('You joined a gym and it is now your entire personality.', 'Spor salonuna yazıldın; artık başka hiçbir şeyden bahsetmiyorsun.'),
     text: (c) => c.t('Your friends have muted you.', 'Arkadaşların seni sessize aldı.'),
     choices: [
       {
@@ -2235,3 +2235,5 @@ function interview(c: Ctx, base: number): string {
     `Müdür "Bilgilerinizi dosyada tutacağız" dedi. Muhtemelen sonsuza kadar.`,
   );
 }
+
+quietInMourning(teenEvents);

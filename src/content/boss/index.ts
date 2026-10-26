@@ -1,10 +1,11 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef, Txt } from '../types';
-import { cap, dat, kin, kinWord, nm, wage } from '../base/util';
+import { cap, dat, gen, kin, kinWord, nm, wage } from '../base/util';
 import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
 import { inheritanceTax } from '../../engine/economy';
 import {
   INDUSTRIES,
+  DIVIDEND_TAX,
   MIN_YEARS_TO_SELL,
   SALE_RANGE,
   STAGE_NAMES,
@@ -12,6 +13,7 @@ import {
   an,
   bossState,
   canFound,
+  companyAge,
   companyNames,
   companyOf,
   endCompany,
@@ -19,7 +21,9 @@ import {
   hasMark,
   peekBoss,
   saleShare,
+  scaleDrag,
   stageName,
+  teamCapacity,
   tidy,
   valuate,
   type Company,
@@ -66,7 +70,7 @@ function industryChoice(id: Industry): ChoiceDef {
         lastProfit: 0,
         gen: 1,
       };
-      company.valuation = valuate(company);
+      company.valuation = valuate(company, c.s.year);
       bossState(c.p).company = company;
       c.h.achieve('founder');
       if (c.lang === 'tr')
@@ -80,6 +84,13 @@ function industryChoice(id: Industry): ChoiceDef {
     tone: 'big',
   };
 }
+
+/** Job title while running the company: the founder founded it; an heir owns and runs it (playtest 3 §2.9). */
+export const ownerTitle = (c: Ctx, comp: Company) =>
+  genOf(comp) === 1 ? c.t(`Founder & CEO of ${comp.name}`, `${comp.name} Kurucusu ve CEO'su`) : c.t(`Owner & CEO of ${comp.name}`, `${comp.name} Sahibi ve CEO'su`);
+/** Job title after selling it. */
+const formerTitle = (c: Ctx, comp: Company) =>
+  genOf(comp) === 1 ? c.t(`Founder of ${comp.name}`, `${comp.name} Kurucusu`) : c.t(`Former owner of ${comp.name}`, `${comp.name} Eski Sahibi`);
 
 function bankrupt(c: Ctx, reason: string, reasonTr: string): string {
   const b = bossState(c.p);
@@ -172,7 +183,7 @@ const events: EventDef[] = [
           comp.ownership *= 1 - Number(c.vars.stake) / 100;
           comp.stage = NEXT_STAGE[comp.stage];
           comp.hype = Math.min(100, comp.hype + 15);
-          comp.valuation = valuate(comp);
+          comp.valuation = valuate(comp, c.s.year);
           return c.t(
             `${comp.name} raised ${c.h.fmt(Number(c.vars.amt))}. It is now a ${STAGE_NAMES[comp.stage].toLowerCase()} and you own ${Math.round(comp.ownership * 100)}%.`,
             `${comp.name} ${c.h.fmt(Number(c.vars.amt))} yatırım aldı. Şirket artık "${stageName(comp.stage, 'tr')}" aşamasında, senin payın %${Math.round(comp.ownership * 100)}.`,
@@ -190,7 +201,7 @@ const events: EventDef[] = [
             comp.cash += Number(c.vars.amt) * 1.3;
             comp.ownership *= 1 - (Number(c.vars.stake) - 5) / 100;
             comp.stage = NEXT_STAGE[comp.stage];
-            comp.valuation = valuate(comp);
+            comp.valuation = valuate(comp, c.s.year);
             return c.t(
               `You pushed back and got a better deal. ${comp.name} raised ${c.h.fmt(Number(c.vars.amt) * 1.3)}.`,
               `Diretip daha iyi bir anlaşma kaptın. ${comp.name} ${c.h.fmt(Number(c.vars.amt) * 1.3)} yatırım aldı.`,
@@ -239,7 +250,7 @@ const events: EventDef[] = [
           b.exits++;
           c.h.achieve('exit');
           c.h.stat('happiness', 10);
-          if (!c.p.jobId) c.p.jobTitle = c.t(`Founder of ${comp.name}`, `${comp.name} Kurucusu`);
+          if (!c.p.jobId) c.p.jobTitle = formerTitle(c, comp);
           return sayWith(c, 'boss.sell.sold', SOLD, { name: comp.name, x: c.h.fmt(payout) });
         },
         tone: 'big',
@@ -256,7 +267,8 @@ const events: EventDef[] = [
     category: 'business',
     cooldown: 5,
     weight: 6,
-    when: (c) => !!co(c) && co(c)!.valuation >= wage(c, 1_000_000) && co(c)!.stage !== 'public',
+    // thresholds follow the v0.9 valuations (lower multiples, maturity discount), so the big moments still come
+    when: (c) => !!co(c) && co(c)!.valuation >= wage(c, 500_000) && co(c)!.stage !== 'public',
     setup: (c) => {
       c.vars.price = Math.round((co(c)!.valuation * c.rng.int(SALE_RANGE.acquisition[0], SALE_RANGE.acquisition[1])) / 100);
     },
@@ -279,7 +291,7 @@ const events: EventDef[] = [
           b.exits++;
           c.h.achieve('exit');
           c.h.stat('happiness', 12);
-          if (!c.p.jobId) c.p.jobTitle = c.t(`Founder of ${comp.name}`, `${comp.name} Kurucusu`);
+          if (!c.p.jobId) c.p.jobTitle = formerTitle(c, comp);
           return c.t(
             `You sold ${comp.name} for ${c.h.fmt(Number(c.vars.price))}. Your share after taxes: ${c.h.fmt(payout)}.`,
             `${comp.name} şirketini ${c.h.fmt(Number(c.vars.price))} karşılığında sattın. Vergiden sonra sana kalan: ${c.h.fmt(payout)}.`,
@@ -481,7 +493,7 @@ const events: EventDef[] = [
     id: 'boss.magazine',
     category: 'business',
     once: true,
-    when: (c) => !!co(c) && co(c)!.valuation >= wage(c, 10_000_000),
+    when: (c) => !!co(c) && co(c)!.valuation >= wage(c, 4_000_000),
     text: '',
     apply: (c) => {
       c.h.achieve('cover');
@@ -572,7 +584,7 @@ const MARKETING_MEH: ((v: NameAmount) => Pair)[] = [
   ({ name, x }) => [`You paid ${x} for ${an(name)} billboard. It is mostly seen by pigeons.`, `${name} için bir afişe ${x} ödedin. Afişi en çok güvercinler görüyor.`],
   ({ name, x }) => [`The ${name} radio ad aired at 3 a.m. Cost: ${x}. Audience: insomniacs.`, `${name} radyo reklamı gece üçte yayınlandı. Maliyeti ${x}, dinleyicisi uykusuzlar.`],
   ({ name, x }) => [`You printed ${name} flyers for ${x} and handed them out on a corner. Most are in the recycling now.`, `Sokak köşesinde ${name} broşürü dağıttın. Basımına ${x} gitti; çoğu şimdi geri dönüşüm kutusunda.`],
-  ({ name, x }) => [`You paid an influencer ${x}. Their post about ${name} got fewer likes than their breakfast.`, `Bir fenomene ${x} ödedin. ${name} paylaşımı, kahvaltı fotoğrafından az beğeni aldı.`],
+  ({ name, x }) => [`You paid an influencer ${x}. Their post about ${name} got fewer likes than their breakfast.`, `Bir fenomene ${x} ödedin. ${name} paylaşımı, sıradan bir kahvaltı fotoğrafından bile az beğeni aldı.`],
   ({ name, x }) => [`The ${name} campaign cost ${x}. A cousin says she saw it. Nobody else has confirmed.`, `${name} kampanyası ${x} tuttu. Bir kuzenin gördüğünü söylüyor; doğrulayan başka kimse yok.`],
   ({ name, x }) => [`You spent ${x} on online ads for ${name}. Most of the clicks were you, checking the ads.`, `${name} için internet reklamlarına ${x} harcadın. Tıklamaların çoğu reklamı kontrol eden sendin.`],
   ({ name, x }) => [`${x} on ${an(name)} campaign bought a little buzz. A very little buzz.`, `${name} kampanyasına ${x} harcadın; biraz ses getirdi. Çok az bir ses.`],
@@ -601,6 +613,22 @@ const FIRST_HIRE: ((v: Staff) => Pair)[] = [
   ({ name }) => [`${name} has its first employee. You gave them the good chair and kept the wobbly one.`, `${name} ilk çalışanına kavuştu. İyi sandalyeyi ona verdin, sallananı sende kaldı.`],
   ({ name }) => [`Your first hire at ${name} started on Monday. You had practised saying "my team" in the mirror.`, `${name} şirketindeki ilk çalışanın pazartesi başladı. Aynanın karşısında "ekibim" demeyi prova etmiştin.`],
   ({ name }) => [`You signed your first employment contract at ${name}, with a pen you bought for the occasion. A team of two.`, `${name} adına ilk iş sözleşmeni, sırf bu iş için aldığın bir kalemle imzaladın. İki kişilik bir ekip.`],
+];
+
+/** The first employee of a firm that ran for years as a one-person business (founded by you). */
+type LateHire = { name: string; yrs: number; founded: number; founder: string };
+const FIRST_HIRE_SOLO: ((v: LateHire) => Pair)[] = [
+  ({ name, yrs }) => [`For ${yrs} years ${name} was just you and a kettle. Today it has its first employee, and the kettle has competition.`, `${yrs} yıl boyunca ${name} bir sen bir de çaydanlıktan ibaretti. Bugün ilk çalışanını aldı; çaydanlığın artık bir rakibi var.`],
+  ({ name }) => [`After years of doing every job at ${name} yourself, you hired someone. Showing them where the light switches are made you oddly emotional.`, `${name} şirketindeki her işi yıllarca tek başına yaptıktan sonra birini işe aldın. Ona elektrik düğmelerinin yerini gösterirken tuhaf bir şekilde duygulandın.`],
+  ({ name }) => [`${name} finally has more than one name on the payroll. Yours is still the one that gets paid last.`, `${name} maaş bordrosunda nihayet birden fazla isim var. Maaşı en son yatan yine sensin.`],
+  ({ name, yrs }) => [`You hired the first employee in the ${yrs}-year history of ${name}. They asked where the manual was. You are the manual.`, `${name} şirketinin ${yrs} yıllık tarihindeki ilk çalışanı işe başladı. Kullanım kılavuzunun nerede olduğunu sordu. Kılavuz sensin.`],
+];
+/** The first employee from outside the family in an inherited firm. */
+const FIRST_HIRE_FAMILY: ((v: LateHire) => Pair)[] = [
+  ({ name, founded }) => [`${name} has been run by family hands since ${founded}. Today, for the first time, someone from outside the family signed a contract.`, `${name}, ${founded} yılından beri hep ailenin elinde döndü. Bugün ilk kez aileden olmayan biri iş sözleşmesi imzaladı.`],
+  ({ name, founder }) => [`The first outsider ever hired at ${name} asked who the old photo by the door was. You told ${founder}'s story for an hour.`, `${name} şirketine dışarıdan alınan ilk çalışan, kapının yanındaki eski fotoğrafın kim olduğunu sordu. Bir saat boyunca ${gen(founder)} hikâyesini anlattın.`],
+  ({ name }) => [`You hired someone who is not related to anyone at ${name}. At the family lunch it was the only topic.`, `${name} şirketine kimsenin akrabası olmayan birini aldın. Aile yemeğinde başka konu konuşulmadı.`],
+  ({ name, yrs }) => [`After ${yrs} years as a family-only firm, ${name} has a real employee. Your relatives keep asking if they can trust "the new one".`, `${yrs} yıl sadece aileyle dönen ${name} artık gerçek bir çalışana sahip. Akrabalar durmadan "Yeniye güvenilir mi?" diye soruyor.`],
 ];
 
 /** Back from zero staff after layoffs or quits. */
@@ -722,6 +750,10 @@ const activities: ActivityDef[] = [
       const v: Staff = { name: comp.name, n, team: comp.employees + 1 };
       if (before === 0 && !hasMark(comp, 'firsthire')) {
         addMark(comp, 'firsthire');
+        // "a team of two" only for a young firm; an old one-person firm or an inherited one gets its own line
+        const late: LateHire = { name: comp.name, yrs: companyAge(comp, c.s.year), founded: comp.founded, founder: comp.founderName };
+        if (genOf(comp) > 1) return sayWith(c, 'boss_hire.first_family', FIRST_HIRE_FAMILY, late);
+        if (late.yrs > 5) return sayWith(c, 'boss_hire.first_late', FIRST_HIRE_SOLO, late);
         return sayWith(c, 'boss_hire.first', FIRST_HIRE, v);
       }
       addMark(comp, 'firsthire');
@@ -764,7 +796,7 @@ const activities: ActivityDef[] = [
   {
     id: 'boss_dividend',
     label: (c) => c.t('Pay yourself', 'Kendine ödeme yap'),
-    description: (c) => c.t('Take some company cash home', 'Şirket kasasından biraz eve götür'),
+    description: (c) => c.t('Take some company cash home (dividend tax applies)', 'Şirket kasasından biraz eve götür (kâr payı vergisi kesilir)'),
     group: 'Business',
     minAge: 18,
     available: (c) => !!co(c) && co(c)!.cash > 0,
@@ -772,8 +804,10 @@ const activities: ActivityDef[] = [
       const comp = co(c)!;
       const take = Math.round(comp.cash * 0.3);
       comp.cash -= take;
-      c.h.money(Math.round(take * comp.ownership));
-      return sayWith(c, 'boss_dividend', DIVIDEND, { name: comp.name, x: c.h.fmt(take * comp.ownership) });
+      // your share, after dividend tax (the lines show what actually lands in your account)
+      const net = Math.round(take * comp.ownership * (1 - DIVIDEND_TAX));
+      c.h.money(net);
+      return sayWith(c, 'boss_dividend', DIVIDEND, { name: comp.name, x: c.h.fmt(net) });
     },
   },
   {
@@ -826,7 +860,7 @@ const activities: ActivityDef[] = [
       comp.stage = 'public';
       comp.cash += Math.round(comp.valuation * 0.12);
       comp.ownership *= 0.85;
-      comp.valuation = valuate(comp);
+      comp.valuation = valuate(comp, c.s.year);
       c.h.achieve('ipo');
       c.h.stat('happiness', 15);
       return c.t(
@@ -843,22 +877,23 @@ function onYear(c: Ctx) {
   const comp = b?.company;
   if (!b || !comp) return;
   const ind = INDUSTRIES[comp.industry];
-  const capacity = (comp.employees + 1) * wage(c, ind.revPerHead);
+  const capacity = teamCapacity(comp.employees) * wage(c, ind.revPerHead);
   let growth = ind.growth + comp.hype / 250 + (c.p.stats.smarts - 50) / 600 + moraleGrowth(comp) + (c.rng.next() * 2 - 1) * ind.volatility;
   if (growth > 0) growth *= Math.max(0, 1 - comp.revenue / wage(c, ind.market)); // the market saturates
+  growth -= scaleDrag(comp.revenue, getCountry(c.p.countryId).wageFactor);
   if (comp.revenue > capacity) growth = Math.min(growth, 0.01 - (comp.revenue / capacity - 1) * 0.2);
   if (c.p.jailYears > 0) growth -= 0.3;
   comp.revenue = Math.max(0, Math.round(comp.revenue * (1 + growth)));
   const staff = comp.employees * wage(c, ind.staffCost);
-  const pretax = comp.revenue * ind.grossMargin - staff - wage(c, 1500);
+  const pretax = comp.revenue * (ind.grossMargin - (ind.overhead ?? 0)) - staff - wage(c, 1500);
   const profit = Math.round(pretax > 0 ? pretax * 0.75 : pretax); // 25% corporate tax on profit
   comp.lastProfit = profit;
   comp.cash += profit;
   comp.hype = Math.max(0, comp.hype - 6);
   afterYear(c, comp);
-  comp.valuation = valuate(comp);
+  comp.valuation = valuate(comp, c.s.year);
   b.peakValuation = Math.max(b.peakValuation, comp.valuation);
-  if (!c.p.jobId) c.p.jobTitle = c.t(`Founder & CEO of ${comp.name}`, `${comp.name} Kurucusu ve CEO'su`);
+  if (!c.p.jobId) c.p.jobTitle = ownerTitle(c, comp);
   if (comp.valuation >= local(c.p.countryId, 1_000_000_000)) c.h.achieve('unicorn');
 }
 
@@ -905,7 +940,8 @@ export const bossPack: ContentPack = {
     // a new generation draws up its own succession plan
     nb.company = { ...comp, gen: g, cofounderId: undefined, heirId: undefined, heirAsked: undefined, marks: [...(comp.marks ?? [])] };
     nb.peakValuation = comp.valuation;
-    if (!next.jobId) next.jobTitle = tr ? `${comp.name} CEO'su` : `CEO of ${comp.name}`;
+    // an heir owns and runs it; only the founder is "Kurucusu" (same title the yearly tick keeps)
+    if (!next.jobId) next.jobTitle = tr ? `${comp.name} Sahibi ve CEO'su` : `Owner & CEO of ${comp.name}`;
     // inheritance tax on the family's stake, with 50% business relief: paid from company cash first, then by selling shares
     const stake = Math.max(0, comp.valuation * comp.ownership);
     let due = Math.round(inheritanceTax(stake, getCountry(next.countryId).wageFactor) * 0.5);

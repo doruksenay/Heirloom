@@ -5,7 +5,22 @@ import { getCountry } from './world';
 import { isCoastal, seaName } from './places';
 import { acc, dat, gen, loc, wth } from '../i18n/tr-grammar';
 import { ABROAD_CITIES } from '../content/base/events-flavour';
-import { cap, isStep, kin, kinWord } from '../content/base/util';
+import { pickIndex } from '../content/base/lines';
+import { cap, kin, kinWord } from '../content/base/util';
+import {
+  ADVICE,
+  AGAIN,
+  ARGUE,
+  COMPLIMENT,
+  COMPLIMENT_KID,
+  GIFT_ITEMS_GROWN,
+  GIFT_REACT,
+  MAKE_UP,
+  TIME_GROWN,
+  type L,
+  type Rel,
+  type W,
+} from '../content/base/people-lines';
 
 /** How many times per year the player can interact with the same person. */
 export const INTERACTIONS_PER_PERSON = 2;
@@ -34,45 +49,42 @@ const grown = (st: Stage) => st === 'adult' || st === 'elder';
 /** An English/Turkish line pair. */
 type Line = [string, string];
 
-/** Words about the other person: name and English pronouns (Turkish has no gendered pronouns). */
-interface Who {
-  N: string;
-  he: string;
-  He: string;
-  his: string;
-  him: string;
-}
-const who = (p: Person): Who => {
+/** Words about the other person: name and English pronouns (Turkish has none), and the player as their parent. */
+const who = (p: Person, c?: Ctx): W => {
   const f = p.gender === 'female';
-  return { N: p.firstName, he: f ? 'she' : 'he', He: f ? 'She' : 'He', his: f ? 'her' : 'his', him: f ? 'her' : 'him' };
+  const mum = c?.p.gender === 'female';
+  return {
+    N: p.firstName,
+    he: f ? 'she' : 'he',
+    He: f ? 'She' : 'He',
+    his: f ? 'her' : 'his',
+    him: f ? 'her' : 'him',
+    parEn: mum ? 'mum' : 'dad',
+    parTr: mum ? 'annesi' : 'babası',
+  };
 };
 
-/** "big sister" / "ablan", "little brother" / "erkek kardeşin", "grandma" / "büyükannen", "wife" / "karın". */
-function kinPair(c: Ctx, p: Person, kind: RelationKind): Line {
-  const f = p.gender === 'female';
-  if (kind === 'grandparent') return [f ? 'grandma' : 'grandpa', f ? 'büyükannen' : 'deden'];
-  let en = kinWord(p, kind, isStep(c, p));
-  if (kind === 'sibling' && p.birthYear !== c.p.birthYear) en = `${p.birthYear < c.p.birthYear ? 'big' : 'little'} ${en}`;
+/** The relationship group a pool is written for (partners and spouses share the love lines). */
+const relOf = (kind: RelationKind): Rel => (kind === 'partner' || kind === 'spouse' ? 'love' : kind === 'ex' ? 'friend' : (kind as Rel));
+const build = (ls: readonly L[], w: W): Line[] => ls.map((f) => f(w));
+
+/** "big sister" / "ablan", "little brother" / "erkek kardeşin". */
+function siblingWords(c: Ctx, p: Person): Line {
+  let en = kinWord(p, 'sibling');
+  if (p.birthYear !== c.p.birthYear) en = `${p.birthYear < c.p.birthYear ? 'big' : 'little'} ${en}`;
   // kin() reads c.lang; build the Turkish word from a Turkish view of the same context
-  return [en, kin({ ...c, lang: 'tr' }, p, kind)];
+  return [en, kin({ ...c, lang: 'tr' }, p, 'sibling')];
 }
 
 // ---------------------------------------------------------------- picking without repeats
 
-const RECENT_KEY = 'people_lines';
-
 /**
- * Picks one line with exactly one RNG call, then deterministically steps past lines this player saw recently
- * for the same pool (no extra RNG, so both languages stay in step). Remembers the last few picks per pool in p.ext.
+ * Picks one line with exactly one RNG call (lines.ts pickIndex), then deterministically steps past the lines used
+ * recently for the same pool. The memory is shared by the whole dynasty, so an heir does not hear the lines their
+ * parent heard (no extra RNG, so both languages stay in step).
  */
 function pickLine(c: Ctx, pool: string, lines: Line[]): string {
-  let i = c.rng.int(0, lines.length - 1);
-  const ext = (c.p.ext ??= {});
-  const all = (ext[RECENT_KEY] ??= {}) as Record<string, number[]>;
-  const recent = all[pool] ?? [];
-  for (let t = 0; t < lines.length && recent.includes(i); t++) i = (i + 1) % lines.length;
-  const keep = Math.max(0, Math.min(3, lines.length - 2));
-  all[pool] = keep ? [...recent.filter((x) => x !== i), i].slice(-keep) : [];
+  const i = pickIndex(c, `rel.${pool}`, lines.length);
   return c.t(lines[i][0], lines[i][1]);
 }
 
@@ -222,6 +234,7 @@ function timeLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lines
       ],
     };
 
+  const rel = relOf(kind);
   const lines: Line[] = [
     [`You and ${N} cooked together and burned the rice.`, `${wth(N)} birlikte yemek yaptınız ve pilavı yaktınız.`],
     [`You and ${N} watched an old movie and talked through all of it.`, `${wth(N)} eski bir film izlediniz ve film boyunca hiç susmadınız.`],
@@ -231,15 +244,9 @@ function timeLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lines
     [`You and ${N} went out for breakfast and stayed until lunch.`, `${wth(N)} kahvaltıya çıktınız ve öğlene kadar kalkmadınız.`],
     [`You and ${N} took a long walk in the park and solved most of the world's problems.`, `${wth(N)} parkta uzun bir yürüyüş yapıp dünyanın sorunlarının çoğunu çözdünüz.`],
     [`You and ${N} looked through old photos and laughed at everyone's hair.`, `${wth(N)} eski fotoğraflara bakıp herkesin saçına güldünüz.`],
+    ...build(TIME_GROWN[rel], who(p, c)),
   ];
-  let pool = 'time:grown-grown';
-  if (kind === 'spouse' || kind === 'partner') {
-    pool += ':love';
-    lines.push(
-      [`You and ${N} slow-danced in the kitchen to a song on the radio.`, `${wth(N)} mutfakta radyodaki bir şarkıyla ağır ağır dans ettiniz.`],
-      [`You and ${N} planned a holiday you will probably never take. It was still lovely.`, `${wth(N)} muhtemelen hiç gitmeyeceğiniz bir tatilin planını yaptınız. Yine de çok güzeldi.`],
-    );
-  }
+  let pool = `time:grown-grown:${rel}`;
   if (me === 'elder') {
     pool += ':elder';
     lines.push(
@@ -267,7 +274,7 @@ function timeLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lines
 
 // ---------------------------------------------------------------- gifts
 
-function giftLines(c: Ctx, p: Person): { pool: string; lines: Line[] } {
+function giftLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lines: Line[] } {
   const them = stageOf(ageOf(c.s, p));
   const { N, He, he } = who(p);
   let items: Line[];
@@ -308,25 +315,18 @@ function giftLines(c: Ctx, p: Person): { pool: string; lines: Line[] } {
       [`${He} loved it, though ${he} would never say so.`, 'Çok sevdi ama bunu asla söylemez.'],
     ];
   } else {
-    items = [
-      ['a scarf', 'bir atkı'],
-      ['a book', 'bir kitap'],
-      ['a plant', 'bir saksı çiçeği'],
-      ['concert tickets', 'konser bileti'],
-      ['a framed photo of you two', 'ikinizin çerçeveli bir fotoğrafını'],
-      ['a good bottle of olive oil', 'iyi bir şişe zeytinyağı'],
-      ['a cookbook', 'bir yemek kitabı'],
-    ];
-    reactions = [
-      [`${He} loved it.`, 'Çok sevdi.'],
-      [`${He} said you shouldn't have, then hugged you anyway.`, '"Hiç gerek yoktu" dedi, sonra yine de sana sarıldı.'],
-    ];
+    // grown-ups: every item with every reaction written for this relationship
+    const rel = relOf(kind);
+    const reacts = build(GIFT_REACT[rel], who(p, c));
+    const lines: Line[] = [];
+    GIFT_ITEMS_GROWN.forEach(([en, tr]) => reacts.forEach(([ren, rtr]) => lines.push([`You gave ${N} ${en}. ${ren}`, `${dat(N)} ${tr} hediye ettin. ${rtr}`])));
+    return { pool: `gift:grown:${rel}`, lines };
   }
   const lines = items.map(([en, tr], k): Line => {
     const [ren, rtr] = reactions[k % reactions.length];
     return [`You gave ${N} ${en}. ${ren}`, `${dat(N)} ${tr} hediye ettin. ${rtr}`];
   });
-  return { pool: `gift:${grown(them) ? 'grown' : them}`, lines };
+  return { pool: `gift:${them}`, lines };
 }
 
 // ---------------------------------------------------------------- compliments
@@ -334,7 +334,7 @@ function giftLines(c: Ctx, p: Person): { pool: string; lines: Line[] } {
 function complimentLines(c: Ctx, p: Person, kind: RelationKind, ok: boolean): { pool: string; lines: Line[] } {
   const me = stageOf(c.age);
   const them = stageOf(ageOf(c.s, p));
-  const { N, he, He, his, him } = who(p);
+  const { N, he, He } = who(p);
   if (them === 'baby') {
     return ok
       ? {
@@ -353,16 +353,19 @@ function complimentLines(c: Ctx, p: Person, kind: RelationKind, ok: boolean): { 
     if (grown(them)) lines.push([`You told ${N} ${he} looked well rested. ${He} had not slept in two days.`, `${dat(N)} çok dinlenmiş göründüğünü söyledin. İki gündür uyumamıştı.`]);
     return { pool: `compliment:no:${grown(them) ? 'grown' : 'young'}`, lines };
   }
-  const [kEn, kTr] = kinPair(c, p, kind);
-  const lines: Line[] = [
-    [`You told ${N} how much ${he} means to you.`, `${dat(N)} senin için ne kadar değerli olduğunu söyledin.`],
-    [`You told ${N} ${his} laugh is your favourite sound in the world.`, `${dat(N)} dünyada en sevdiğin sesin onun kahkahası olduğunu söyledin.`],
-    [`You told ${N} ${he} gives the best hugs. ${He} hugged you to prove it.`, `${dat(N)} en güzel onun sarıldığını söyledin. Kanıtlamak için hemen sarıldı.`],
-    [`You told your ${kEn} ${N} that ${he} always makes your day better. ${He} pretended not to blush.`, `${cap(kTr)} ${dat(N)} gününü hep güzelleştirdiğini söyledin. Kızarmamış gibi yaptı.`],
-  ];
+  const rel = relOf(kind);
+  const w = who(p, c);
+  // a small child's compliments sound like a small child; a grown child gets the grown-up lines too
+  const own = rel === 'child' && !grown(them) ? COMPLIMENT.child.slice(0, 3) : COMPLIMENT[rel];
+  const lines: Line[] = [[`You told ${N} how much ${he} means to you.`, `${dat(N)} senin için ne kadar değerli olduğunu söyledin.`], ...build(own, w)];
+  const kidVoice = me === 'kid' && (rel === 'mother' || rel === 'father' || rel === 'grandparent');
+  if (kidVoice) lines.push(...build(COMPLIMENT_KID, w));
+  if (rel === 'sibling') {
+    const [kEn, kTr] = siblingWords(c, p);
+    lines.push([`You told your ${kEn} ${N} that growing up with ${w.him} was the best part of growing up.`, `${cap(kTr)} ${dat(N)}, onunla birlikte büyümenin çocukluğunun en güzel yanı olduğunu söyledin.`]);
+  }
   if (me === 'kid') lines.push([`You drew ${N} a picture with a giant heart on it. It went straight on the fridge.`, `${dat(N)} kocaman kalpli bir resim çizdin. Hemen buzdolabının kapağına asıldı.`]);
-  if (grown(me) && grown(them)) lines.push([`You told ${N} you would trust ${him} with anything. ${He} went quiet, then said, "Same."`, `${dat(N)} ona her konuda güvendiğini söyledin. Bir an sustu, sonra "Ben de sana" dedi.`]);
-  return { pool: `compliment:${me === 'kid' ? 'kid' : grown(me) && grown(them) ? 'grown' : 'any'}`, lines };
+  return { pool: `compliment:${rel}:${me === 'kid' ? 'kid' : grown(them) ? 'grown' : 'young'}`, lines };
 }
 
 // ---------------------------------------------------------------- advice
@@ -377,52 +380,21 @@ function grandmaPlausible(c: Ctx): boolean {
   });
 }
 
+/** Which advice pool fits: who is speaking (the relationship) and how old the player is. */
+function adviceKey(c: Ctx, p: Person, kind: RelationKind): string {
+  const rel = relOf(kind);
+  const me = stageOf(c.age);
+  const elderly = rel === 'mother' || rel === 'father' || rel === 'grandparent';
+  if (c.age < 13 || ageOf(c.s, p) < 13) return elderly ? 'grownup:kid' : 'peer:kid';
+  if (me === 'teen') return rel === 'mother' || rel === 'father' ? 'parent:teen' : rel === 'grandparent' ? 'grandparent' : 'peer:teen';
+  if (me === 'elder' && (rel === 'friend' || rel === 'sibling')) return 'peer:elder';
+  return rel;
+}
+
 function adviceLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lines: Line[] } {
-  const speaker = ageOf(c.s, p);
   const { N } = who(p);
-  const says = (en: string, tr: string): Line => [`${N} told you: "${en}"`, `${N} dedi ki: "${tr}"`];
-  let pool: string;
-  let lines: Line[];
-  if (c.age < 13 || speaker < 13) {
-    pool = 'advice:kid';
-    lines = [
-      says('If the teacher is angry, look sorry, not cool.', 'Öğretmen kızgınsa havalı değil, mahcup görün.'),
-      says('Never lend anyone your good pen.', 'İyi kalemini kimseye ödünç verme.'),
-      says('Make friends with the kid who shares snacks.', 'Yiyeceğini paylaşan çocukla arkadaş ol.'),
-      says('Never eat yellow snow.', 'Sarı karı asla yeme.'),
-      says('Double-knot your shoelaces. Trust me.', 'Ayakkabı bağcığına çift düğüm at. Bana güven.'),
-    ];
-  } else if (c.age < 18) {
-    pool = 'advice:teen';
-    lines = [
-      says('Never trust anyone with two phones.', 'İki telefonu olan kimseye asla güvenme.'),
-      says('Buy cheap, cry twice.', 'Ucuz etin yahnisi yavan olur.'),
-      says("Don't send a message you'd hate to see on a billboard.", 'Bir reklam panosunda görmek istemeyeceğin mesajı kimseye atma.'),
-      says('Nobody remembers who was cool at school. Everyone remembers who was kind.', 'Okulda kimin havalı olduğunu kimse hatırlamaz, kimin iyi olduğunu herkes hatırlar.'),
-      says('Go to sleep. Whatever it is, it will look smaller in the morning.', 'Yat uyu. Ne olursa olsun, sabah daha küçük görünür.'),
-    ];
-  } else if (c.age < 65) {
-    pool = 'advice:adult';
-    lines = [
-      says('Never trust a man with two phones.', 'İki telefonu olan adama asla güvenme.'),
-      says('Buy cheap, cry twice.', 'Ucuz etin yahnisi yavan olur.'),
-      says("Don't sign anything on a Friday.", 'Cuma günü hiçbir şey imzalama.'),
-      says('A boss who smiles too much is planning a meeting.', 'Çok gülümseyen patron bir toplantı planlıyordur.'),
-      says('Never go grocery shopping hungry.', 'Markete asla aç karnına gitme.'),
-      says('Keep one good coat and one good friend.', 'Bir iyi paltonla bir iyi dostun olsun, yeter.'),
-      says('Sleep on it. Whatever it is, it will look smaller in the morning.', 'Bir gece uyu. Ne olursa olsun, sabah daha küçük görünür.'),
-    ];
-  } else {
-    pool = 'advice:elder';
-    lines = [
-      says("Walk every day, even if it's only to the bakery.", 'Her gün yürü, fırına kadar bile olsa.'),
-      says('Write the recipes down while you still remember.', 'Tarifleri unutmadan bir yere yaz.'),
-      says('Stop reading the obituaries first.', 'Gazetede önce vefat ilanlarına bakmayı bırak.'),
-      [`${N} told you to stop answering calls from numbers you don't know.`, `${N} bilinmeyen numaralardan gelen aramalara artık cevap vermemeni söyledi.`],
-      says('Buy cheap, cry twice.', 'Ucuz etin yahnisi yavan olur.'),
-      says('Spend it. The grandchildren will be fine.', 'Harca gitsin. Torunlar idare eder.'),
-    ];
-  }
+  let pool = `advice:${adviceKey(c, p, kind)}`;
+  const lines = build(ADVICE[adviceKey(c, p, kind)] ?? ADVICE.friend, who(p, c));
   // "call your grandmother more" only when the player is young and a grandmother can still be alive
   if (c.age >= 10 && kind !== 'child' && kind !== 'grandparent' && grandmaPlausible(c)) {
     pool += ':gran';
@@ -431,6 +403,24 @@ function adviceLines(c: Ctx, p: Person, kind: RelationKind): { pool: string; lin
   }
   return { pool, lines };
 }
+
+/** Which argument pool fits the two of you. */
+function argueKey(c: Ctx, p: Person, kind: RelationKind): string {
+  const rel = relOf(kind);
+  const me = stageOf(c.age);
+  const them = stageOf(ageOf(c.s, p));
+  if (them === 'baby') return 'baby';
+  const elderly = rel === 'mother' || rel === 'father' || rel === 'grandparent';
+  if (me === 'kid') return elderly ? 'kid:grown' : 'kid:peer';
+  if (me === 'teen') return rel === 'mother' || rel === 'father' ? 'teen:parent' : rel === 'grandparent' ? 'grandparent' : 'teen:peer';
+  if (rel === 'mother' || rel === 'father') return 'parent';
+  if (rel === 'child') return them === 'kid' ? 'child:kid' : them === 'teen' ? 'child:teen' : 'child:grown';
+  return rel;
+}
+
+/** A second use of the same interaction with the same person this year (interact() counts it before run). */
+const again = (c: Ctx, p: Person, id: string) => (c.p.actionsThisYear[`rel:${p.id}:${id}`] ?? 0) >= 2 && !!AGAIN[id];
+const againLine = (c: Ctx, p: Person, id: string) => pickLine(c, `again:${id}`, build(AGAIN[id], who(p, c)));
 
 // ---------------------------------------------------------------- a child who emigrated (base.child_abroad)
 
@@ -483,6 +473,7 @@ export const INTERACTIONS: InteractionDef[] = [
     run: (c, p, r) => {
       c.h.closeness(p.id, c.rng.int(4, 9));
       c.h.stat('happiness', 2);
+      if (again(c, p, 'time')) return againLine(c, p, 'time');
       const { pool, lines } = livesAbroad(c, p) ? abroadTimeLines(c, p) : timeLines(c, p, r.kind);
       return pickLine(c, pool, lines);
     },
@@ -494,11 +485,12 @@ export const INTERACTIONS: InteractionDef[] = [
     kinds: ALL,
     minAge: 12,
     available: (c) => c.p.money >= wage(c, 50),
-    run: (c, p) => {
+    run: (c, p, r) => {
       const cost = wage(c, c.rng.int(30, 120));
       c.h.money(-cost);
       c.h.closeness(p.id, c.rng.int(8, 14));
-      const { pool, lines } = livesAbroad(c, p) ? abroadGiftLines(c, p) : giftLines(c, p);
+      if (again(c, p, 'gift')) return againLine(c, p, 'gift');
+      const { pool, lines } = livesAbroad(c, p) ? abroadGiftLines(c, p) : giftLines(c, p, r.kind);
       return pickLine(c, pool, lines);
     },
   },
@@ -511,6 +503,7 @@ export const INTERACTIONS: InteractionDef[] = [
     run: (c, p, r) => {
       const ok = c.rng.chance(0.85);
       c.h.closeness(p.id, ok ? c.rng.int(3, 6) : -1);
+      if (ok && again(c, p, 'compliment')) return againLine(c, p, 'compliment');
       const { pool, lines } = complimentLines(c, p, r.kind, ok);
       return pickLine(c, pool, lines);
     },
@@ -524,6 +517,7 @@ export const INTERACTIONS: InteractionDef[] = [
     run: (c, p) => {
       c.h.closeness(p.id, 10);
       p.stats.smarts = Math.min(100, p.stats.smarts + 2);
+      if (again(c, p, 'story')) return againLine(c, p, 'story');
       const { N, He } = who(p);
       return pickLine(c, 'story', [
         [`You read ${N} a bedtime story. ${He} was asleep before the dragon showed up.`, `${dat(N)} masal okudun. Ejderha daha sahneye çıkmadan uyudu.`],
@@ -587,6 +581,7 @@ export const INTERACTIONS: InteractionDef[] = [
       c.h.stat('smarts', 1);
       c.h.stat('happiness', 2);
       c.h.closeness(p.id, 3);
+      if (again(c, p, 'advice')) return againLine(c, p, 'advice');
       const { pool, lines } = adviceLines(c, p, r.kind);
       return pickLine(c, pool, lines);
     },
@@ -597,43 +592,18 @@ export const INTERACTIONS: InteractionDef[] = [
     labelTr: 'Kavga çıkar',
     kinds: ALL,
     minAge: 6,
-    run: (c, p) => {
+    run: (c, p, r) => {
       const { N } = who(p);
       if (c.rng.chance(0.15)) {
         c.h.closeness(p.id, 2);
-        return c.t(`You started an argument with ${N}, but you both ended up laughing.`, `${wth(N)} tartışma başlattın ama sonunda ikiniz de gülmekten kırıldınız.`);
+        if (stageOf(ageOf(c.s, p)) === 'baby') return c.t(`You tried to tell ${N} off. ${N} laughed at you, and then so did you.`, `${dat(N)} kızmaya çalıştın. ${N} sana güldü, sonra sen de güldün.`);
+        return pickLine(c, 'argue:makeup', build(MAKE_UP, who(p, c)));
       }
       c.h.closeness(p.id, -c.rng.int(4, 10));
       c.h.stat('happiness', -2);
-      const me = stageOf(c.age);
-      const them = stageOf(ageOf(c.s, p));
-      const forgettable: Line = [
-        `You argued with ${N} about something neither of you will remember next week.`,
-        `${wth(N)} haftaya ikinizin de hatırlamayacağı bir şey yüzünden tartıştınız.`,
-      ];
-      if (them === 'baby')
-        return pickLine(c, 'argue:baby', [
-          [`You tried to argue with ${N} about bedtime. ${N} won without saying a word.`, `${wth(N)} yatma saati konusunda tartışmaya çalıştın. ${N} tek kelime etmeden kazandı.`],
-          [`You and ${N} had a standoff over a spoonful of peas. The peas lost.`, `${wth(N)} bir kaşık bezelye yüzünden inatlaştınız. Kaybeden bezelyeler oldu.`],
-        ]);
-      if (me === 'kid')
-        return pickLine(c, 'argue:kid', [
-          forgettable,
-          [`You and ${N} argued about whose turn it was. It was nobody's turn.`, `${wth(N)} sıranın kimde olduğu yüzünden kavga ettiniz. Sıra kimsede değildi.`],
-          [`You and ${N} fought over the TV remote until a grown-up confiscated it.`, `${wth(N)} kumanda için kavga ettiniz; sonunda bir büyük gelip kumandaya el koydu.`],
-        ]);
-      if (me === 'teen')
-        return pickLine(c, 'argue:teen', [
-          forgettable,
-          [`You slammed a door in ${N}'s face. It felt great for four seconds.`, `${gen(N)} yüzüne kapıyı çarptın. Dört saniye boyunca harika hissettirdi.`],
-          [`You and ${N} fell out over a message that was "obviously a joke."`, `${wth(N)} "belli ki şaka olan" bir mesaj yüzünden bozuştunuz.`],
-        ]);
-      return pickLine(c, 'argue:grown', [
-        forgettable,
-        [`You and ${N} argued about how to load the dishwasher. Nobody won.`, `${wth(N)} bulaşık makinesinin nasıl dizileceği konusunda tartıştınız. Kazanan olmadı.`],
-        [`You and ${N} argued about politics at dinner. Dessert was cancelled.`, `${wth(N)} akşam yemeğinde siyaset tartıştınız. Tatlı iptal edildi.`],
-        [`You and ${N} argued about directions. You were both wrong.`, `${wth(N)} yol tarifi yüzünden tartıştınız. İkiniz de yanılıyordunuz.`],
-      ]);
+      if (again(c, p, 'argue')) return againLine(c, p, 'argue');
+      const key = argueKey(c, p, r.kind);
+      return pickLine(c, `argue:${key}`, build(ARGUE[key], who(p, c)));
     },
   },
   {
@@ -697,6 +667,9 @@ export function interact(s: GameState, personId: string, id: string): string | n
   const person = s.people[personId];
   const rel = s.player.relations.find((r) => r.personId === personId)!;
   s.player.actionsThisYear[`rel:${personId}`] = usesWith(s, personId) + 1;
+  // per interaction too, so a second "spend time" with the same person this year reads as "again"
+  const k = `rel:${personId}:${id}`;
+  s.player.actionsThisYear[k] = (s.player.actionsThisYear[k] ?? 0) + 1;
   const line = def.run(c, person, rel);
   c.h.log(line);
   return line;

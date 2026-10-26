@@ -4,6 +4,10 @@ import { isNative } from './native';
 // Saves live in localStorage; on phones every write is mirrored to Capacitor Preferences.
 const GAME_KEY = 'heirloom.save.v1';
 const PROFILE_KEY = 'heirloom.profile.v1';
+/** Today's Daily Challenge life, kept apart so it never touches the family saga. */
+const DAILY_KEY = 'heirloom.daily.v1';
+/** Which of the two saves is on screen: 'family' or 'daily'. */
+const MODE_KEY = 'heirloom.mode.v1';
 
 /** First launch follows the phone's language: Turkish phones start in Turkish. */
 function deviceLang(): 'en' | 'tr' {
@@ -49,7 +53,7 @@ export async function initStorage(): Promise<void> {
   if (!isNative()) return;
   try {
     const { Preferences } = await import('@capacitor/preferences');
-    for (const key of [GAME_KEY, PROFILE_KEY]) {
+    for (const key of [GAME_KEY, PROFILE_KEY, DAILY_KEY, MODE_KEY]) {
       const { value } = await Preferences.get({ key });
       if (value !== null) localStorage.setItem(key, value);
     }
@@ -68,3 +72,10 @@ export const loadProfile = (): Profile => {
   return p ? { ...DEFAULT_PROFILE, ...p, settings: { ...DEFAULT_PROFILE.settings, ...p.settings } } : DEFAULT_PROFILE;
 };
 export const saveProfile = (p: Profile) => write(PROFILE_KEY, p);
+export const loadDaily = () => {
+  const g = read<GameState>(DAILY_KEY);
+  return g && g.version === 1 && g.daily ? g : null;
+};
+export const saveDaily = (g: GameState | null) => write(DAILY_KEY, g);
+export const loadMode = (): 'family' | 'daily' => (read<string>(MODE_KEY) === 'daily' ? 'daily' : 'family');
+export const saveMode = (m: 'family' | 'daily') => write(MODE_KEY, m);

@@ -138,7 +138,7 @@ export function Family({ app }: { app: AppApi }) {
           ))}
         </div>
       </section>
-      {age >= TORCH_AGE && !s.dead && <TorchCard app={app} onOpen={() => setTorchOpen(true)} />}
+      {age >= TORCH_AGE && !s.dead && !s.daily && <TorchCard app={app} onOpen={() => setTorchOpen(true)} />}
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
           <h2 class="title-l">{T('Ribbons')}</h2>

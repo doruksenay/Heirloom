@@ -2,7 +2,7 @@ import type { ChoiceDef, Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
 import { firstNames } from '../../engine/world';
 import { familyFirstNames, freshFirstNames } from '../../engine/context';
-import { acc, cap, dat, gen, kin, nm, single, wage, who, wth } from './util';
+import { acc, cap, dat, gen, kin, nm, single, wage, who, wth, quietInMourning } from './util';
 import { catName } from '../../engine/pets';
 import { currentTier, homeTier, houseState } from '../../engine/home';
 import { tierPrice } from './activities-home';
@@ -206,9 +206,10 @@ export const elderEvents: EventDef[] = [
       const taken = new Set([kid.person.firstName, c.p.firstName, ...all.map((x) => x.n)]);
       const free = freshFirstNames(c.s, g).filter((n) => !taken.has(n));
       c.vars.trendy = c.rng.pick(free.length ? free : pool);
-      // the name you would push for: your own, your spouse's, or your parent's
+      // the name you would push for: your own, your spouse's, or a late parent's (a living one would put two
+      // people of the same name in the family tree and make every line about them ambiguous)
       const sp = c.p.relations.find((r) => r.kind === 'spouse' && c.s.people[r.personId]?.gender === g);
-      const par = c.p.relations.find((r) => r.kind === (g === 'female' ? 'mother' : 'father') && c.s.people[r.personId]);
+      const par = c.p.relations.find((r) => r.kind === (g === 'female' ? 'mother' : 'father') && c.s.people[r.personId]?.deathYear !== undefined);
       if (c.p.gender === g) (c.vars.honor = c.p.firstName), (c.vars.hw = 'you');
       else if (sp) (c.vars.honor = c.s.people[sp.personId].firstName), (c.vars.hw = 'spouse');
       else if (par) (c.vars.honor = c.s.people[par.personId].firstName), (c.vars.hw = 'parent');
@@ -1108,7 +1109,7 @@ export const elderEvents: EventDef[] = [
           c.h.stat('health', -1);
           return c.t(
             `You queued all day. You got the stamp, ${money(c)} and three new friends from the line.`,
-            `Bütün gün sırada bekledin. Mührü de aldın, hesabına ${money(c)} da yattı, kuyruktan üç yeni arkadaş da edindin.`,
+            `Bütün gün sırada bekledin. Mührü de aldın, hesabına da ${money(c)} yattı, kuyruktan üç yeni arkadaş da edindin.`,
           );
         },
       },
@@ -2252,3 +2253,5 @@ function addGrandbaby(c: Ctx, name: string) {
   parent.childIds = [...(parent.childIds ?? []), baby.id];
   st.gk.push({ n: name, g, by: c.s.year, p: parent.id, id: baby.id });
 }
+
+quietInMourning(elderEvents);

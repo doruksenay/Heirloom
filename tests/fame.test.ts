@@ -232,3 +232,70 @@ describe('fame v0.7 playtest fixes', () => {
     expect(s.player.log[s.player.log.length - 1].text).toContain('bir figüran olarak');
   });
 });
+
+describe('fame round-3 playtest fixes (playtest 3 §2.6)', () => {
+  const DEAD_MOM = /Annene şaka|Öz annen|Annenle canlı|Annen canlı yayına|annenin "Ne zaman|Annen hâlâ seni affetmedi|prank on your own mother|Your own mother|with your mother|Your mother called|your mother ask|Your mother still/;
+  const GRANDMA = /Ninen yayına|Ninenle canlı|Your grandmother called in|with your grandmother/;
+
+  /** A 59-year-old social-media star whose mother died long ago and who has no grandmother left. */
+  const orphanStar = (lang: Lang, seed: number) => {
+    const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'İzmir', seed }, profile(lang));
+    s.year += 59;
+    for (const r of s.player.relations) if (r.kind === 'mother' || r.kind === 'father' || r.kind === 'grandparent') s.people[r.personId].deathYear = s.year - 20;
+    const f = fameState(s.player);
+    f.path = 'social';
+    f.fans = 50_000;
+    return s;
+  };
+
+  it('never puts a dead mother or a grandmother the player never had on air', () => {
+    for (const lang of ['tr', 'en'] as Lang[]) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const s = orphanStar(lang, seed);
+        for (let y = 0; y < 30; y++) {
+          s.player.actionsThisYear = {};
+          for (const a of ['fame_post', 'fame_live', 'fame_podcast', 'fame_stylist']) doActivity(s, a);
+          s.year++;
+        }
+        for (const id of ['fame.livestream_mishap', 'fame.talk_show', 'fame.collab_star']) {
+          const def = findEvent(id)?.def;
+          if (!def) continue;
+          for (let k = 0; k < 6; k++) {
+            if (openEvent(s, def)) {
+              const ok = s.pending!.choices.filter((ch) => !ch.disabled);
+              choose(s, ok[k % ok.length].id); // every choice in turn
+            }
+          }
+        }
+        const text = s.player.log.map((l) => l.text).join('\n');
+        expect(text).not.toMatch(DEAD_MOM);
+        expect(text).not.toMatch(GRANDMA);
+      }
+    }
+  });
+
+  it('a young star with a living mother still gets the family lines', () => {
+    let family = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'İzmir', seed }, profile('tr'));
+      s.year += 20;
+      const f = fameState(s.player);
+      f.path = 'social';
+      f.fans = 50_000;
+      for (let y = 0; y < 10; y++) {
+        s.player.actionsThisYear = {};
+        for (const a of ['fame_post', 'fame_live', 'fame_podcast', 'fame_stylist']) doActivity(s, a);
+        s.year++;
+      }
+      family += s.player.log.filter((l) => /Annene şaka|Öz annen|Ninen|Annenle/.test(l.text)).length;
+    }
+    expect(family).toBeGreaterThan(0);
+  });
+
+  it('calls a grandmother of unknown side "ninen", never "babaanne"', async () => {
+    const { readFileSync } = await import('fs');
+    for (const f of ['src/content/fame/index.ts', 'src/content/fame/events-more.ts', 'src/content/fame/activities-more.ts', 'src/content/campus/index.ts']) {
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/[Bb]abaanne|Anneannen/);
+    }
+  });
+});

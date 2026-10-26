@@ -1,10 +1,10 @@
 import type { Ctx, EventDef, ChoiceDef, ActivityDef } from '../content/types';
 import type { GameState, LifeRecord, Person, Player, Profile, Gender, Education } from './types';
 import { makeCtx, ageOf, clamp, freshFirstNames } from './context';
-import { createRng, randomSeed } from './rng';
+import { createRng, randomSeed, type Rng } from './rng';
 import { getCountry } from './world';
 import { BASE_JOBS, EDUCATION_RANK, salaryFor, titleFor } from './careers';
-import { abl, acc, dat, gen, loc } from '../i18n/tr-grammar';
+import { abl, acc, dat, gen, gen as gen_, loc } from '../i18n/tr-grammar';
 import { furniture, hasGarden } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
@@ -211,8 +211,11 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
   h.addRelation(mother, 'mother', rng.int(60, 95));
   h.addRelation(father, 'father', rng.int(55, 95));
   const siblings = rng.weighted([0, 1, 2], (n) => [5, 4, 2][n]) ?? 0;
+  const sibs: Person[] = [];
   for (let i = 0; i < siblings; i++) {
-    h.addRelation(h.newPerson({ age: rng.int(2, 10), lastName: opts.lastName }), 'sibling', rng.int(40, 85));
+    const sib = h.newPerson({ age: rng.int(2, 10), lastName: opts.lastName });
+    h.addRelation(sib, 'sibling', rng.int(40, 85));
+    sibs.push(sib);
   }
 
   const girlOrBoy = opts.gender === 'female' ? 'a girl' : 'a boy';
@@ -229,6 +232,19 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
       `Annen ${mother.firstName} (${h.ageOf(mother)}) ve baban ${father.firstName} (${h.ageOf(father)}) seni kucaklarında eve getirdi.`,
     ),
   );
+  // the brothers and sisters, eldest first, so they do not first appear years later (playtest 3); no rng
+  if (sibs.length) {
+    sibs.sort((a, b) => a.birthYear - b.birthYear);
+    const en = sibs.map((q) => `big ${q.gender === 'female' ? 'sister' : 'brother'} ${q.firstName} (${h.ageOf(q)})`);
+    const tr = sibs.map((q) => `${q.gender === 'female' ? 'ablan' : 'ağabeyin'} ${q.firstName} (${h.ageOf(q)})`);
+    const trList = tr.join(' ve ');
+    h.log(
+      c.t(
+        `Your ${en.join(' and your ')} ${sibs.length > 1 ? 'were' : 'was'} waiting at the door to meet you.`,
+        `${trList[0].toLocaleUpperCase('tr')}${trList.slice(1)} seni kapıda ${sibs.length > 1 ? 'bekliyorlardı' : 'bekliyordu'}.`,
+      ),
+    );
+  }
 
   if (opts.scenario === 'sano') {
     h.addHeirloom('clock', c.t("Grandpa Mehmet's pocket watch", "Mehmet Dede'nin cep saati"), c.t('Mehmet Baba bought it with his first wage from the Zonguldak mines in 1961.', "Mehmet Baba onu 1961'de Zonguldak madenlerindeki ilk maaşıyla almıştı."));
@@ -278,6 +294,11 @@ function perksFor(profile: Profile): string[] {
 export const hasPlus = (s: GameState) => !!s.perks?.includes('plus');
 
 export function refreshPacks(s: GameState, profile: Profile) {
+  if (s.daily) {
+    // a Daily Challenge plays with the same packs and no perks for everyone; only the language follows settings
+    s.lang = profile.settings.language ?? 'en';
+    return;
+  }
   s.enabledPacks = resolveEnabledPacks(profile);
   s.perks = perksFor(profile);
   s.lang = profile.settings.language ?? 'en';
@@ -298,14 +319,28 @@ export function annualMortality(age: number, health: number, shift = 0): number 
   return Math.min(0.95, base * healthFactor * (1 + shift * 5) + 0.0002);
 }
 
-function deathCause(c: Ctx): string {
-  const { age, p, rng } = c;
-  // stored in English; the UI and logs translate known causes (see causeTr)
-  if (p.stats.health < 20) return rng.pick(['a long illness', 'heart failure', 'pneumonia']);
-  if (age >= 78) return rng.pick(['old age', 'peacefully in sleep', 'heart failure', 'a stroke']);
-  if (age < 40) return rng.pick(['a car accident', 'a sudden aneurysm', 'a rare infection']);
-  return rng.pick(['a heart attack', 'cancer', 'a stroke', 'a car accident']);
+/**
+ * Causes of a natural death by age band, with weights (playtest 3: a car accident killed 15% of
+ * Turkish lives, at 53, 65 and 68, because every cause had the same chance at any age).
+ * Accidents and rare causes belong to the young; cancer and heart attacks to midlife; heart failure,
+ * pneumonia, falls and old age to the very old. Every cause here has a sentence in DEATH_LINES.
+ */
+const CAUSES_BY_AGE: { max: number; causes: [string, number][] }[] = [
+  { max: 39, causes: [['a car accident', 30], ['a sudden aneurysm', 20], ['a rare infection', 20], ['cancer', 18], ['a heart attack', 6]] },
+  { max: 59, causes: [['cancer', 38], ['a heart attack', 30], ['a stroke', 12], ['a long illness', 8], ['a car accident', 4], ['a sudden aneurysm', 4]] },
+  { max: 77, causes: [['cancer', 32], ['a heart attack', 22], ['a stroke', 15], ['heart failure', 12], ['a long illness', 9], ['pneumonia', 6], ['a car accident', 1]] },
+  { max: 89, causes: [['heart failure', 22], ['peacefully in sleep', 16], ['old age', 14], ['a stroke', 14], ['cancer', 12], ['pneumonia', 10], ['a heart attack', 6], ['a fall', 6]] },
+  { max: Infinity, causes: [['old age', 30], ['peacefully in sleep', 26], ['heart failure', 20], ['pneumonia', 12], ['a stroke', 6], ['a fall', 6]] },
+];
+/** A body worn down by poor health (health under 20) usually goes slowly. */
+const FRAIL_CAUSES: [string, number][] = [['a long illness', 40], ['heart failure', 25], ['pneumonia', 20], ['cancer', 15]];
+
+/** One weighted pick (one rng call whatever the age or language). Stored in English; see CAUSE_TR and deathLine. */
+export function deathCauseFor(age: number, health: number, rng: Rng): string {
+  const list = health < 20 && age >= 40 ? FRAIL_CAUSES : CAUSES_BY_AGE.find((b) => age <= b.max)!.causes;
+  return rng.weighted(list, (x) => x[1])?.[0] ?? 'old age';
 }
+const deathCause = (c: Ctx) => deathCauseFor(c.age, c.p.stats.health, c.rng);
 
 /** Leaving prison (playtest 2: one line, 106 times in 202 lives). */
 const RELEASE_LINES: Pair[] = [
@@ -394,7 +429,7 @@ function yearlyTick(c: Ctx): string | null {
     }
   }
   if (age >= 18) {
-    const kids = h.relatives('child').filter((k) => h.ageOf(k.person) < 18).length;
+    const kids = h.relatives('child').filter((k) => h.ageOf(k.person) < 18).length + raisedGrandkids(s).filter((g) => ageOf(s, g) < 18).length;
     const b = yearBudget(p, age, salary, !!h.partner(), kids);
     const net = safetyNet(p, age, b);
     h.money(b.pay + b.support + net - b.cost);
@@ -404,6 +439,14 @@ function yearlyTick(c: Ctx): string | null {
   }
   if (age === 65 && job && !p.retired) scheduled = scheduled ?? 'base.retirement';
   if (p.money >= 0 && h.has('debt_plan')) h.unflag('debt_plan');
+
+  // --- a life-stage event pushed back a year by a death in the family (see the relatives loop below)
+  const eng = engineExt(p);
+  if (!scheduled && eng.deferred) {
+    const d = eng.deferred;
+    delete eng.deferred;
+    if (d !== 'base.retirement' || (job && !p.retired)) scheduled = d;
+  }
 
   // --- nudges the engine opens as scheduled events (at most one scheduled event a year)
   if (!scheduled && age >= 23 && p.jailYears === 0 && p.money < 0) {
@@ -420,6 +463,7 @@ function yearlyTick(c: Ctx): string | null {
   for (const pack of enabledPacks(s.enabledPacks)) pack.onYear?.(c);
 
   // --- relatives
+  let loss: { person: Person; kind: 'child' | 'spouse' } | undefined;
   for (const rel of p.relations) {
     const person = s.people[rel.personId];
     if (!person || person.deathYear !== undefined) continue;
@@ -443,6 +487,8 @@ function yearlyTick(c: Ctx): string | null {
       );
       h.stat('happiness', firstGrandkid ? 5 : 3);
     }
+    // brothers and sisters have children too: nieces and nephews, who can carry on a childless life's family
+    if (rel.kind === 'sibling' && pa >= 24 && pa <= 42 && rng.chance(0.06)) addNibling(c, person);
     if (rng.chance(annualMortality(pa, person.stats.health, country.mortalityShift))) {
       person.deathYear = s.year;
       // a former player who passed the torch: their family-tree entry now gets a death year too
@@ -458,6 +504,9 @@ function yearlyTick(c: Ctx): string | null {
         : { mother: 'Annen', father: 'Baban', sibling: person.birthYear < p.birthYear ? (f ? 'Ablan' : 'Ağabeyin') : f ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: f ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: f ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın', grandparent: f ? 'Büyükannen' : 'Deden' }[rel.kind];
       h.log(c.t(`Your ${label} ${person.firstName} passed away at ${pa}.`, `${labelTr} ${person.firstName}, ${pa} yaşında hayata gözlerini yumdu.`), 'bad');
       h.stat('happiness', -Math.round(rel.closeness / 6));
+      // a child or a partner: the year belongs to the loss (playtest 3: a class reunion right after a daughter died)
+      if (rel.kind === 'child' && loss?.kind !== 'child') loss = { person, kind: 'child' };
+      else if ((rel.kind === 'spouse' || rel.kind === 'partner') && !loss) loss = { person, kind: 'spouse' };
       const parentLike = (rel.kind === 'mother' || rel.kind === 'father' || rel.kind === 'grandparent') && !rel.step;
       const lucky = parentLike && rng.chance(0.6);
       // a parent who handed the family over left you your share of what they kept: spent down by the years
@@ -476,7 +525,83 @@ function yearlyTick(c: Ctx): string | null {
     }
   }
   syncGrandkids(c);
+  if (loss) {
+    // the grief event takes this year's scheduled slot; whatever it pushed aside opens next year
+    h.flag('mourning');
+    eng.loss = loss.person.id;
+    const orphans = loss.kind === 'child' && (loss.person.childIds ?? []).some((id) => s.people[id] && s.people[id].deathYear === undefined && ageOf(s, s.people[id]) < 18);
+    const ev = loss.kind === 'spouse' ? 'base.grief_spouse' : orphans ? 'base.grief_orphan' : 'base.grief_child';
+    if (scheduled && scheduled !== ev) eng.deferred = scheduled;
+    scheduled = ev;
+  }
   return scheduled;
+}
+
+/** Engine bookkeeping kept on the player (p.ext.engine; optional, so old saves load). */
+interface EngineExt {
+  /** A scheduled life-stage event that a death in the family pushed to next year. */
+  deferred?: string;
+  /** The child or partner most recently lost (for the grief events and the quiet year after). */
+  loss?: string;
+}
+const engineExt = (p: Player): EngineExt => ((p.ext ??= {}).engine ??= {}) as EngineExt;
+
+/** Grandchildren the player took in after their parent died (flag `raising:<id>`, set by base.grief_orphan). */
+export function raisedGrandkids(s: GameState): Person[] {
+  return grandchildren(s)
+    .map((g) => g.person)
+    .filter((q) => `raising:${q.id}` in s.player.flags && q.deathYear === undefined);
+}
+
+const capTr = (w: string) => (w ? w[0].toLocaleUpperCase('tr') + w.slice(1) : w);
+
+/** Turkish word for the player as this sibling's child's aunt or uncle: teyze, hala, dayı, amca. */
+export function auntWordTr(player: Gender, sibling: Gender): string {
+  if (player === 'female') return sibling === 'female' ? 'teyze' : 'hala';
+  return sibling === 'female' ? 'dayı' : 'amca';
+}
+
+/** A brother or sister of the player had a baby: a real niece or nephew who can inherit (no heirs of one's own). */
+function addNibling(c: Ctx, sib: Person): Person {
+  const { h, p, s } = c;
+  const firstEver = !p.relations.some((r) => r.kind === 'sibling' && (s.people[r.personId]?.childIds?.length ?? 0) > 0);
+  const again = (sib.childIds?.length ?? 0) > 0;
+  // a brother's children carry his surname; a sister's usually their father's
+  const baby = h.newPerson({ age: 0, lastName: sib.gender === 'male' ? sib.lastName : undefined });
+  sib.kids = (sib.kids ?? 0) + 1;
+  sib.childIds = [...(sib.childIds ?? []), baby.id];
+  const sf = sib.gender === 'female';
+  const bf = baby.gender === 'female';
+  const older = sib.birthYear < p.birthYear;
+  const sEn = sf ? 'sister' : 'brother';
+  const sTr = older ? (sf ? 'Ablan' : 'Ağabeyin') : sf ? 'Kız kardeşin' : 'Erkek kardeşin';
+  const n = sib.firstName;
+  const b = baby.firstName;
+  const child = bf ? 'kızı' : 'oğlu';
+  h.log(
+    again
+      ? c.t(`Your ${sEn} ${n} had another baby: ${b}.`, `${sTr} ${gen(n)} bir ${child} daha oldu: ${b}.`)
+      : firstEver
+        ? c.t(
+            `Your ${sEn} ${n} had a baby ${bf ? 'girl' : 'boy'}, ${b}. You're an ${p.gender === 'female' ? 'aunt' : 'uncle'}!`,
+            `${sTr} ${gen(n)} bir ${child} oldu: ${b}. ${capTr(auntWordTr(p.gender, sib.gender))} oldun!`,
+          )
+        : c.t(`Your ${sEn} ${n} had a baby ${bf ? 'girl' : 'boy'}, ${b}. One more ${bf ? 'niece' : 'nephew'} for you.`, `${sTr} ${gen(n)} bir ${child} oldu: ${b}. Bir yeğenin daha var.`),
+    'good',
+  );
+  h.stat('happiness', 2);
+  return baby;
+}
+
+/** Children of the player's brothers and sisters (any age, living or not). */
+export function niblings(s: GameState): { person: Person; parent: Person }[] {
+  const out: { person: Person; parent: Person }[] = [];
+  for (const r of s.player.relations) {
+    if (r.kind !== 'sibling') continue;
+    const parent = s.people[r.personId];
+    for (const id of parent?.childIds ?? []) if (s.people[id] && id !== s.player.id) out.push({ person: s.people[id], parent });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- grandchildren
@@ -758,8 +883,35 @@ export const CAUSE_TR: Record<string, string> = {
   'a rare infection': 'nadir bir enfeksiyon',
   'a heart attack': 'kalp krizi',
   cancer: 'kanser',
+  'a fall': 'evde düşme',
 };
 export const causeTr = (cause: string) => CAUSE_TR[cause] ?? cause;
+
+/**
+ * The last line of a life, one full sentence per cause (playtest 3: "You died at 81 of peacefully in sleep.").
+ * `{n}` is the age; it never takes a Turkish suffix.
+ */
+const DEATH_LINES: Record<string, [string, string]> = {
+  'a long illness': ['You died at {n}, after a long illness.', '{n} yaşında, uzun süren bir hastalığın ardından hayata gözlerini yumdun.'],
+  'heart failure': ['Your heart finally gave out at {n}.', '{n} yaşında kalbin daha fazla dayanamadı.'],
+  pneumonia: ['You died of pneumonia at {n}.', '{n} yaşında zatürreye yenik düştün.'],
+  'old age': ['You died of old age at {n}, with a full life behind you.', '{n} yaşında, dolu dolu bir ömrün ardından yaşlılıktan hayata gözlerini yumdun.'],
+  'peacefully in sleep': ['You died peacefully in your sleep at {n}.', '{n} yaşında, bir gece uykunda huzur içinde göçüp gittin.'],
+  'a stroke': ['You died of a stroke at {n}.', '{n} yaşında geçirdiğin bir felç sonucu hayatını kaybettin.'],
+  'a car accident': ['You died in a car accident at {n}.', '{n} yaşında bir trafik kazasında hayatını kaybettin.'],
+  'a sudden aneurysm': ['A sudden aneurysm took you at {n}.', 'Ani bir anevrizma, {n} yaşında hayatına son verdi.'],
+  'a rare infection': ['You died of a rare infection at {n}.', '{n} yaşında nadir görülen bir enfeksiyon yüzünden hayatını kaybettin.'],
+  'a heart attack': ['You died of a heart attack at {n}.', '{n} yaşında geçirdiğin bir kalp kriziyle hayata veda ettin.'],
+  cancer: ['You died of cancer at {n}.', '{n} yaşında kansere yenik düştün.'],
+  'a fall': ['You died at {n}, after a bad fall at home.', '{n} yaşında evde kötü bir şekilde düştün ve bir daha ayağa kalkamadın.'],
+};
+
+/** The life's closing sentence for a cause of death, in the story language. Unknown causes fall back to "Cause: …". */
+export function deathLine(cause: string, age: number, lang: 'en' | 'tr' = 'en'): string {
+  const l = DEATH_LINES[cause];
+  if (l) return l[lang === 'tr' ? 1 : 0].split('{n}').join(String(age));
+  return lang === 'tr' ? `${age} yaşında hayata gözlerini yumdun. Sebep: ${causeTr(cause)}.` : `You died at ${age}. Cause: ${cause}.`;
+}
 
 
 const HANDOVER_WORDS: [string, string][] = [
@@ -777,8 +929,9 @@ export const HANDED_OVER = 'handed over';
 
 export interface HeirOption {
   person: Person;
-  kind: 'child' | 'grandchild';
-  /** For a grandchild: the player's child who is its parent. */
+  /** 'nibling': a niece or nephew (a brother's or sister's child), offered only when no child or grandchild can carry on. */
+  kind: 'child' | 'grandchild' | 'nibling';
+  /** For a grandchild: the player's child who is its parent. For a niece or nephew: the player's brother or sister. */
   parent?: Person;
 }
 
@@ -788,15 +941,23 @@ const livingChildren = (s: GameState): Person[] =>
     .map((r) => s.people[r.personId])
     .filter((x): x is Person => !!x && x.deathYear === undefined);
 
-/** Everyone who could carry on: living children (from `minChildAge`) and adult grandchildren. */
+/**
+ * Everyone who could carry on: living children (from `minChildAge`), adult grandchildren and any grandchild the
+ * player is raising. With none of those, the children of the player's brothers and sisters (playtest 3: one life
+ * in seven ended the dynasty for want of a child).
+ */
 export function heirOptions(s: GameState, minChildAge = 0): HeirOption[] {
   const kids = livingChildren(s)
     .filter((k) => ageOf(s, k) >= minChildAge)
     .map((person): HeirOption => ({ person, kind: 'child' }));
+  const raising = new Set(raisedGrandkids(s).map((q) => q.id));
   const gks = grandchildren(s)
-    .filter(({ person }) => person.deathYear === undefined && ageOf(s, person) >= 18)
+    .filter(({ person }) => person.deathYear === undefined && (ageOf(s, person) >= 18 || (raising.has(person.id) && ageOf(s, person) >= minChildAge)))
     .map(({ person, parent }): HeirOption => ({ person, kind: 'grandchild', parent }));
-  return [...kids, ...gks];
+  if (kids.length || gks.length || livingChildren(s).length) return [...kids, ...gks];
+  return niblings(s)
+    .filter(({ person }) => person.deathYear === undefined && ageOf(s, person) >= minChildAge)
+    .map(({ person, parent }): HeirOption => ({ person, kind: 'nibling', parent }));
 }
 
 /** Heirs offered on the summary screen. After a hand-over, only the heir who was chosen. */
@@ -808,8 +969,9 @@ export function heirs(s: GameState): Person[] {
   return heirOptions(s).map((x) => x.person);
 }
 
-/** Adult children and adult grandchildren who could take over now. */
-export const torchHeirs = (s: GameState): HeirOption[] => heirOptions(s, 18);
+/** Adult children and adult grandchildren who could take over now (nieces and nephews inherit only at a death). */
+export const torchHeirs = (s: GameState): (HeirOption & { kind: 'child' | 'grandchild' })[] =>
+  heirOptions(s, 18).filter((o): o is HeirOption & { kind: 'child' | 'grandchild' } => o.kind !== 'nibling');
 
 /** Whether the player can pass the torch right now. */
 export function canPassTorch(s: GameState): boolean {
@@ -878,7 +1040,7 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
   if (handover) {
     c.h.log(c.t(`At ${age}, you passed the torch to ${handover.heir.firstName}.`, `${age} yaşında bayrağı ${dat(handover.heir.firstName)} devrettin.`), 'big');
   } else {
-    c.h.log(c.t(`You died at ${age} of ${cause}.`, `${age} yaşında hayata gözlerini yumdun. Sebep: ${causeTr(cause)}.`), 'big');
+    c.h.log(deathLine(cause, age, c.lang), 'big');
   }
   s.dead = record;
   s.pending = null;
@@ -945,7 +1107,9 @@ export function continueAsChild(s: GameState, heirId: string): void {
   // at their death.
   // The home counts towards the heir's part: with brothers and sisters, the heir gets the home and only the cash
   // beyond it (playtest 2: an inherited home made every generation richer than the last).
-  const splitWays = Math.max(1, kids.length);
+  // A grandchild heir takes a share next to the old player's children (in the place of a parent who died, or
+  // beside a living one); before, one living child meant the grandchild took everything and the parent nothing.
+  const splitWays = Math.max(1, kids.length + (opt.kind === 'grandchild' ? 1 : 0));
   const handed = handedOver ? savings * HANDOVER_GIFT : savings;
   const tax = inheritanceTax(handed, wageFactor);
   const homeValue = prev.home.owned ? Math.max(0, prev.home.value) : 0;
@@ -992,6 +1156,18 @@ export function continueAsChild(s: GameState, heirId: string): void {
     if (step && step.id !== bio?.id && step.id !== prev.id)
       np.relations.push({ personId: step.id, kind: step.gender === 'female' ? 'mother' : 'father', closeness: 55, sinceYear: Math.max(child.birthYear, current!.sinceYear), step: true });
     for (const k of kids) if (k.id !== child.id) np.relations.push({ personId: k.id, kind: 'sibling', closeness: rng.int(40, 85), sinceYear: k.birthYear });
+  } else if (opt.kind === 'nibling') {
+    // a niece or nephew: their own parent (the old player's brother or sister), brothers and sisters, and the old
+    // player's parents, who are their grandparents too
+    const parent = opt.parent!;
+    np.relations.push({ personId: parent.id, kind: parent.gender === 'female' ? 'mother' : 'father', closeness: rng.int(60, 90), sinceYear: child.birthYear });
+    for (const r of prev.relations)
+      if ((r.kind === 'mother' || r.kind === 'father') && !r.step && s.people[r.personId])
+        np.relations.push({ personId: r.personId, kind: 'grandparent', closeness: 70, sinceYear: child.birthYear });
+    for (const id of parent.childIds ?? []) {
+      const sib = s.people[id];
+      if (sib && id !== child.id && sib.deathYear === undefined) np.relations.push({ personId: id, kind: 'sibling', closeness: rng.int(40, 85), sinceYear: sib.birthYear });
+    }
   } else {
     const parent = opt.parent!;
     np.relations.push({ personId: parent.id, kind: parent.gender === 'female' ? 'mother' : 'father', closeness: rng.int(60, 90), sinceYear: child.birthYear });
@@ -1044,12 +1220,22 @@ export function continueAsChild(s: GameState, heirId: string): void {
         : `Passed from ${prev.firstName} to ${child.firstName} in ${s.year}.`,
     );
   }
-  s.dynasty.generation++;
+  // the generation number follows the family tree: a grandchild is two steps down, a niece or nephew one
+  // (playtest 3: a biological third generation was told "Gen 2 begins with you")
+  s.dynasty.generation += opt.kind === 'grandchild' ? 2 : 1;
   s.dead = null;
   s.pending = null;
   const f = prev.gender === 'female';
+  // Turkish names the side of the family: anneanne/babaanne, teyze/hala/dayı/amca
+  const sideFemale = opt.parent?.gender === 'female';
   const who =
-    opt.kind === 'child' ? { en: f ? 'mother' : 'father', tr: f ? 'Annen' : 'Baban' } : { en: f ? 'grandmother' : 'grandfather', tr: f ? 'Büyükannen' : 'Deden' };
+    opt.kind === 'child'
+      ? { en: f ? 'mother' : 'father', tr: f ? 'Annen' : 'Baban' }
+      : opt.kind === 'grandchild'
+        ? { en: f ? 'grandmother' : 'grandfather', tr: f ? (sideFemale ? 'Anneannen' : 'Babaannen') : 'Deden' }
+        : { en: f ? 'aunt' : 'uncle', tr: capTr(auntWordTr(prev.gender, opt.parent?.gender ?? 'female')) + 'n' };
+  const gk = opt.kind === 'grandchild';
+  const pn = prev.firstName;
   const gen = s.dynasty.generation;
   const fam = s.dynasty.familyName;
   if (handedOver) {
@@ -1064,32 +1250,45 @@ export function continueAsChild(s: GameState, heirId: string): void {
       c2.h.log(
         np.money > 0
           ? c2.t(`${prev.firstName} shared out half of the family savings. You got the family home and ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını paylaştırdı. Sana aile evi ve ${c2.h.fmt(np.money)} düştü.`)
-          : c2.t(`${prev.firstName} shared out half of the family savings between your brothers and sisters. The family home is yours.`, `${prev.firstName} aile birikiminin yarısını kardeşlerine paylaştırdı. Aile evi sana kaldı.`),
+          : gk
+            ? c2.t(`${pn} shared out half of the family savings between ${f ? 'her' : 'his'} children. The family home is yours.`, `${pn} aile birikiminin yarısını çocukları arasında paylaştırdı. Aile evi sana kaldı.`)
+            : c2.t(`${pn} shared out half of the family savings between your brothers and sisters. The family home is yours.`, `${pn} aile birikiminin yarısını kardeşlerin arasında paylaştırdı. Aile evi sana kaldı.`),
       );
     else if (np.money > 0)
       c2.h.log(
         splitWays > 1
-          ? c2.t(`${prev.firstName} shared out half of the family savings between the children. Your part: ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını çocuklar arasında paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
+          ? gk
+            ? c2.t(`${pn} shared out half of the family savings between ${f ? 'her' : 'his'} children and you. Your part: ${c2.h.fmt(np.money)}.`, `${pn} aile birikiminin yarısını çocuklarıyla senin aranda paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
+            : c2.t(`${pn} shared out half of the family savings between the children. Your part: ${c2.h.fmt(np.money)}.`, `${pn} aile birikiminin yarısını çocuklar arasında paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
           : c2.t(`${prev.firstName} gave you half of the family savings: ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını sana verdi: ${c2.h.fmt(np.money)}.`),
       );
     if (tax > 0) c2.h.log(c2.t(`The tax office took its cut of the gift: ${c2.h.fmt(tax)}.`, `Vergi dairesi bu bağıştan payını aldı: ${c2.h.fmt(tax)} intikal vergisi.`));
     if (s.dynasty.heirlooms.length) c2.h.log(c2.t('The family heirlooms are yours to keep now.', 'Aile yadigârları artık sende.'));
   } else {
     c2.h.log(
-      c2.t(
-        `You lost your ${who.en}, ${prev.firstName}. Gen ${gen} of the ${fam} family begins with you.`,
-        `${who.tr} ${acc(prev.firstName)} kaybettin. ${fam} ailesinin ${gen}. kuşağı seninle başlıyor.`,
-      ),
+      opt.kind === 'nibling'
+        ? c2.t(
+            `You lost your ${who.en}, ${pn}. With no children left to carry on, ${f ? 'she' : 'he'} left the family to you. Gen ${gen} of the ${fam} family begins with you.`,
+            `${who.tr} ${acc(pn)} kaybettin. Geride çocuğu kalmamıştı; aileyi sana bıraktı. ${fam} ailesinin ${gen}. kuşağı seninle başlıyor.`,
+          )
+        : c2.t(
+            `You lost your ${who.en}, ${pn}. Gen ${gen} of the ${fam} family begins with you.`,
+            `${who.tr} ${acc(pn)} kaybettin. ${fam} ailesinin ${gen}. kuşağı seninle başlıyor.`,
+          ),
       'big',
     );
     if (tax > 0 || splitWays > 1) {
       const t = c2.h.fmt(tax);
       c2.h.log(
         tax > 0 && splitWays > 1
-          ? c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${splitWays} children.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${splitWays} kardeş arasında bölündü.`)
+          ? gk
+            ? c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${pn}'s children and you.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${gen_(pn)} çocuklarıyla senin aranda bölündü.`)
+            : c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${splitWays} children.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${splitWays} kardeş arasında bölündü.`)
           : tax > 0
             ? c2.t(`The estate was settled. The tax office took ${t} in inheritance tax.`, `Miras işlemleri bitti. Vergi dairesi ${t} veraset vergisi aldı.`)
-            : c2.t(`The savings were split between ${splitWays} children.`, `Birikim ${splitWays} kardeş arasında bölündü.`),
+            : gk
+              ? c2.t(`The savings were split between ${pn}'s children and you.`, `Birikim, ${gen_(pn)} çocuklarıyla senin aranda bölündü.`)
+              : c2.t(`The savings were split between ${splitWays} children.`, `Birikim ${splitWays} kardeş arasında bölündü.`),
       );
     }
     const home = prev.home.owned;
@@ -1103,10 +1302,15 @@ export function continueAsChild(s: GameState, heirId: string): void {
       );
     else if (homeTookShare)
       c2.h.log(
-        c2.t(
-          `The family home${hl ? ' and the heirlooms' : ''} came to you; your brothers and sisters shared the savings.`,
-          `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi kardeşlerin paylaştı.`,
-        ),
+        gk
+          ? c2.t(
+              `The family home${hl ? ' and the heirlooms' : ''} came to you; ${pn}'s children shared the savings.`,
+              `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi ${gen_(pn)} çocukları paylaştı.`,
+            )
+          : c2.t(
+              `The family home${hl ? ' and the heirlooms' : ''} came to you; your brothers and sisters shared the savings.`,
+              `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi kardeşlerin paylaştı.`,
+            ),
       );
   }
   assignGoals(s, c2.rng);
@@ -1165,7 +1369,7 @@ const QUIET: { max: number; lines: Line[] }[] = [
       ['You decided you were going to be famous. Details to follow.', 'Ünlü olmaya karar verdin. Ayrıntılar sonra.'],
       ['You grew five centimetres and none of your trousers fit.', 'Beş santim uzadın, hiçbir pantolonun olmuyor.'],
       ['You wrote very serious poems and hid them.', 'Çok ciddi şiirler yazıp sakladın.'],
-      ['You discovered an old band and made it your whole personality.', 'Eski bir grup keşfettin ve onu kişiliğinin tamamı yaptın.'],
+      ['You discovered an old band and made it your whole personality.', 'Eski bir grup keşfettin; artık bütün kimliğin o grup.'],
       ['You slept until noon every weekend. Growing, apparently.', 'Her hafta sonu öğlene kadar uyudun. Büyüme çağı, diyorlar.'],
     ],
   },
@@ -1244,9 +1448,25 @@ const QUIET_JAIL: Line[] = [
   ['You marked the days on the wall. That is a lot of marks.', 'Günleri duvara çentik atarak saydın. Çok çentik oldu.'],
 ];
 
+/** A quiet year in or just after the year a child or partner died: no jokes (playtest 3 §2.4). `{n}` name, `{g}` Turkish genitive. */
+const QUIET_GRIEF: Line[] = [
+  ['A quiet year, the first without {n}. Some days were almost ordinary.', '{n} olmadan geçirdiğin ilk yıl. Bazı günler neredeyse sıradandı.'],
+  ["{n}'s number is still in your phone. You cannot bring yourself to delete it.", '{g} numarası hâlâ telefonunda kayıtlı. Silmeye elin varmıyor.'],
+  ["On {n}'s birthday you baked a cake anyway, and the whole family came.", '{g} doğum gününde yine de pasta yaptın; bütün aile geldi.'],
+  ["You visited {n}'s grave every week and told the news, the small things first.", 'Her hafta {g} mezarına gidip olan biteni anlattın; önce küçük şeyleri.'],
+];
+
 /** Logs one short life-stage line in a year where nothing else was written. One rng call; recent lines are skipped deterministically. */
 export function quietYear(c: Ctx): void {
   const { p, age } = c;
+  const lossId = (p.ext?.engine as EngineExt | undefined)?.loss;
+  const lostOne = lossId ? c.s.people[lossId] : undefined;
+  if (lostOne && p.flags.mourning !== undefined && c.s.year - p.flags.mourning <= 1 && p.jailYears === 0) {
+    const i = c.rng.int(0, QUIET_GRIEF.length - 1);
+    const [en, tr] = QUIET_GRIEF[i];
+    c.h.log(c.t(en.split('{n}').join(lostOne.firstName), tr.split('{g}').join(gen(lostOne.firstName)).split('{n}').join(lostOne.firstName)));
+    return;
+  }
   const bucket = p.jailYears > 0 ? -1 : QUIET.findIndex((b) => age <= b.max);
   const lines = bucket < 0 ? QUIET_JAIL : QUIET[bucket].lines;
   p.ext = p.ext ?? {};

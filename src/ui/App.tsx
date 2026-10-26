@@ -11,6 +11,7 @@ import { Settings } from './screens/Settings';
 import { AdOverlay } from './AdOverlay';
 import { T } from '../i18n/ui';
 import { Intro } from './screens/Intro';
+import { Daily, DailyEnd } from './screens/Daily';
 import { Component, type ComponentChildren } from 'preact';
 import { reportError } from '../platform/analytics';
 
@@ -57,8 +58,10 @@ export function App() {
   const g = app.game;
 
   let body;
-  if (!g && !app.profile.introSeen && app.tab !== 'settings' && app.tab !== 'store') body = <Intro app={app} />;
+  if (app.tab === 'daily') body = <Daily app={app} />;
+  else if (!g && !app.profile.introSeen && app.tab !== 'settings' && app.tab !== 'store') body = <Intro app={app} />;
   else if (!g) body = app.tab === 'store' ? <Store app={app} /> : app.tab === 'settings' ? <Settings app={app} /> : <NewLife app={app} />;
+  else if (g.dead && g.daily && app.tab !== 'store' && app.tab !== 'settings') body = <DailyEnd app={app} />;
   else if (g.dead && app.tab !== 'store' && app.tab !== 'settings') body = <Summary app={app} />;
   else {
     const screens: Record<Tab, () => preact.JSX.Element> = {
@@ -68,10 +71,11 @@ export function App() {
       family: () => <Family app={app} />,
       store: () => <Store app={app} />,
       settings: () => <Settings app={app} />,
+      daily: () => <Daily app={app} />,
     };
     body = screens[app.tab]();
   }
-  const showNav = !!g && !g.dead;
+  const showNav = !!g && !g.dead && app.tab !== 'daily';
 
   return (
     <div class="shell">

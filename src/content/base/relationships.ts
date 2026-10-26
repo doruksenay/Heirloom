@@ -1,5 +1,5 @@
 import type { Ctx } from '../types';
-import { dat, gen, wth } from './util';
+import { da, dat, gen, wth } from './util';
 
 // Ending a relationship from an event. A partner is a break-up; a spouse is a real divorce:
 // "boşandınız", the savings split, the house bought out, and the children stay in the family.
@@ -31,7 +31,7 @@ export function divorceTerms(c: Ctx, pid: string): string {
     parts.push(
       buyout >= share
         ? c.t(`You kept the house; buying out ${n}'s share cost ${c.h.fmt(buyout)}.`, `Evde sen kaldın; ${gen(n)} payını ödemek ${c.h.fmt(buyout)} tuttu.`)
-        : c.t(`You kept the house. ${n} took the car and the good sofa instead.`, `Evde sen kaldın. ${n} da onun yerine arabayı ve güzel koltuğu aldı.`),
+        : c.t(`You kept the house. ${n} took the car and the good sofa instead.`, `Ev sende kaldı; ${da(n)} arabayı ve güzel koltuğu aldı.`),
     );
   }
   // the children stay family: young ones split the week, grown ones get two dinners

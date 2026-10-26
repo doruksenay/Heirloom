@@ -8,6 +8,7 @@ import {
   INDUSTRIES,
   SALE_RANGE,
   addMark,
+  tidy,
   an,
   bossState,
   companyAge,
@@ -1015,9 +1016,17 @@ export const moreEvents: EventDef[] = [
     minAge: 18,
     weight: 40,
     cooldown: 1,
-    when: (c) => !!co(c) && yrs(c) >= 10 && yrs(c) <= 14 && !hasMark(co(c)!, 'ten'),
+    // the party follows the founding year: on time at ten, or a year or two late and the title says so
+    when: (c) => !!co(c) && yrs(c) >= 10 && yrs(c) <= 12 && !hasMark(co(c)!, 'ten'),
     setup: (c) => addMark(co(c)!, 'ten'),
-    title: (c) => c.t(`${co(c)!.name} turns ten!`, `${co(c)!.name} on yaşında!`),
+    title: (c) => {
+      const n = co(c)!.name;
+      const late = yrs(c) - 10;
+      if (late === 0) return c.t(`${n} turns ten!`, `${n} on yaşında!`);
+      return late === 1
+        ? c.t(`${n} turned ten last year, and nobody threw a party.`, `${n} geçen yıl on yaşına girdi ve kimse parti vermedi.`)
+        : c.t(`${n} turned ten two years ago. The party is long overdue.`, `${n} iki yıl önce on yaşına girdi. Partisi çoktan gecikti.`);
+    },
     text: (c) => c.t('The team wants a party. The accountant whispers, "Let us not overdo it."', 'Ekip büyük bir parti istiyor. Muhasebeci "Abartmayalım" diye fısıldıyor.'),
     choices: [
       {
@@ -1604,33 +1613,6 @@ export const moreEvents: EventDef[] = [
     ],
   },
   {
-    id: 'boss.anniversary50',
-    category: 'business',
-    minAge: 18,
-    weight: 60,
-    cooldown: 1,
-    when: (c) => !!co(c) && yrs(c) >= 50 && !hasMark(co(c)!, 'fifty'),
-    text: '',
-    apply: (c) => {
-      const comp = co(c)!;
-      addMark(comp, 'fifty');
-      hype(comp, 20);
-      morale(comp, 15);
-      c.h.stat('happiness', 10);
-      c.h.achieve('half_century');
-      if (genOf(comp) === 1)
-        return c.t(
-          `${comp.name} turned 50. You cut the cake yourself, just like you cut the ribbon in ${comp.founded}.`,
-          `${comp.name} 50 yaşına girdi. ${comp.founded} yılında kurdelesini kestiğin şirketin pastasını da yine sen kestin.`,
-        );
-      return c.t(
-        `${comp.name} turned 50. There was cake, there were speeches, and the slideshow opened with the first receipt ${comp.founderName} ever wrote.`,
-        `${comp.name} 50 yaşına girdi. Pasta kesildi, nutuklar atıldı, slayt gösterisi ${gen(comp.founderName)} kestiği ilk fişle açıldı.`,
-      );
-    },
-    tone: 'big',
-  },
-  {
     id: 'boss.successor',
     category: 'business',
     scheduled: true,
@@ -1796,4 +1778,55 @@ export const moraleGrowth = (comp: Company) => (moraleOf(comp) - 50) / 1500;
 export function afterYear(c: Ctx, comp: Company) {
   if (comp.franchises) comp.cash += comp.franchises * wage(c, 4000);
   if (comp.morale !== undefined) comp.morale = clamp(comp.morale + (50 - comp.morale) * 0.2);
+  jubilee(c, comp);
+}
+
+// ------------------------------------------------------------------ jubilees (playtest 3 §2.9)
+// Round birthdays of the company are logged in the exact year (founding year + n) from the yearly tick, so a
+// firm never "turns 50" at 66. No RNG. The 50th keeps its old mark ('fifty') and achievement.
+
+type Jub = { name: string; founded: number; founder: string; you: boolean };
+const JUBILEES: Record<number, { mark: string; lines: (j: Jub) => Pair }> = {
+  25: {
+    mark: 'twentyfive',
+    lines: ({ name, founded, you }) =>
+      you
+        ? [`${name} turned 25. The staff dug out a photo from ${founded}: you, a folding table and a hand-painted sign.`, `${name} 25 yaşına girdi. Çalışanlar ${founded} yılından kalma bir fotoğraf buldu: sen, katlanır bir masa ve elle boyanmış bir tabela.`]
+        : [`${name} turned 25. Someone framed the first invoice and hung it next to the coffee machine.`, `${name} 25 yaşına girdi. Biri ilk faturayı çerçeveletip kahve makinesinin yanına astı.`],
+  },
+  50: {
+    mark: 'fifty',
+    lines: ({ name, founded, founder, you }) =>
+      you
+        ? [`${name} turned 50. You cut the cake yourself, just like you cut the ribbon in ${founded}.`, `${name} 50 yaşına girdi. ${founded} yılında kurdelesini kestiğin şirketin pastasını da yine sen kestin.`]
+        : [`${name} turned 50. There was cake, there were speeches, and the slideshow opened with the first receipt ${founder} ever wrote.`, `${name} 50 yaşına girdi. Pasta kesildi, nutuklar atıldı, slayt gösterisi ${gen(founder)} kestiği ilk fişle açıldı.`],
+  },
+  75: {
+    mark: 'seventyfive',
+    lines: ({ name, founder }) => [
+      `${name} turned 75. Three generations of staff came to the party, and the oldest one still calls the company "${founder}'s place".`,
+      `${name} 75 yaşına girdi. Partiye üç kuşak çalışan geldi; en yaşlıları şirkete hâlâ "${gen(founder)} yeri" diyor.`,
+    ],
+  },
+  100: {
+    mark: 'hundred',
+    lines: ({ name, founded }) => [
+      `${name} turned 100. The city put up a small plaque: "In business since ${founded}." You touched it on the way in every morning that week.`,
+      `${name} 100 yaşına girdi. Belediye kapıya küçük bir plaket astı: "${founded} yılından beri hizmette." O hafta her sabah içeri girerken plakete dokundun.`,
+    ],
+  },
+};
+
+function jubilee(c: Ctx, comp: Company) {
+  const age = companyAge(comp, c.s.year);
+  const j = JUBILEES[age];
+  if (!j || hasMark(comp, j.mark)) return;
+  addMark(comp, j.mark);
+  const v: Jub = { name: comp.name, founded: comp.founded, founder: comp.founderName, you: genOf(comp) === 1 };
+  const [en, tr] = j.lines(v);
+  hype(comp, age >= 50 ? 20 : 10);
+  morale(comp, 15);
+  c.h.stat('happiness', age >= 50 ? 10 : 6);
+  if (age === 50) c.h.achieve('half_century');
+  c.h.log(tidy(c.t(en, tr)), 'big');
 }

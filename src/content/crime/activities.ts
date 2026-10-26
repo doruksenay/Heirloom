@@ -18,8 +18,8 @@ const PICKPOCKET_LINES: ((v: string) => [string, string])[] = [
   (v) => [`A tourist lost ${v} to you near the fountain. He is still taking selfies.`, `Çeşmenin yanında bir turistin ${v} parası senin cebine geçti. Adam hâlâ selfie çekiyor.`],
   (v) => [`You came home with ${v} and a stranger's loyalty card. One more coffee and the next one is free.`, `Eve ${v} ve bir yabancının sadakat kartıyla döndün. Bir kahve daha alsan bedava.`],
   (v) => [`You lifted ${v} from a man arguing on the phone. He is still arguing.`, `Telefonda tartışan bir adamın cebinden ${v} çekip uzaklaştın. Adam hâlâ tartışıyor.`],
-  (v) => [`A crowded market, a careless handbag, and you are ${v} richer. You bought a coffee for your nerves.`, `Kalabalık bir pazar, dalgın bir çanta ve ${v} daha zengin bir sen. Sinirlerin için bir kahve aldın.`],
-  (v) => [`You bumped into a tourist, apologized beautifully and walked off ${v} richer.`, `Bir turiste çarptın, çok güzel özür diledin ve ${v} daha zengin yürüyüp gittin.`],
+  (v) => [`A crowded market, a careless handbag, and you are ${v} richer. You bought a coffee for your nerves.`, `Kalabalık bir pazar, ağzı açık bir çanta ve cebine giren ${v}. Sinirlerini yatıştırmak için bir kahve aldın.`],
+  (v) => [`You bumped into a tourist, apologized beautifully and walked off ${v} richer.`, `Bir turiste çarptın, çok güzel bir özür diledin ve yürüyüp gittin. Cebinde fazladan ${v} vardı.`],
 ];
 
 const PICKPOCKET_CAUGHT: ((x: string) => Pair)[] = [
@@ -40,6 +40,9 @@ const WORKSHOP_LATER: ((x: string) => Pair)[] = [
   (x) => [`An order of forty chairs for a school came through the workshop. You signed the bottom of one. You earned ${x}.`, `Atölyeye bir okul için kırk sandalyelik sipariş geldi. Birinin altına adını kazıdın. Kazancın ${x}.`],
 ];
 
+/** Years between two heist plans. */
+export const HEIST_GAP = 5;
+
 export const crimeActivities: ActivityDef[] = [
   {
     id: 'shoplift',
@@ -50,7 +53,7 @@ export const crimeActivities: ActivityDef[] = [
     maxAge: 75,
     available: free,
     run: (c) => {
-      if (c.rng.chance(0.65)) {
+      if (c.rng.chance(0.7)) {
         const v = wage(c, c.rng.int(20, 150));
         c.h.money(v);
         if (c.age >= 18) petty(c, 2);
@@ -65,9 +68,13 @@ export const crimeActivities: ActivityDef[] = [
           ['You were caught at the door. The manager made you apologize in front of everyone, then called home.', 'Kapıda yakalandın. Müdür herkesin önünde özür dilemeni istedi, sonra evi aradı.'],
         ]);
       }
-      if (c.rng.chance(0.4)) return c.t('Store security tackled you at the door. ', 'Mağaza güvenliği seni kapıda yakaladı. ') + convict(c, 1, 'theft', 'Hırsızlık');
-      c.h.money(-wage(c, 400));
+      // a first or second petty theft ends in a fine, not a cell; prison is for repeat offenders (playtest 3 §2.14)
+      if (c.p.criminalRecord >= 2 && c.rng.chance(0.3)) return c.t('Store security tackled you at the door, and the judge had seen your file before. ', 'Mağaza güvenliği seni kapıda yakaladı; hâkim de dosyanı daha önce görmüştü. ') + convict(c, 1, 'theft', 'Hırsızlık');
+      c.h.money(-wage(c, 300));
+      petty(c, 4);
       return say(c, 'shoplift.fine', [
+        ['The manager banned you from the shop for life and pinned your photo by the till. You also paid a fine.', 'Müdür seni dükkândan ömür boyu men etti, fotoğrafını kasanın yanına astı. Üstüne bir de para cezası ödedin.'],
+        ['A security guard with very patient eyes walked you to the back office. You paid a fine and signed a form promising to be better.', 'Bakışları çok sabırlı bir güvenlik görevlisi seni arka odaya götürdü. Ceza ödedin ve uslu duracağına dair bir kâğıt imzaladın.'],
         ['You were caught shoplifting and paid a heavy fine.', 'Mağazada suçüstü yakalandın ve tuzlu bir para cezası ödedin.'],
         ['Security had been watching you on camera before you even touched anything. A heavy fine.', 'Güvenlik görevlisi daha hiçbir şeye dokunmadan seni kamerada izliyormuş. Tuzlu bir ceza.'],
         ['The alarm went off at the door. You tried to look surprised. The fine was not surprised.', 'Kapıda alarm öttü. Şaşırmış gibi yapmaya çalıştın. Cezayı kesen görevli hiç şaşırmadı.'],
@@ -149,7 +156,8 @@ export const crimeActivities: ActivityDef[] = [
     maxAge: 70,
     available: (c) => {
       const st = peekCrime(c.p);
-      return free(c) && !st?.heist && !st?.charge && c.s.year - (st?.lastHeistYear ?? 0) >= 4;
+      // one plan every five years at most, counted from the last plan (called off or not)
+      return free(c) && !st?.heist && !st?.charge && c.s.year - (st?.lastHeistYear ?? 0) >= HEIST_GAP;
     },
     run: () => ({ event: 'crime.heist_plan' }),
   },

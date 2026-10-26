@@ -1,20 +1,22 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../types';
 import type { JobDef } from '../../engine/careers';
-import { titleFor } from '../../engine/careers';
+import { isCareerUpgrade, titleFor } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
 import { isCoastal } from '../../engine/places';
-import { say, type Pair } from '../base/lines';
+import { say, sayWith, type Pair } from '../base/lines';
+import { grandmaAlive, motherAlive } from '../fame/util';
 import {
   CLUBS,
-  COMPANIES,
   HONORS,
   MAJORS,
   atUni,
   bumpGpa,
   campusState,
   clubName,
+  companiesFor,
   ensureEnrolled,
+  fitsMajor,
   fmtGpa,
   free,
   gpaTarget,
@@ -106,7 +108,11 @@ function majorChoice(m: Major): ChoiceDef {
       st.major = m;
       c.h.flag(`major:${m}`);
       c.h.stat('happiness', 3);
-      const [en, tr] = MAJOR_LINES[m];
+      // the Fine Arts line asks "your parents"; without a living parent the relatives ask instead
+      const [en, tr] =
+        m === 'arts' && c.h.relatives(['mother', 'father']).length === 0
+          ? (['You chose Fine Arts. Your relatives asked, very calmly, what the plan is.', 'Güzel Sanatlar seçtin. Akrabaların çok sakin bir sesle "Peki plan ne?" diye sordu.'] as const)
+          : MAJOR_LINES[m];
       return c.t(en, tr);
     },
     tone: 'big',
@@ -149,6 +155,46 @@ function hireChance(c: Ctx): number {
   return Math.min(0.95, 0.45 + c.p.stats.smarts / 300 + st.gpa / 16 + st.internships * 0.05 + honors - (c.p.criminalRecord > 0 ? 0.2 : 0));
 }
 
+/** Lowercase major for the middle of a Turkish sentence: "hukuk okumuş", "tıp diplomanı". */
+const majorLower = (c: Ctx) => majorName('tr', cs(c).major).toLocaleLowerCase('tr');
+
+/** What a hire at the career fair sounds like: by the job's field, and for someone leaving another job. */
+type Hire = { t: string; maj: string; majEn: string; cur: string };
+const HIRE_LINES: Record<JobDef['field'] | 'any', ((v: Hire) => Pair)[]> = {
+  any: [
+    ({ t, majEn, maj }) => [`The recruiter loved that you studied ${majEn}. You are now ${aOrAn(t)}!`, `İK'cı ${maj} okumuş olmana bayıldı. Artık ${t} oldun!`],
+    ({ t }) => [`You shook forty hands, ate eleven free mints and got one real offer. You are now ${aOrAn(t)}.`, `Kırk el sıktın, on bir bedava şeker yedin ve bir gerçek teklif aldın. Artık ${t} oldun.`],
+  ],
+  tech: [
+    ({ t }) => [`The engineering lead quizzed you at the stand for forty minutes, then shook your hand. You are now ${aOrAn(t)}.`, `Standdaki ekip lideri seni kırk dakika soru yağmuruna tuttu, sonra elini sıktı. Artık ${t} oldun.`],
+    ({ t }) => [`They asked you to fix a bug on the laptop at their stand. You fixed two. You are now ${aOrAn(t)}.`, `Standdaki dizüstünde bir hatayı düzeltmeni istediler. Sen iki tane düzelttin. Artık ${t} oldun.`],
+  ],
+  health: [
+    ({ t, maj, majEn }) => [`The hospital's recruiter liked your ${majEn} degree and your steady hands. You are now ${aOrAn(t)}.`, `Hastane standındaki yönetici ${maj} diplomanı ve sakin ellerini beğendi. Artık ${t} oldun.`],
+    ({ t }) => [`The clinic's recruiter asked how you cope with night shifts. "Tea," you said. You are now ${aOrAn(t)}.`, `Klinik standındaki görevli gece nöbetlerini nasıl idare ettiğini sordu. "Çayla" dedin. Artık ${t} oldun.`],
+  ],
+  office: [
+    ({ t, maj, majEn }) => [`A partner at the stand read your CV twice and underlined your ${majEn} degree. You are now ${aOrAn(t)}.`, `Standdaki ortak CV'ni iki kez okudu ve ${maj} diplomanın altını çizdi. Artık ${t} oldun.`],
+    ({ t }) => [`The firm's recruiter was impressed that you brought your own pen. You are now ${aOrAn(t)}.`, `Şirketin işe alımcısı kendi kalemini getirmene bayıldı. Artık ${t} oldun.`],
+  ],
+  creative: [
+    ({ t }) => [`The art director flipped through your portfolio, stopped at one page and said "This." You are now ${aOrAn(t)}.`, `Sanat yönetmeni portfolyonu karıştırdı, bir sayfada durdu ve "İşte bu" dedi. Artık ${t} oldun.`],
+    ({ t }) => [`The studio's stand had a beanbag and no dress code. They hired you on the spot as ${aOrAn(t)}.`, `Stüdyonun standında bir armut koltuk vardı, kıyafet kuralı yoktu. Seni oracıkta ${t} olarak işe aldılar.`],
+  ],
+  public: [
+    ({ t }) => [`At the education stand they asked you to explain fractions to a passing child. The child understood. You are now ${aOrAn(t)}.`, `Eğitim standındakiler yanlarından geçen bir çocuğa kesirleri anlatmanı istedi. Çocuk anladı. Artık ${t} oldun.`],
+    ({ t }) => [`The faculty table liked your thesis more than you ever did. You are now ${aOrAn(t)}.`, `Fakülte masasındakiler bitirme tezini senden bile çok beğendi. Artık ${t} oldun.`],
+  ],
+  service: [],
+  trade: [],
+};
+/** Someone who already has a job and moves up through the fair. */
+const HIRE_SWITCH: ((v: Hire) => Pair)[] = [
+  ({ t, cur }) => [`The recruiter skipped the graduate questions and asked about your years as ${aOrAn(cur)}. They hired you as ${aOrAn(t)}.`, `İşe alımcı mezun sorularını geçip ${cur} olarak geçirdiğin yılları sordu. Seni ${t} olarak işe aldılar.`],
+  ({ t }) => [`You went for the free pens and came back with an offer: ${t}, on a better salary than now. You handed in your notice the next day.`, `Bedava kalem için gitmiştin, elinde bir teklifle döndün: ${t}, üstelik şimdikinden iyi bir maaşla. Ertesi gün istifa dilekçeni verdin.`],
+  ({ t }) => [`A rival of your employer had a stand. By the end of the coffee you had agreed to join them as ${aOrAn(t)}.`, `Çalıştığın yerin rakiplerinden biri de fuardaydı. Kahven bitmeden onlara ${t} olarak geçmeyi kabul etmiştin.`],
+];
+
 const fairChoice = (i: number): ChoiceDef => ({
   id: `job${i}`,
   label: (c) => (c.vars[`job${i}`] ? String(c.vars[`title${i}`]) : '—'),
@@ -156,12 +202,20 @@ const fairChoice = (i: number): ChoiceDef => ({
   requiresLabel: 'No opening',
   resolve: (c) => {
     if (c.rng.chance(hireChance(c))) {
-      c.h.setJob(String(c.vars[`job${i}`]));
+      const cur = c.p.jobId && !c.p.retired ? c.h.jobTitle() ?? '' : '';
+      const id = String(c.vars[`job${i}`]);
+      c.h.setJob(id);
+      // an experienced hire can come in above the entry rung (the offer said which title)
+      const lvl = Number(c.vars[`lvl${i}`] ?? 0);
+      if (lvl > 0) {
+        c.p.jobLevel = lvl;
+        c.p.jobTitle = c.h.jobTitle();
+      }
       c.h.stat('happiness', 6);
-      return c.t(
-        `The recruiter loved that you studied ${majorName('en', cs(c).major)}. You are now ${aOrAn(c.h.jobTitle() ?? '')}!`,
-        `İK'cı ${majorName('tr', cs(c).major)} okumuş olmana bayıldı. Artık ${c.h.jobTitle()} oldun!`,
-      );
+      const v: Hire = { t: c.h.jobTitle() ?? '', maj: majorLower(c), majEn: majorName('en', cs(c).major), cur };
+      if (cur) return sayWith(c, 'campus.fair.switch', HIRE_SWITCH, v);
+      const field = c.h.job()?.field ?? 'office';
+      return sayWith(c, `campus.fair.hire.${field}`, [...HIRE_LINES.any, ...HIRE_LINES[field]], v);
     }
     c.h.stat('happiness', -3);
     return c.t(
@@ -170,6 +224,47 @@ const fairChoice = (i: number): ChoiceDef => ({
     );
   },
 });
+
+/**
+ * The title a fair stand offers: the entry rung for a graduate, a matching rung for someone already working
+ * (never the top of the ladder), and the second rung for a PhD going into academia or research.
+ */
+function offerLevel(c: Ctx, j: JobDef): number {
+  const employed = !!c.p.jobId && !c.p.retired;
+  if (employed && j.id === c.p.jobId) return c.p.jobLevel + 1; // a rival employer poaches you one rung up
+  let lvl = employed ? Math.max(0, Math.min(c.p.jobLevel, j.titles.length - 2)) : 0;
+  if (cs(c).phd && ACADEMIC_JOB_IDS.includes(j.id)) lvl = Math.max(lvl, 1);
+  return lvl;
+}
+const ACADEMIC_JOB_IDS = ['academic', 'research'];
+
+/** Graduate jobs that fit the major and are a real step up for the player (no Dean → Probationary Firefighter). */
+const DEGREE_FIELDS: JobDef['field'][] = ['tech', 'health', 'office', 'creative', 'public'];
+/** Fresh offers for this fair: fitting upgrades not shown at the last one. */
+const freshJobs = (c: Ctx) => {
+  // last year's stands are still there this year; the year after, they are back with new people
+  const st = cs(c);
+  const last = st.fairYear !== undefined && c.s.year - st.fairYear <= 1 ? st.fairLast ?? [] : [];
+  return fairJobs(c).filter((j) => !last.includes(j.id));
+};
+/** Why the fair has nothing for you, if it has nothing: 'seen' (same stands as last time), 'top' (nothing beats your job), 'none'. */
+function fairGap(c: Ctx): 'open' | 'seen' | 'top' | 'none' {
+  if (freshJobs(c).length) return 'open';
+  if (fairJobs(c).length) return 'seen';
+  const employed = !!c.p.jobId && !c.p.retired;
+  return employed && majorJobs(c, DEGREE_FIELDS).some((j) => fitsMajor(cs(c).major, j.id)) ? 'top' : 'none';
+}
+
+/** No job is offered more than this many times in one life: recruiters stop calling back. */
+const FAIR_MAX_OFFERS = 3;
+function fairJobs(c: Ctx, leeway = 10): JobDef[] {
+  const st = cs(c);
+  const jobs = majorJobs(c, DEGREE_FIELDS, leeway);
+  // your own job at the next rung, from a rival employer (never the top rung: that one is earned in-house)
+  const cur = c.p.jobId && !c.p.retired ? c.h.job() : undefined;
+  if (cur && fitsMajor(st.major, cur.id) && c.p.jobLevel + 1 <= cur.titles.length - 2) jobs.unshift(cur);
+  return jobs.filter((j) => fitsMajor(st.major, j.id) && (st.fairCount?.[j.id] ?? 0) < FAIR_MAX_OFFERS && isCareerUpgrade(c, j, offerLevel(c, j)));
+}
 
 function startGrad(c: Ctx, prog: 'masters' | 'phd'): string {
   const st = cs(c);
@@ -181,7 +276,7 @@ function startGrad(c: Ctx, prog: 'masters' | 'phd'): string {
   if (prog === 'masters') {
     return st.funded
       ? c.t("You started a master's degree on a full fellowship. Two more years of free library Wi-Fi.", 'Tam burslu yüksek lisansa başladın. İki yıl daha bedava kütüphane interneti.')
-      : c.t(`You started a master's degree. Tuition is ${c.h.fmt(wage(c, 4000))} a year. Noodles are back on the menu.`, `Yüksek lisansa başladın. Yıllık harç ${c.h.fmt(wage(c, 4000))}. Hazır noodle'lar menüye geri döndü.`);
+      : c.t(`You started a master's degree. Tuition is ${c.h.fmt(wage(c, 4000))} a year. Noodles are back on the menu.`, `Yüksek lisansa başladın. Yıllık harç ${c.h.fmt(wage(c, 4000))}. Hazır erişte günleri yeniden başladı.`);
   }
   return c.t(
     `You started a funded PhD. ${st.gradYearsLeft} years, a small stipend and a desk in a basement lab.`,
@@ -192,7 +287,7 @@ function startGrad(c: Ctx, prog: 'masters' | 'phd'): string {
 // ------------------------------------------------------------------ events
 const ROOMMATE_QUIRKS: [string, string][] = [
   ['snores like a diesel engine', 'dizel motor gibi horluyor'],
-  ['only eats instant noodles, at 3 a.m.', 'sadece hazır noodle yiyor, o da gece üçte'],
+  ['only eats instant noodles, at 3 a.m.', 'sadece hazır erişte yiyor, o da gece üçte'],
   ['practices the bağlama at midnight', 'gece yarısı bağlama çalışıyor'],
   ['labels every item in the fridge', 'buzdolabındaki her şeye isim etiketi yapıştırıyor'],
   ['has a partner who basically lives in your room', 'sevgilisi neredeyse odanıza taşındı'],
@@ -538,7 +633,9 @@ const events: EventDef[] = [
           c.h.flag('scholarship');
           c.h.money(wage(c, 1000));
           c.h.stat('happiness', 6);
-          return c.t('You accepted. Your parents printed the letter and framed it.', 'Kabul ettin. Annen mektubu çerçeveletip salonun baş köşesine astı.');
+          if (motherAlive(c)) return c.t('You accepted. Your mother had the letter framed and hung it in the best spot in the living room.', 'Kabul ettin. Annen mektubu çerçeveletip salonun baş köşesine astı.');
+          if (c.h.relatives('father').length) return c.t('You accepted. Your father had the letter framed and shows it to every guest.', 'Kabul ettin. Baban mektubu çerçeveletti, gelen her misafire gösteriyor.');
+          return c.t('You accepted, and framed the letter yourself. It hangs above your desk.', 'Kabul ettin ve mektubu kendin çerçeveletip masanın üstüne astın.');
         },
         tone: 'good',
       },
@@ -736,7 +833,7 @@ const events: EventDef[] = [
       const st = cs(c);
       const field: JobDef['field'] = c.rng.pick(st.major ? MAJORS[st.major].fields : ['office']);
       c.vars.field = field;
-      c.vars.company = c.rng.pick(COMPANIES[field]);
+      c.vars.company = c.rng.pick(companiesFor(c.p.countryId)[field]); // Turkish employers in Türkiye only
     },
     title: (c) => c.t(`${c.vars.company} offers you a summer internship.`, `${c.vars.company} sana yaz stajı teklif ediyor.`),
     text: (c) => c.t('The listing promised "real responsibility". You suspect the responsibility is coffee.', 'İlanda "gerçek sorumluluk" yazıyor. Sen o sorumluluğun çay-kahve olduğundan şüpheleniyorsun.'),
@@ -804,14 +901,40 @@ const events: EventDef[] = [
     scheduled: true,
     setup: (c) => {
       const st = cs(c);
-      const options = [...majorJobs(c, st.major ? MAJORS[st.major].fields : ['office'])].sort(() => c.rng.next() - 0.5).slice(0, 3);
+      // the stands you saw last time have moved on: different offers each fair (the same job never comes back
+      // fair after fair), and only real steps up for someone already working (playtest 3 §2.10)
+      const why = fairGap(c);
+      const options = [...freshJobs(c)].sort(() => c.rng.next() - 0.5).slice(0, 3);
       options.forEach((j, i) => {
+        const lvl = offerLevel(c, j);
         c.vars[`job${i}`] = j.id;
-        c.vars[`title${i}`] = titleFor(j, 0, c.lang);
+        c.vars[`lvl${i}`] = lvl;
+        c.vars[`title${i}`] = titleFor(j, lvl, c.lang);
       });
+      st.fairLast = options.map((j) => j.id);
+      st.fairYear = c.s.year;
+      const count = (st.fairCount ??= {});
+      for (const j of options) count[j.id] = (count[j.id] ?? 0) + 1;
+      c.vars.why = why;
     },
-    title: (c) => c.t('The career fair is full of companies looking for graduates like you.', 'Kariyer fuarı tam senin bölümünden mezun arayan şirketlerle dolu.'),
-    text: (c) => (c.vars.job0 ? c.t('Your degree opens doors here. Pick a stand.', 'Diploman burada kapı açıyor. Bir stant seç.') : c.t('Nobody is hiring for your degree today. You took a lot of free pens.', 'Bugün bölümüne uygun ilan yok. Bol bol bedava kalem topladın.')),
+    title: (c) =>
+      c.p.jobId && !c.p.retired
+        ? c.t('The career fair is full of companies poaching experienced people.', 'Kariyer fuarı deneyimli eleman avlayan şirketlerle dolu.')
+        : c.t('The career fair is full of companies looking for graduates like you.', 'Kariyer fuarı tam senin bölümünden mezun arayan şirketlerle dolu.'),
+    text: (c) => {
+      switch (String(c.vars.why)) {
+        case 'open':
+          return c.p.jobId && !c.p.retired
+            ? c.t('A few stands could beat your current job. Pick one.', 'Birkaç stant şimdiki işinden iyisini sunabilir. Birini seç.')
+            : c.t('Your degree opens doors here. Pick a stand.', 'Diploman burada kapı açıyor. Bir stant seç.');
+        case 'seen':
+          return c.t('The same stands as last time, with the same brochures. Nothing new for you this year.', 'Geçen seferki standlar, aynı broşürler. Bu yıl sana yeni bir şey yok.');
+        case 'top':
+          return c.t('Nobody here can offer you more than you already have. You took a lot of free pens.', 'Buradaki kimse sana şimdikinden fazlasını veremiyor. Bol bol bedava kalem topladın.');
+        default:
+          return c.t('Nobody is hiring for your degree today. You took a lot of free pens.', 'Bugün bölümüne uygun ilan yok. Bol bol bedava kalem topladın.');
+      }
+    },
     choices: [fairChoice(0), fairChoice(1), fairChoice(2), { id: 'none', label: (c) => c.t('Just take the free pens', 'Sadece bedava kalem topla'), resolve: () => '' }],
   },
   {
@@ -824,14 +947,14 @@ const events: EventDef[] = [
     setup: (c) => {
       const st = cs(c);
       if (st.internOffer) {
-        const job = majorJobs(c, [st.internOffer.field], 10)[0];
+        const job = majorJobs(c, [st.internOffer.field], 10).filter((j) => fitsMajor(st.major, j.id) && isCareerUpgrade(c, j, 0))[0];
         if (job) {
           c.vars.offerJob = job.id;
           c.vars.offerTitle = titleFor(job, 0, c.lang);
           c.vars.company = st.internOffer.company;
         }
       }
-      const fieldJob = majorJobs(c, st.major ? MAJORS[st.major].fields : ['office'], 5)[0];
+      const fieldJob = fairJobs(c, 5).filter((j) => offerLevel(c, j) === 0)[0];
       if (fieldJob) {
         c.vars.fieldJob = fieldJob.id;
         c.vars.fieldTitle = titleFor(fieldJob, 0, c.lang);
@@ -1211,11 +1334,18 @@ const activities: ActivityDef[] = [
   {
     id: 'campus_career_fair',
     label: (c) => c.t('Go to a career fair', 'Kariyer fuarına git'),
-    description: (c) => c.t('Jobs that match your degree, better odds', 'Bölümüne uygun ilanlar, daha yüksek şans'),
+    description: (c) => {
+      const gap = peekCampus(c.p)?.gradYear && c.p.education === 'university' ? fairGap(c) : 'open';
+      if (gap === 'top') return c.t('No stand can beat your current job', 'Hiçbir stant şimdiki işinden iyisini sunmuyor');
+      if (gap === 'seen') return c.t('The same stands as last time. Try again next year', 'Geçen seferki standların aynısı. Seneye yine gel');
+      if (gap === 'none') return c.t('Nobody is hiring for your degree right now', 'Şu sıralar bölümüne uygun ilan yok');
+      return c.t('Jobs that match your degree, better odds', 'Bölümüne uygun ilanlar, daha yüksek şans');
+    },
     group: 'Career',
     minAge: 20,
     maxAge: 45,
-    available: (c) => free(c) && !c.p.retired && c.p.education === 'university' && !!peekCampus(c.p)?.gradYear,
+    // greyed out when no stand could beat the job you have (playtest 3 §2.10), instead of a wasted visit
+    available: (c) => free(c) && !c.p.retired && c.p.education === 'university' && !!peekCampus(c.p)?.gradYear && fairGap(c) === 'open',
     run: () => ({ event: 'campus.career_fair' }),
   },
   {
@@ -1272,7 +1402,9 @@ function graduate(c: Ctx) {
   } else if (honors === 'magna') {
     c.h.log(c.t(`You graduated magna cum laude in ${en} (GPA ${gs}). Your cap flew the highest.`, `${tr} bölümünden ${gs} ortalamayla, yüksek onur belgesiyle mezun oldun. Kepin en yükseğe uçtu.`), 'good');
   } else if (honors === 'cum') {
-    c.h.log(c.t(`You graduated cum laude in ${en} (GPA ${gs}). Your grandmother told the whole neighborhood.`, `${tr} bölümünden ${gs} ortalamayla, onur belgesiyle mezun oldun. Anneannen bütün mahalleye haber verdi.`), 'good');
+    // whoever is still there to brag about it (the side of a grandmother is not known: "ninen")
+    const [whoEn, whoTr] = grandmaAlive(c) ? ['Your grandmother', 'Ninen'] : motherAlive(c) ? ['Your mother', 'Annen'] : ['Your old neighbour', 'Eski komşun'];
+    c.h.log(c.t(`You graduated cum laude in ${en} (GPA ${gs}). ${whoEn} told the whole neighborhood.`, `${tr} bölümünden ${gs} ortalamayla, onur belgesiyle mezun oldun. ${whoTr} bütün mahalleye haber verdi.`), 'good');
   } else if (g < 2) {
     c.h.log(c.t(`You graduated in ${en} with a ${gs} GPA. "C's get degrees" was proven right once again.`, `${tr} bölümünden ${gs} ortalamayla, kıl payı mezun oldun. "Diploma diplomadır" felsefesi bir kez daha kazandı.`));
   } else {

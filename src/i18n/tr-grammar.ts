@@ -138,3 +138,9 @@ export const loc = (name: string) => `${name}'${endsHard(name) ? 't' : 'd'}${v2(
 export const abl = (name: string) => `${name}'${endsHard(name) ? 't' : 'd'}${v2(name)}n`;
 /** Comitative: Ada'yla, Mehmet'le (written as a suffix) */
 export const wth = (name: string) => `${name}'${endsWithVowel(name) ? 'y' : ''}l${v2(name)}`;
+
+/**
+ * The separate particle "de/da" ("too", "and"), written apart and never softened: Gizem de, Emre de, Pamuk da, Carlos da.
+ * Returns the name with the particle: `${da(name)} öyle.` → "Gizem de öyle."
+ */
+export const da = (name: string) => `${name} ${v2(name)}`.replace(/ a$/, ' da').replace(/ e$/, ' de');

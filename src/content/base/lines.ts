@@ -4,10 +4,11 @@ import type { Ctx } from '../types';
  * Text-variant picker for repeatable activities (playtest problem 3: lines repeating within a life).
  *
  * `say(c, 'gym.adult', LINES)` picks one [English, Turkish] pair with exactly ONE `c.rng.int` call,
- * then deterministically shifts past the variants this key used recently in this life, so the same
- * line does not come back until most of the list has been seen. The memory lives in
- * `c.p.ext.lines[key]` (a short list of indices): it belongs to this life only, survives saves, and
- * old saves without it simply start with an empty memory.
+ * then deterministically shifts past the variants this key used recently, so the same line does not
+ * come back until most of the list has been seen. The memory lives in `c.s.dynasty.lineMemory[key]`
+ * (a short list of indices) and is shared by every life of the dynasty (playtest 3: generation 2 read
+ * 12% verbatim lines from generation 1). It survives saves; a save from before v0.9 keeps its per-life
+ * memory (`c.p.ext.lines`), which is adopted on first use.
  *
  * RNG discipline: one rng call per pick whatever the language, list length or memory.
  */
@@ -15,17 +16,21 @@ import type { Ctx } from '../types';
 export type Pair = readonly [string, string];
 
 /** Never remember more than this many indices per key (keeps saves small). */
-const MAX_MEMORY = 24;
+const MAX_MEMORY = 32;
 
 type LineMemory = Record<string, number[]>;
 
+const isMemory = (m: unknown): m is LineMemory => !!m && typeof m === 'object' && !Array.isArray(m);
+
 function memory(c: Ctx): LineMemory {
-  const ext = (c.p.ext ??= {});
-  const m = ext.lines;
-  if (m && typeof m === 'object' && !Array.isArray(m)) return m as LineMemory;
-  const fresh: LineMemory = {};
-  ext.lines = fresh;
-  return fresh;
+  const d = c.s.dynasty;
+  if (isMemory(d.lineMemory)) return d.lineMemory;
+  // an older save: adopt this life's memory, then keep it on the dynasty
+  const old = c.p.ext?.lines;
+  const m: LineMemory = isMemory(old) ? (old as LineMemory) : {};
+  if (c.p.ext) delete c.p.ext.lines;
+  d.lineMemory = m;
+  return m;
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { Lang } from '../engine/types';
+import { TR_DAILY } from './ui-daily';
 
 /**
  * Interface strings. Keys are the English text, so screens stay readable:
@@ -234,6 +235,9 @@ export const TR: Record<string, string> = {
   'Continue as your grandchild {name}, {n}': 'Torunun {name} olarak devam et ({n})',
   'Life goals · {n}/{max}': 'Hayat hedefleri · {n}/{max}',
   'Continue as {name}, {n}': '{name} olarak devam et ({n})',
+  'Continue as your niece {name}, {n}': 'Yeğenin {name} olarak devam et ({n})',
+  'Continue as your nephew {name}, {n}': 'Yeğenin {name} olarak devam et ({n})',
+  'No child of your own is left, so a niece or nephew can carry the family on: they inherit your home, your heirlooms and your money.': 'Geride kendi çocuğun kalmadı; aileyi bir yeğenin devam ettirebilir. Evin, yadigârların ve paran ona kalır.',
   'No children to carry on. The {name} story ends here, but a new family can begin.':
     '{name} ailesini sürdürecek çocuk yok. Hikâye burada bitiyor ama yeni bir aile başlayabilir.',
   // end of a dynasty (engine, round 2)
@@ -360,6 +364,7 @@ export const TR: Record<string, string> = {
     '{n}. kuşak. Annenin ya da babanın hayatı artık soy ağacında; geride bıraktığı her şey artık senin.',
 };
 
+Object.assign(TR, TR_DAILY);
 const DICTS: Partial<Record<Lang, Record<string, string>>> = { tr: TR };
 
 /** Translate an interface string into the current language, filling {placeholders}. */

@@ -1,7 +1,7 @@
 import type { Ctx, EventDef } from '../types';
 import { MAX_PETS, addPet, displayName, findPet, nextNum, petAge, petDies, petKind, petNames, petState, petsOf, type Pet, type PetKind } from '../../engine/pets';
 import { currentTier, homeTier, type HomeTier } from '../../engine/home';
-import { acc, cap, dat, gen, wage, wth } from './util';
+import { acc, cap, da, dat, gen, officeJob, wage, wth } from './util';
 import { coastal, inTr } from './events-flavour';
 import { say as sayLine, type Pair } from './lines';
 import {
@@ -28,10 +28,10 @@ import {
 export function say(c: Ctx, pet: Pet | undefined, en: string, tr: string, x: string | number = ''): string {
   const ne = pet ? displayName(pet, 'en') : '';
   const nt = pet ? displayName(pet, 'tr') : '';
-  const fill = (s: string, m: Record<string, string>) => s.replace(/\{(acc|dat|gen|wth|n|x)\}/g, (_, k: string) => m[k]);
+  const fill = (s: string, m: Record<string, string>) => s.replace(/\{(acc|dat|gen|wth|da|n|x)\}/g, (_, k: string) => m[k]);
   return c.t(
-    fill(en, { n: ne, acc: ne, dat: ne, wth: ne, gen: `${ne}'s`, x: String(x) }),
-    fill(tr, { n: nt, acc: acc(nt), dat: dat(nt), wth: wth(nt), gen: gen(nt), x: String(x) }),
+    fill(en, { n: ne, acc: ne, dat: ne, wth: ne, da: ne, gen: `${ne}'s`, x: String(x) }),
+    fill(tr, { n: nt, acc: acc(nt), dat: dat(nt), wth: wth(nt), da: da(nt), gen: gen(nt), x: String(x) }),
   );
 }
 
@@ -414,7 +414,7 @@ const petEventsOnly: EventDef[] = [
           const pet = petById(c)!;
           petDies(c.p, pet, c.s.year);
           c.h.stat('happiness', -8);
-          return say(c, pet, 'You held {acc} until the very end. Your hand was the last thing {n} knew.', 'Sonuna kadar {acc} kucağında tuttun. {gen} son bildiği şey senin elindi.');
+          return say(c, pet, 'You held {acc} until the very end. Your hand was the last thing {n} knew.', 'Sonuna kadar {acc} kucağında tuttun. {n} son nefesini senin kucağında verdi.');
         },
         tone: 'bad',
       },
@@ -444,7 +444,7 @@ const petEventsOnly: EventDef[] = [
             c.h.money(wage(c, 300));
             c.h.stat('happiness', 7);
             petCloser(pet, 5);
-            return say(c, pet, '{n} won Best in Show! The trophy is on the shelf; {n} sleeps next to it.', '{n} birinci oldu! Kupa rafta duruyor; {n} de hemen yanında uyuyor.');
+            return say(c, pet, '{n} won Best in Show! The trophy is on the shelf; {n} sleeps next to it.', '{n} birinci oldu! Kupa rafta duruyor; {da} hemen yanında uyuyor.');
           }
           c.h.stat('happiness', 1);
           return say(c, pet, '{n} came fourth out of four and tried to eat a judge. Great day anyway.', '{n} dört yarışmacı arasında dördüncü oldu ve bir jüri üyesini yemeye çalıştı. Yine de güzel bir gündü.');
@@ -709,7 +709,7 @@ const petEventsOnly: EventDef[] = [
     category: 'pets',
     minAge: 18,
     cooldown: 8,
-    when: (c) => hasPet(c, 'cat') && !!c.p.jobId,
+    when: (c) => hasPet(c, 'cat') && officeJob(c),
     setup: (c) => void pickPet(c, 'cat'),
     title: sayP('{n} walked across your keyboard during a video call with your boss.', '{n}, patronunla görüntülü toplantıdayken klavyenin üstünden yürüdü.'),
     text: (c) => c.t('A message reading "ğğğğğğğğğ" has gone to the whole company.', 'Bütün şirkete "ğğğğğğğğğ" yazan bir mesaj gitti.'),

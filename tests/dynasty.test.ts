@@ -551,3 +551,258 @@ describe('job listings', () => {
     }
   });
 });
+
+describe('round 3 engine fixes (playtest 3)', () => {
+  /** Runs years until `person` dies (made very old and frail so it happens fast); returns false if the player died first. */
+  function untilDeath(s: GameState, person: Person): boolean {
+    person.birthYear = s.year - 110;
+    person.stats.health = 0;
+    for (let y = 0; y < 30 && person.deathYear === undefined; y++) {
+      s.player.stats.health = 100;
+      settle(s);
+      ageUp(s);
+      if (s.dead) return false;
+    }
+    return person.deathYear === s.year;
+  }
+
+  it('writes a full sentence for every cause of death, in both languages', async () => {
+    const { CAUSE_TR, deathLine } = await import('../src/engine/game');
+    for (const cause of Object.keys(CAUSE_TR)) {
+      const en = deathLine(cause, 81, 'en');
+      const tr = deathLine(cause, 81, 'tr');
+      expect(en).toContain('81');
+      expect(tr).toContain('81 yaşında');
+      expect(en).not.toMatch(/ of (peacefully|a long illness)\b/);
+      expect(tr).not.toContain('Sebep:');
+      expect(tr).not.toMatch(/81'/); // never a suffix after the number
+    }
+    expect(deathLine('peacefully in sleep', 81, 'en')).toBe('You died peacefully in your sleep at 81.');
+  });
+
+  it('weights causes of death by age: car accidents for the young, almost never after 60', async () => {
+    const { deathCauseFor } = await import('../src/engine/game');
+    const rng = createRng(7);
+    const share = (age: number, cause: string) => {
+      let n = 0;
+      for (let i = 0; i < 3000; i++) if (deathCauseFor(age, 70, rng) === cause) n++;
+      return n / 3000;
+    };
+    expect(share(30, 'a car accident')).toBeGreaterThan(0.2);
+    expect(share(55, 'a car accident')).toBeLessThan(0.07);
+    expect(share(70, 'a car accident')).toBeLessThan(0.025);
+    expect(share(85, 'a car accident')).toBe(0);
+    expect(share(30, 'old age')).toBe(0);
+    expect(share(92, 'old age')).toBeGreaterThan(0.2);
+  });
+
+  it('gives a grandchild heir the right family words, a fair share and the generation from the family tree', () => {
+    for (const lang of ['en', 'tr'] as Lang[]) {
+      const s = fresh(5, false, lang, 'us');
+      setAge(s, 80);
+      s.player.money = 200_000;
+      const c = makeCtx(s);
+      const son = c.h.newPerson({ age: 56, gender: 'male', lastName: 'Yılmaz' });
+      c.h.addRelation(son, 'child', 80);
+      const gk = c.h.newPerson({ age: 30, gender: 'female', lastName: 'Yılmaz' });
+      son.kids = 1;
+      son.childIds = [gk.id];
+      s.player.deathCause = 'old age';
+      finishLife(s);
+      expect(heirOptions(s).find((o) => o.person.id === gk.id)?.kind).toBe('grandchild');
+      continueAsChild(s, gk.id);
+      // the living son keeps his part: the grandchild gets half, not everything (US tax: $25.5k on $200k)
+      expect(s.player.money).toBe(Math.round((200_000 - 25_500) / 2));
+      expect(s.dynasty.generation).toBe(3);
+      const text = s.player.log.map((l) => l.text).join('\n');
+      expect(text).not.toMatch(/brothers and sisters|kardeş/);
+      if (lang === 'en') {
+        expect(text).toContain('You lost your grandmother, Ada. Gen 3 of the Yılmaz family begins with you.');
+        expect(text).toContain("between Ada's children and you");
+      } else {
+        // the father's mother: babaanne
+        expect(text).toContain("Babaannen Ada'yı kaybettin. Yılmaz ailesinin 3. kuşağı seninle başlıyor.");
+        expect(text).toContain("Ada'nın çocuklarıyla senin aranda bölündü");
+      }
+    }
+  });
+
+  it('lets a niece or nephew carry on a childless life, with the right aunt or uncle word', () => {
+    for (const lang of ['en', 'tr'] as Lang[]) {
+      const s = fresh(6, false, lang, 'tr');
+      s.player.relations = s.player.relations.filter((r) => r.kind !== 'sibling');
+      setAge(s, 75);
+      s.player.money = 50_000;
+      const c = makeCtx(s);
+      const brother = c.h.newPerson({ age: 72, gender: 'male', lastName: 'Yılmaz' });
+      c.h.addRelation(brother, 'sibling', 70);
+      const niece = c.h.newPerson({ age: 9, gender: 'female', lastName: 'Yılmaz' });
+      brother.kids = 1;
+      brother.childIds = [niece.id];
+      // a child of your own comes first
+      const own = c.h.newPerson({ age: 40, lastName: 'Yılmaz' });
+      c.h.addRelation(own, 'child', 80);
+      expect(heirOptions(s).map((o) => o.kind)).toEqual(['child']);
+      own.deathYear = s.year - 1;
+      expect(heirOptions(s).map((o) => [o.kind, o.person.id])).toEqual([['nibling', niece.id]]);
+      expect(torchHeirs(s)).toEqual([]);
+      s.player.deathCause = 'cancer';
+      finishLife(s);
+      expect(heirs(s).map((h) => h.id)).toEqual([niece.id]);
+      continueAsChild(s, niece.id);
+      expect(s.player.id).toBe(niece.id);
+      expect(s.player.relations.find((r) => r.personId === brother.id)?.kind).toBe('father');
+      expect(s.dynasty.generation).toBe(2);
+      const text = s.player.log.map((l) => l.text).join('\n');
+      // Ada is the girl's father's sister: hala
+      expect(text).toContain(lang === 'en' ? 'You lost your aunt, Ada.' : "Halan Ada'yı kaybettin.");
+    }
+  });
+
+  it('brothers and sisters have babies, and the player hears about it', () => {
+    let born = 0;
+    for (let seed = 1; seed <= 20 && !born; seed++) {
+      const s = fresh(seed, false, 'tr');
+      setAge(s, 30);
+      const c = makeCtx(s);
+      const sis = c.h.newPerson({ age: 30, gender: 'female', lastName: 'Yılmaz' });
+      c.h.addRelation(sis, 'sibling', 70);
+      for (let y = 0; y < 12 && !s.dead && !(sis.childIds ?? []).length; y++) {
+        s.player.stats.health = 100;
+        settle(s);
+        ageUp(s);
+      }
+      if (!(sis.childIds ?? []).length) continue;
+      born++;
+      const baby = s.people[sis.childIds![0]];
+      // Ada (a woman) is her sister's child's teyze
+      expect(s.player.log.some((l) => l.text.includes(`bir ${baby.gender === 'female' ? 'kızı' : 'oğlu'} oldu: ${baby.firstName}. Teyze oldun!`))).toBe(true);
+    }
+    expect(born).toBe(1);
+  });
+
+  it('opens a grief event in the year a child dies, sets the mourning flag and keeps comedy out of that year', async () => {
+    const { inMourning } = await import('../src/engine/context');
+    let seen = 0;
+    for (let seed = 1; seed <= 10 && seen < 3; seed++) {
+      const s = fresh(seed, false, 'tr');
+      setAge(s, 50);
+      const c = makeCtx(s);
+      const kid = c.h.newPerson({ age: 25, gender: 'female', lastName: 'Yılmaz' });
+      c.h.addRelation(kid, 'child', 85);
+      if (!untilDeath(s, kid)) continue;
+      seen++;
+      expect(s.pending?.eventId).toBe('base.grief_child');
+      expect(s.pending?.title).toMatch(new RegExp(`^Kızın ${kid.firstName}'[ıiuü]? ?.*toprağa verdin\\.$`));
+      expect(inMourning(s)).toBe(true);
+      const logBefore = s.player.log.length;
+      choose(s, 'tree');
+      expect(s.player.log.slice(logBefore).some((l) => l.text.includes('fidan'))).toBe(true);
+      ageUp(s);
+      expect(inMourning(s)).toBe(false);
+    }
+    expect(seen).toBeGreaterThanOrEqual(2);
+  });
+
+  it('asks what happens to an orphaned grandchild, who can then carry the family on as a child', () => {
+    let seen = 0;
+    for (let seed = 1; seed <= 10 && !seen; seed++) {
+      const s = fresh(seed, false, 'en');
+      setAge(s, 60);
+      const c = makeCtx(s);
+      const son = c.h.newPerson({ age: 34, gender: 'male', lastName: 'Yılmaz' });
+      c.h.addRelation(son, 'child', 85);
+      const gk = c.h.newPerson({ age: 6, gender: 'female', lastName: 'Yılmaz' });
+      son.kids = 1;
+      son.childIds = [gk.id];
+      if (!untilDeath(s, son)) continue;
+      seen++;
+      expect(s.pending?.eventId).toBe('base.grief_orphan');
+      expect(s.pending?.body).toContain(`"When is Dad coming home?"`);
+      choose(s, 'raise');
+      expect(heirOptions(s).map((o) => [o.kind, o.person.id])).toEqual([['grandchild', gk.id]]);
+      s.player.deathCause = 'a heart attack';
+      finishLife(s);
+      continueAsChild(s, gk.id);
+      expect(s.player.id).toBe(gk.id);
+      expect(s.player.school).toBe('primary');
+    }
+    expect(seen).toBe(1);
+  });
+
+  it('grieves a spouse, and pushes a displaced retirement to the next year', () => {
+    let seen = 0;
+    for (let seed = 1; seed <= 12 && !seen; seed++) {
+      const s = fresh(seed, false, 'en');
+      setAge(s, 64);
+      s.player.jobId = 'teacher';
+      s.player.jobLevel = 1;
+      const c = makeCtx(s);
+      const wife = c.h.newPerson({ age: 64, gender: 'female' });
+      c.h.addRelation(wife, 'spouse', 85);
+      s.player.relations[s.player.relations.length - 1].sinceYear = s.year - 30;
+      wife.birthYear = s.year - 109; // dies within a year or two, at 110
+      wife.stats.health = 0;
+      s.player.stats.health = 100;
+      ageUp(s); // 65: retirement is due
+      if (s.dead || wife.deathYear !== s.year) continue;
+      seen++;
+      expect(s.pending?.eventId).toBe('base.grief_spouse');
+      expect(s.pending?.body).toContain(`years with ${wife.firstName}`);
+      choose(s, 'walk');
+      s.player.stats.health = 100;
+      ageUp(s);
+      expect(s.pending?.eventId).toBe('base.retirement');
+    }
+    expect(seen).toBe(1);
+  });
+
+  it('makes adoption a real choice for a childless adult', async () => {
+    const { adoptChild, canAdopt } = await import('../src/content/base/adoption');
+    let adopted = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const s = fresh(seed, false, 'tr');
+      setAge(s, 38);
+      s.player.money = 100_000;
+      const c = makeCtx(s);
+      expect(canAdopt(c)).toBe(true);
+      expect(activitiesFor(s.enabledPacks).some((a) => a.id === 'adopt')).toBe(true);
+      const line = adoptChild(c, seed % 2 === 0);
+      const kids = heirs(s);
+      if (!kids.length) continue;
+      adopted++;
+      expect(line).toContain(kids[0].firstName);
+      expect(`adopted:${kids[0].id}` in s.player.flags).toBe(true);
+      expect(canAdopt(makeCtx(s))).toBe(false); // not again the same year
+    }
+    expect(adopted).toBeGreaterThanOrEqual(4);
+  });
+
+  it('mentions the brothers and sisters at birth, eldest first', () => {
+    let seen = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      for (const lang of ['en', 'tr'] as Lang[]) {
+        const s = fresh(seed, false, lang);
+        const sibs = s.player.relations.filter((r) => r.kind === 'sibling');
+        const line = s.player.log.find((l) => l.text.includes(lang === 'en' ? 'waiting at the door' : 'seni kapıda'));
+        expect(!!line).toBe(sibs.length > 0);
+        if (line) {
+          seen++;
+          for (const r of sibs) expect(line.text).toContain(s.people[r.personId].firstName);
+        }
+      }
+    }
+    expect(seen).toBeGreaterThan(4);
+  });
+
+  it('plays the same family in both languages (RNG calls do not depend on the language)', () => {
+    for (const seed of [11, 12]) {
+      const runs = (['en', 'tr'] as Lang[]).map((lang) => {
+        const s = fresh(seed, false, lang);
+        playOut(s, createRng(seed), 130);
+        return { age: s.dead?.age, cause: s.dead?.cause, people: Object.keys(s.people).length, rng: s.rng };
+      });
+      expect(runs[0]).toEqual(runs[1]);
+    }
+  });
+});
