@@ -9,6 +9,7 @@ import { famePack } from './fame';
 import { bossPack } from './boss';
 import { campusPack } from './campus';
 import { lineagePack } from './lineage';
+import { propertyPack } from './property';
 
 /**
  * Every content pack shipped in the app. Paid packs are bundled but stay
@@ -16,7 +17,7 @@ import { lineagePack } from './lineage';
  * require the player to opt in to adult content (with an 18+ confirmation).
  * New expansions: create a folder next to base/ and crime/, export a ContentPack, add it here.
  */
-export const PACKS: ContentPack[] = [basePack, famePack, bossPack, campusPack, cultureTrPack, lineagePack, crimePack];
+export const PACKS: ContentPack[] = [basePack, famePack, bossPack, campusPack, cultureTrPack, lineagePack, propertyPack, crimePack];
 
 export function getPack(id: string): ContentPack | undefined {
   return PACKS.find((p) => p.id === id);
