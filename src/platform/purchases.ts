@@ -125,10 +125,47 @@ export function expandEntitlements(ids: string[]): string[] {
   return [...out];
 }
 
+/** A price ready to show: the formatted text plus the amount and currency, so sums stay in one currency. */
+export interface ShownPrice {
+  text: string;
+  amount: number;
+  currency: string;
+  /** True when the store reported it; false for the test build's approximation. */
+  fromStore: boolean;
+}
+
+/**
+ * Test-build prices for Turkish players: the Turkish App Store / Play price points next to each US tier, so a
+ * Turkish screenshot does not show dollars. The real stores report their own localized price at runtime.
+ */
+const TRY_TIERS: Record<string, number> = { '0.99': 39.99, '1.99': 79.99, '2.99': 119.99, '3.99': 159.99, '4.99': 199.99, '9.99': 399.99 };
+
+const usdOf = (price: string) => Number(price.replace(/[^0-9.]/g, '')) || 0;
+
+/** The display price of a product when the store has not reported one (dev provider, offline, not loaded yet). */
+export function fallbackPrice(prod: Product, lang: 'en' | 'tr'): ShownPrice | null {
+  const usd = usdOf(prod.price);
+  if (!usd) return null;
+  const tl = lang === 'tr' ? TRY_TIERS[usd.toFixed(2)] : undefined;
+  if (tl !== undefined) return { text: formatPrice(tl, 'TRY', 'tr'), amount: tl, currency: 'TRY', fromStore: false };
+  return { text: formatPrice(usd, 'USD', lang), amount: usd, currency: 'USD', fromStore: false };
+}
+
+/** "₺399,99", "$9.99". */
+export function formatPrice(amount: number, currency: string, lang: 'en' | 'tr'): string {
+  try {
+    return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
 export interface PurchaseProvider {
   readonly isDev: boolean;
   purchase(productId: string): Promise<boolean>;
   restore(): Promise<string[]>;
+  /** Localized prices from the store, by product id (empty when unknown). */
+  prices(): Promise<Record<string, ShownPrice>>;
 }
 
 export const DevPurchaseProvider: PurchaseProvider = {
@@ -138,6 +175,9 @@ export const DevPurchaseProvider: PurchaseProvider = {
   },
   async restore() {
     return [];
+  },
+  async prices() {
+    return {}; // no store: the screen shows fallbackPrice
   },
 };
 
@@ -175,6 +215,18 @@ export const RevenueCatProvider: PurchaseProvider = {
       return Object.keys(customerInfo.entitlements.active);
     } catch {
       return [];
+    }
+  },
+  async prices() {
+    try {
+      const Purchases = await revenueCat();
+      const ids = PRODUCTS.filter((p) => !p.free).map((p) => p.id);
+      const { products } = await Purchases.getProducts({ productIdentifiers: ids, type: 'NON_SUBSCRIPTION' as never });
+      const out: Record<string, ShownPrice> = {};
+      for (const p of products) out[p.identifier] = { text: p.priceString, amount: p.price, currency: p.currencyCode, fromStore: true };
+      return out;
+    } catch {
+      return {};
     }
   },
 };

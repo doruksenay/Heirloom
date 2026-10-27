@@ -31,7 +31,7 @@ export function dateLabel(date: string, lang: string) {
 /** A category value for display; money is stored in US-baseline dollars over the wage factor. */
 export function fmtScore(cat: DailyCategory, v: number, countryId: string, lang: string) {
   if (cat.unit === 'money') return fmtShort(v * getCountry(countryId).wageFactor, countryId, lang as 'en' | 'tr');
-  if (cat.unit === 'years') return T('{n} yrs', { n: v });
+  if (cat.unit === 'years') return T('age {n}', { n: v });
   if (v >= 10_000) return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
   return fmtInt(v);
 }
@@ -48,7 +48,7 @@ function untilNext(now = Date.now()) {
 
 function shareText(app: AppApi, g: GameState, r: DailyResult) {
   const lines = [`Heirloom · ${T('Daily Challenge')} · ${dateLabel(r.date, app.lang)}`];
-  lines.push(`${g.player.firstName} ${g.player.lastName}, ${cityName(g.player.city, app.lang)} · ${T('{n} yrs', { n: g.dead?.age ?? 0 })}`);
+  lines.push(`${g.player.firstName} ${g.player.lastName}, ${cityName(g.player.city, app.lang)} · ${T('age {n}', { n: g.dead?.age ?? 0 })}`);
   for (const id of Object.keys(r.scores)) {
     const cat = categoryById(id);
     if (!cat) continue;

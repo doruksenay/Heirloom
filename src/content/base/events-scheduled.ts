@@ -140,6 +140,7 @@ const jobChoice = (i: number): ChoiceDef => ({
   badge: undefined,
   requires: (c) => !!c.vars[`job${i}`],
   requiresLabel: 'No opening',
+  hidden: (c) => !c.vars[`job${i}`],
   resolve: (c: Ctx) => {
     const id = String(c.vars[`job${i}`]);
     const chance = 0.35 + c.p.stats.smarts / 250 + c.p.stats.looks / 500 - (c.p.criminalRecord > 0 ? 0.2 : 0);
@@ -876,8 +877,8 @@ export const scheduledEvents: EventDef[] = [
     title: (c) => c.t('A letter from the bank, in red ink', 'Bankadan kırmızı mürekkepli bir mektup'),
     text: (c) =>
       c.t(
-        `You owe ${c.h.fmt(-c.p.money)}, and the interest grows every month. The letter uses the word "final" twice.`,
-        `Toplam borcun ${c.h.fmt(-c.p.money)} ve faizi her ay büyüyor. Mektupta "son ihtar" lafı iki kez geçiyor.`,
+        `You owe ${c.h.fmt(Math.max(0, -c.p.money))}, and the interest grows every month. The letter uses the word "final" twice.`,
+        `Toplam borcun ${c.h.fmt(Math.max(0, -c.p.money))} ve faizi her ay büyüyor. Mektupta "son ihtar" lafı iki kez geçiyor.`,
       ),
     choices: [
       {

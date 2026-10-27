@@ -285,11 +285,22 @@ export const medalPoints = (r: DailyResult) => Object.values(r.medals).reduce<nu
 /** Lines about goals are bookkeeping, not moments. */
 const GOAL_LINE = /^(Life goals:|Hayat hedeflerin:|Goal complete:|Hedef tamam:)/;
 const MOMENT_SCORE: Record<string, number> = { big: 3, good: 1, bad: 1 };
+/** Below this age only a 'big' line is a moment on its own; the toddler's egg-counting only fills an empty life. */
+const CHILDHOOD_AGE = 13;
+const CHILDHOOD_PENALTY = 2;
+
+/** How much a log line deserves a place among the moments (0 or less: never). */
+export function momentScore(e: LogEntry): number {
+  let score = (MOMENT_SCORE[e.tone ?? ''] ?? 0) + (e.title ? 1.5 : 0);
+  if (e.age < CHILDHOOD_AGE && e.tone !== 'big') score -= CHILDHOOD_PENALTY;
+  return score;
+}
 
 /**
  * The 6–8 moments of a finished life for the Daily result screen (review item 14: only birth, graduation and
  * death were shown). Always the first and the last line; between them the biggest lines (tone 'big' first, then
  * answered events with a title, then good and bad news), at most one per year of age, in the order they happened.
+ * Childhood lines only count when they are big (see momentScore).
  */
 export function dailyMoments(s: GameState, max = 8): LogEntry[] {
   const log = s.player.log;
@@ -298,7 +309,7 @@ export function dailyMoments(s: GameState, max = 8): LogEntry[] {
   const last = log[log.length - 1];
   const middle = log
     .slice(1, -1)
-    .map((e, i) => ({ e, i, score: (MOMENT_SCORE[e.tone ?? ''] ?? 0) + (e.title ? 1.5 : 0) }))
+    .map((e, i) => ({ e, i, score: momentScore(e) }))
     .filter((x) => x.score > 0 && !GOAL_LINE.test(x.e.text));
   middle.sort((a, b) => b.score - a.score || a.i - b.i);
   const picked: typeof middle = [];

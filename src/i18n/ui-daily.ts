@@ -1,7 +1,7 @@
 // Turkish interface strings for the Daily Challenge (merged into TR in ui.ts).
 export const TR_DAILY: Record<string, string> = {
   "Daily Challenge": "Günün Hayatı",
-  "{n} yrs": "{n} yaş",
+  "age {n}": "{n} yaş",
   "{h} h {m} min": "{h} sa {m} dk",
   "{n}-day streak": "{n} günlük seri",
   "Copied. Paste it anywhere.": "Kopyalandı. İstediğin yere yapıştırabilirsin.",

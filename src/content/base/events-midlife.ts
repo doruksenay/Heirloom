@@ -346,10 +346,13 @@ export const midlifeEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('smarts', 1);
           c.h.stat('happiness', 2);
-          return c.t(
-            'You traced the rumor to the tea lady. She knows everything and fears nothing.',
-            'Dedikodunun izini çaycı ablaya kadar sürdün. Her şeyi biliyor, hiçbir şeyden korkmuyor.',
-          );
+          // the office tea lady is Türkiye (and old Britain); elsewhere the person who knows everything sits at reception
+          const [en, tr] = byCountry<[string, string]>(c, {
+            tr: ['the tea lady', 'çaycı ablaya'],
+            uk: ['the tea lady', 'çay servisi yapan teyzeye'],
+            other: ['the receptionist', 'resepsiyondaki kadına'],
+          });
+          return c.t(`You traced the rumor to ${en}. She knows everything and fears nothing.`, `Dedikodunun izini ${tr} kadar sürdün. Her şeyi biliyor, hiçbir şeyden korkmuyor.`);
         },
       },
       {

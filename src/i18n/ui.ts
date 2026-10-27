@@ -359,8 +359,8 @@ export const TR: Record<string, string> = {
     'Her yıl birkaç aktivite hakkın var. Her hayatın ayrıca 3 hedefi var; tamamladığın her hedef ailene miras puanı kazandırır.',
   'Tap someone to spend time together, give a gift or have it out. Close family helps you when you are old.':
     'Birine dokun: vakit geçir, hediye ver ya da hesaplaş. Yaşlandığında yakın olduğun aile seni yalnız bırakmaz.',
-  'This is where Heirloom begins. Continue as one of your children: they inherit your home, your heirlooms and most of your money.':
-    'Heirloom asıl şimdi başlıyor. Çocuklarından biri olarak devam et: evin, yadigârların ve paranın çoğu ona kalır.',
+  'This is where Heirloom begins. Continue as one of your children: they inherit the family home, the heirlooms and their share of your money.':
+    'Heirloom asıl şimdi başlıyor. Çocuklarından biri olarak devam et: aile evi, yadigârlar ve paradan payı ona kalır.',
   'See the family tree': 'Soy ağacını gör',
   "Generation {n}. Your parent's life is now part of the family tree, and everything they left behind is yours.":
     '{n}. kuşak. Annenin ya da babanın hayatı artık soy ağacında; geride bıraktığı her şey artık senin.',

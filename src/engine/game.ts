@@ -8,7 +8,7 @@ import { abl, acc, dat, gen, gen as gen_, loc } from '../i18n/tr-grammar';
 import { furniture, hasGarden } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
-import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, inheritanceTax, safetyNet, tuitionFor, yearBudget } from './economy';
+import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, PENSION_AGE, inheritanceTax, safetyNet, tuitionFor, yearBudget } from './economy';
 import { babyOdds, bailoutHelpers, canHaveBaby } from '../content/base/events-scheduled';
 import { canAdopt } from '../content/base/adoption';
 import { cityName } from './places';
@@ -424,6 +424,8 @@ function yearlyTick(c: Ctx): string | null {
   if (job && p.jailYears === 0) {
     salary = salaryFor(job, p.jobLevel, country.wageFactor);
     p.lastSalary = salary;
+    const peak = engineExt(p).peakJob;
+    if (!job.partTime && (!peak || salary >= peak.salary)) engineExt(p).peakJob = { id: job.id, level: p.jobLevel, salary };
     p.jobYears++;
     // ranked jobs (soldier, officer) climb by years of service in their own yearly logic instead
     if (!job.ranked && p.jobYears >= 2 && rng.chance(0.1 + p.stats.smarts / 600 + p.jobYears / 100)) {
@@ -450,7 +452,10 @@ function yearlyTick(c: Ctx): string | null {
   if (!scheduled && eng.deferred) {
     const d = eng.deferred;
     delete eng.deferred;
-    if (d !== 'base.retirement' || (job && !p.retired)) scheduled = d;
+    // a pushed-back bank letter only comes if the debt is still there (an inheritance that year may have cleared it:
+    // "You owe -$90,692")
+    const stillOwes = -p.money - (p.home.owned ? p.home.value : 0) > 0;
+    if ((d !== 'base.retirement' || (job && !p.retired)) && (d !== 'base.debt_letter' || stillOwes)) scheduled = d;
   }
 
   // --- a charge waiting for court takes the scheduled slot, so nudges and life events can't starve it year after year
@@ -554,6 +559,11 @@ interface EngineExt {
   loss?: string;
   /** The first-debt warning was shown this life. */
   debtWarned?: boolean;
+  /**
+   * The best-paid job of this life (id, rung, salary), kept when the job ends: quitting, a firing, prison or a later
+   * odd job cleared the title, and a surgeon's life record read "University graduate". Older saves lack it.
+   */
+  peakJob?: { id: string; level: number; salary: number };
 }
 const engineExt = (p: Player): EngineExt => ((p.ext ??= {}).engine ??= {}) as EngineExt;
 
@@ -647,6 +657,9 @@ export interface HeirCard extends HeirOption {
   money: number;
   /** Whether the family home goes to this heir. */
   home: boolean;
+  /** What that home is worth (0 without one). With brothers and sisters the home counts towards the heir's part, so
+   * a valuable home can leave `money` at 0: the card shows the home's value next to the cash. */
+  homeValue: number;
   /** Names of the heirlooms they would carry on (every heirloom goes to whoever continues). */
   heirlooms: string[];
   /** Their own children and partner, as far as the family records know. */
@@ -693,6 +706,7 @@ export function heirCards(s: GameState): HeirCard[] {
         closeness: rel?.closeness,
         money,
         home: s.player.home.owned,
+        homeValue: s.player.home.owned ? Math.max(0, s.player.home.value) : 0,
         heirlooms,
         kids: Math.max(q.childIds?.length ?? 0, q.kids ?? 0),
         stats: { ...q.stats },
@@ -890,7 +904,7 @@ export function openEvent(s: GameState, def: EventDef): boolean {
     category: def.category,
     title: txt(def.title, c) ?? body,
     body: def.title ? body : '',
-    choices: def.choices.map((ch: ChoiceDef) => {
+    choices: def.choices.filter((ch: ChoiceDef) => !ch.hidden?.(c)).map((ch: ChoiceDef) => {
       const ok = !ch.requires || ch.requires(c);
       return { id: ch.id, label: txt(ch.label, c) ?? ch.id, badge: ok ? ch.badge : ch.requiresLabel, disabled: !ok };
     }),
@@ -1173,6 +1187,29 @@ export function canPassTorch(s: GameState): boolean {
   return !s.dead && !s.pending && playerAge(s) >= TORCH_AGE && s.player.jailYears === 0 && torchHeirs(s).length > 0;
 }
 
+/**
+ * The career line of a finished life: the job held at the end, "Retired …" after a retirement, otherwise the
+ * best-paid job of the life ("Retired Head of Surgery" from 60, "Former …" before), then the education.
+ */
+export function careerLine(s: GameState, c: Ctx = makeCtx(s)): string {
+  const p = s.player;
+  const age = s.year - p.birthYear;
+  if (p.jobId && p.jobTitle) return p.jobTitle;
+  const peak = engineExt(p).peakJob;
+  const peakDef = peak ? allJobs(s.enabledPacks).find((j) => j.id === peak.id) : undefined;
+  const lvl = peakDef ? Math.min(peak!.level, peakDef.titles.length - 1) : 0;
+  const peakEn = peakDef ? titleFor(peakDef, lvl, 'en') : undefined;
+  const peakTr = peakDef ? titleFor(peakDef, lvl, 'tr') : undefined;
+  if (p.retired && p.jobTitle) {
+    // the retirement title, unless an earlier job paid better (a surgeon who retired from a part-time shop job)
+    const keep = !peak || !peakDef || (p.lastSalary ?? 0) >= peak.salary;
+    if (keep) return c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`);
+  }
+  if (peakEn && peakTr) return p.retired || age >= PENSION_AGE ? c.t(`Retired ${peakEn}`, `Emekli ${peakTr}`) : c.t(`Former ${peakEn}`, `Eski ${peakTr}`);
+  if (p.jobTitle) return p.retired ? c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`) : p.jobTitle;
+  return p.education === 'university' ? c.t('University graduate', 'Üniversite mezunu') : c.t('No career', 'Kariyeri yok');
+}
+
 /** Ends the player's life (death or hand-over) and records it in the family history. */
 function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
   checkGoals(s);
@@ -1192,13 +1229,7 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
   const legacy = Math.round(
     age * 10 + Math.max(0, netWorth) / 1000 + children.length * 80 + grandkids * 40 + p.achievements.length * 150 + s.dynasty.heirlooms.length * 50,
   );
-  const career = p.jobTitle
-    ? p.retired
-      ? c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`)
-      : p.jobTitle
-    : p.education === 'university'
-      ? c.t('University graduate', 'Üniversite mezunu')
-      : c.t('No career', 'Kariyeri yok');
+  const career = careerLine(s, c);
   // heirloom words only for the types the family really owns, and only with someone to say them to
   const owned = [...new Set(s.dynasty.heirlooms.map((x) => x.defId))].filter((id) => HEIRLOOM_WORDS[id]);
   const aboutHeirloom = c.rng.chance(0.35) && !handover && !!heir && owned.length > 0;

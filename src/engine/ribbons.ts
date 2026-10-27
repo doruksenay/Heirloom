@@ -15,7 +15,7 @@ export const RIBBONS: RibbonDef[] = [
   { id: 'centenarian', name: 'Centenarian', desc: 'Lived to 100 or more.', nameTr: 'Asırlık', descTr: '100 yaş ve üstünü gördü.', test: (r) => r.age >= 100 },
   { id: 'gone_soon', name: 'Gone Too Soon', desc: 'Died before 30.', nameTr: 'Erken Gidenler', descTr: '30 yaşından önce öldü.', test: (r) => r.age < 30 },
   { id: 'black_sheep', name: 'Black Sheep', desc: 'Convicted more than once.', nameTr: 'Kara Koyun', descTr: 'Birden fazla kez mahkûm oldu.', test: (_r, p) => p.criminalRecord >= 2 },
-  { id: 'tycoon', name: 'Tycoon', desc: 'Ended a life worth a million (US dollars).', nameTr: 'Kodaman', descTr: 'Hayatını bir milyon (ABD doları) servetle tamamladı.', test: (r) => r.netWorth >= 1_000_000 },
+  { id: 'tycoon', name: 'Tycoon', desc: 'Ended a life worth a million (US dollars).', nameTr: 'Kodaman', descTr: 'Hayatını bir milyon (ABD doları) servetle tamamladı.', test: (r, p) => isTycoon(r.netWorth, p.money) },
   { id: 'overachiever', name: 'Overachiever', desc: 'Completed all three life goals.', nameTr: 'Başarı Avcısı', descTr: 'Üç hayat hedefinin hepsini tamamladı.', test: (_r, p) => !!p.goals?.length && p.goals.every((g) => g.done) },
   { id: 'big_family', name: 'Big Family', desc: 'Raised four or more children.', nameTr: 'Kalabalık Aile', descTr: 'Dört ya da daha fazla çocuk büyüttü.', test: (r) => r.children >= 4 },
   { id: 'soulmates', name: 'Soulmates', desc: '40+ years with the same partner.', nameTr: 'Ruh İkizleri', descTr: 'Aynı kişiyle 40 yıldan fazla.', test: (r) => (r.partnerYears ?? 0) >= 40 },
@@ -28,6 +28,13 @@ export const RIBBONS: RibbonDef[] = [
   { id: 'content', name: 'Content', desc: 'Died with 85+ Happiness.', nameTr: 'Huzurlu', descTr: '85+ Mutlulukla öldü.', test: (_r, p) => p.stats.happiness >= 85 },
   { id: 'ordinary', name: 'Quietly Ordinary', desc: 'A normal life, and that is fine.', nameTr: 'Sıradan ve Güzel', descTr: 'Normal bir hayat; bunda bir sorun yok.', test: () => true },
 ];
+
+/**
+ * A tycoon is worth a million in the end, counting the home, the car and the business and subtracting what is owed,
+ * and does not live on borrowed money: a big mortgaged home with the bank account deep in the red (debt above a
+ * quarter of the net worth) is not a fortune (playtest: "Tycoon" on a life that ended in heavy debt).
+ */
+export const isTycoon = (netWorth: number, money: number) => netWorth >= 1_000_000 && money >= -0.25 * netWorth;
 
 export function ribbonFor(r: LifeRecord, p: Player, s: GameState): RibbonDef {
   return [...packRibbons(s.enabledPacks), ...RIBBONS].find((x) => x.test(r, p, s)) ?? RIBBONS[RIBBONS.length - 1];

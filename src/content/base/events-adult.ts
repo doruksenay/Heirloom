@@ -223,7 +223,7 @@ export const adultEvents: EventDef[] = [
             ['drew a picture of you as a dragon. You framed it.', 'seni ejderha olarak çizdi. Resmi çerçeveletip duvara astın.'],
             ['asked why the sky is blue. You said "science" and changed the subject.', 'gökyüzünün neden mavi olduğunu sordu. "Bilim" deyip konuyu değiştirdin.'],
             ['told the whole nursery you\'re a secret agent.', 'bütün anaokuluna senin gizli ajan olduğunu söyledi.'],
-            ['put your shoes on the wrong feet, then yours, then the cat\'s. Proudly.', 'önce kendi ayakkabılarını ters giydi, sonra seninkileri. Gururla.'],
+            [`put ${kid.person.gender === 'female' ? 'her' : 'his'} own shoes on the wrong feet, then yours. Proudly.`, 'önce kendi ayakkabılarını ters giydi, sonra seninkileri. Gururla.'],
           ]
         : [
             ['drew a picture of you as a dragon. You framed it.', 'seni ejderha olarak çizdi. Resmi çerçeveletip duvara astın.'],

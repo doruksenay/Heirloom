@@ -1,6 +1,6 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
-import { PRODUCTS, PACK_IDS, expandEntitlements, purchases, type Product } from '../../platform/purchases';
+import { PRODUCTS, PACK_IDS, expandEntitlements, fallbackPrice, formatPrice, purchases, type Product, type ShownPrice } from '../../platform/purchases';
 import { THEMES } from '../../themes/registry';
 import { Icon } from '../icons';
 import { Cover, ThemeSwatch } from '../brand/covers';
@@ -12,6 +12,16 @@ type Section = 'packs' | 'theme' | 'premium';
 export function Store({ app }: { app: AppApi }) {
   const [section, setSection] = useState<Section>('packs');
   const [confirming, setConfirming] = useState<string | null>(null);
+  // the store's own localized prices (RevenueCat); until they load, or in the test build, a local approximation
+  const [storePrices, setStorePrices] = useState<Record<string, ShownPrice>>({});
+  useEffect(() => {
+    let live = true;
+    purchases.prices().then((ps) => live && setStorePrices(ps));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const priceOf = (p: Product): ShownPrice | null => storePrices[p.id] ?? fallbackPrice(p, app.lang);
   const owned = (id: string) => app.profile.entitlements.includes(id);
   const tr = app.lang === 'tr';
   const title = (p: Product) => (tr && p.titleTr ? p.titleTr : p.title);
@@ -41,6 +51,7 @@ export function Store({ app }: { app: AppApi }) {
 
   const list = PRODUCTS.filter((p) => (section === 'packs' ? p.kind === 'bundle' || p.kind === 'expansion' : p.kind === section));
   const separate = PRODUCTS.filter((p) => PACK_IDS.includes(p.id as (typeof PACK_IDS)[number]));
+  const bundleDeal = compareBundle(separate.map(priceOf), priceOf(PRODUCTS.find((p) => p.kind === 'bundle')!), app.lang);
 
   return (
     <div class="screen store">
@@ -79,7 +90,7 @@ export function Store({ app }: { app: AppApi }) {
                 {theme ? <ThemeSwatch tokens={theme.tokens} /> : <Cover id={prod.id} height={prod.kind === 'bundle' ? 160 : 132} />}
                 <div class="pack-badges">
                   {prod.free && <span class="badge free">{T('Free')}</span>}
-                  {prod.kind === 'bundle' && !got && <span class="badge save">{T('Save {n}%', { n: savePercent(separate, prod) })}</span>}
+                  {prod.kind === 'bundle' && !got && bundleDeal && bundleDeal.save > 0 && <span class="badge save">{T('Save {n}%', { n: bundleDeal.save })}</span>}
                   {prod.mature && <span class="badge mature">18+</span>}
                   {prod.comingSoon && <span class="badge">{T('Coming soon')}</span>}
                 </div>
@@ -112,8 +123,8 @@ export function Store({ app }: { app: AppApi }) {
                           ? owned('premium.no_ads') && !owned(prod.id)
                             ? T('Included with Heirloom+')
                             : T('Also included in Heirloom+')
-                          : prod.kind === 'bundle'
-                            ? T('Instead of {p} one by one', { p: sumPrices(separate) })
+                          : prod.kind === 'bundle' && bundleDeal
+                            ? T('Instead of {p} one by one', { p: bundleDeal.sum })
                             : ''}
                   </span>
                   {prod.free ? (
@@ -126,7 +137,7 @@ export function Store({ app }: { app: AppApi }) {
                     </span>
                   ) : (
                     <button type="button" class="btn primary small" disabled={prod.comingSoon} onClick={() => buy(prod)}>
-                      {confirming === prod.id ? T('I am 18+, buy') : prod.price}
+                      {confirming === prod.id ? T('I am 18+, buy') : (priceOf(prod)?.text ?? T('Buy'))}
                     </button>
                   )}
                 </div>
@@ -139,13 +150,13 @@ export function Store({ app }: { app: AppApi }) {
   );
 }
 
-const dollars = (p: string) => Number(p.replace(/[^0-9.]/g, '')) || 0;
-
-function sumPrices(ps: Product[]): string {
-  return `$${ps.reduce((a, p) => a + dollars(p.price), 0).toFixed(2)}`;
-}
-
-function savePercent(ps: Product[], bundle: Product): number {
-  const sum = ps.reduce((a, p) => a + dollars(p.price), 0);
-  return sum ? Math.round((1 - dollars(bundle.price) / sum) * 100) : 0;
+/**
+ * "Instead of ₺719,96 one by one" and the saving, from the prices actually shown. Only when every price is known and
+ * in one currency, so the sum is never a guess in a different money from the button next to it.
+ */
+export function compareBundle(parts: (ShownPrice | null)[], bundle: ShownPrice | null, lang: 'en' | 'tr'): { sum: string; save: number } | null {
+  if (!bundle || parts.some((p) => !p || p.currency !== bundle.currency)) return null;
+  const total = parts.reduce((a, p) => a + p!.amount, 0);
+  if (!total) return null;
+  return { sum: formatPrice(Math.round(total * 100) / 100, bundle.currency, lang), save: Math.round((1 - bundle.amount / total) * 100) };
 }

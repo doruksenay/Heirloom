@@ -48,4 +48,8 @@ export const TR_UI4: Record<string, string> = {
   'Included with Heirloom+': 'Heirloom+ ile geldi',
   'Also included in Heirloom+': 'Heirloom+ içinde de var',
   'Instead of {p} one by one': 'Tek tek alsan {p}',
+  // heir cards: the home's value and the cash on top of it
+  Cash: 'Nakit',
+  '+{amount} cash': '+{amount} nakit',
+  Buy: 'Satın al',
 };

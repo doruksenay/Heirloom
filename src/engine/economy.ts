@@ -19,6 +19,18 @@ import { currentTier } from './home';
 export const NET_PAY = 0.75;
 /** Yearly upkeep and property tax of an owned home, as a share of its value. */
 export const HOME_UPKEEP = 0.012;
+/**
+ * Upkeep relief: the value-based upkeep is capped at the larger of this share of the country's cost of living and
+ * HOME_UPKEEP_INCOME of the household's income. A home that grew in value over generations (booms, renovations)
+ * no longer drains an ordinary family or a pensioner into debt, while a high earner in a mansion still pays in full.
+ */
+export const HOME_UPKEEP_FLOOR = 0.12;
+export const HOME_UPKEEP_INCOME = 0.08;
+
+/** Yearly value-based upkeep of an owned home for a household with this yearly income (pay + pension or benefits). */
+export function homeUpkeep(value: number, income: number, costOfLiving: number): number {
+  return Math.min(HOME_UPKEEP * Math.max(0, value), Math.max(HOME_UPKEEP_FLOOR * costOfLiving, HOME_UPKEEP_INCOME * income));
+}
 /** Share of take-home pay above the basic cost of living that the household spends anyway. */
 export const LIFESTYLE_SHARE = 0.85;
 /**
@@ -125,7 +137,7 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
     cost += WEALTH_SPEND * Math.max(0, p.money - WEALTH_CUSHION * country.costOfLiving);
     cost += RICH_SPEND * Math.max(0, p.money - RICH_CUSHION * country.costOfLiving);
   }
-  if (p.home.owned) cost += HOME_UPKEEP * p.home.value;
+  if (p.home.owned) cost += homeUpkeep(p.home.value, pay + support, country.costOfLiving);
   const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
   if (p.money < 0 && unsecured > 0) cost += DEBT_RATE * unsecured;
   return { pay, cost, support };

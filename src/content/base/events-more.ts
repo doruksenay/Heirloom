@@ -65,8 +65,7 @@ const weddable = (c: Ctx) =>
 const heirChoice = (i: number): ChoiceDef => ({
   id: `heir${i}`,
   label: (c) => (c.vars[`kid${i}`] ? c.t(`Leave them to ${nm(c, `kid${i}`)}`, `Yadigârları ${dat(nm(c, `kid${i}`))} bırak`) : '—'),
-  requires: (c) => !!c.vars[`kid${i}`],
-  requiresLabel: '—',
+  hidden: (c) => !c.vars[`kid${i}`],
   resolve: (c: Ctx) => {
     Object.keys(c.p.flags)
       .filter((f) => f.startsWith('heir:'))

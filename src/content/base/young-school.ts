@@ -1018,7 +1018,10 @@ export const youngSchoolEvents: EventDef[] = [
     category: 'school',
     scheduled: true,
     setup: (c) => {
-      c.vars.bully = String(ysPeek(c).bully);
+      // the activity only shows with a bully around; opened any other way (an old save, a test), a new one turns up
+      // instead of a nameless "?" at the gate
+      if (bullyAlive(c)) c.vars.bully = String(ysPeek(c).bully);
+      else ys(c).bully = newKid(c, 'bully', 2).id;
     },
     title: (c) => c.t(`${nmc(c, 'bully')} is waiting at the school gate again.`, `${nmc(c, 'bully')} yine okul kapısında bekliyor.`),
     text: tt('You have had enough.', 'Artık yeter.'),

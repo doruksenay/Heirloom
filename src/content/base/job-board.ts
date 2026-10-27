@@ -151,8 +151,8 @@ function matchOf(c: Ctx, j: JobDef): number {
 }
 
 /**
- * Every job this player can see on the job board, best first: the ones they qualify for (by fit, then salary),
- * then the rest (fewest missing requirements first). Leaves out event-only jobs (scouts, the recruitment office),
+ * Every job this player can see on the job board, best first: the ones they qualify for (by salary, then fit),
+ * then the rest (fewest missing requirements first, then salary). Leaves out event-only jobs (scouts, the recruitment office),
  * jobs of other countries (çaycı abroad), and the player's current job. No RNG; language only changes the strings.
  */
 export function jobListing(c: Ctx): JobListing[] {
@@ -191,8 +191,9 @@ export function jobListing(c: Ctx): JobListing[] {
   }
   return rows.sort((a, b) => {
     if (a.qualifies !== b.qualifies) return a.qualifies ? -1 : 1;
-    if (a.qualifies) return b.match - a.match || b.salary - a.salary || a.id.localeCompare(b.id);
-    return a.gaps.length - b.gaps.length || b.match - a.match || a.salary - b.salary || a.id.localeCompare(b.id);
+    // highest pay first in both groups, so the salary column reads top-down in every language; fit only breaks ties
+    if (a.qualifies) return b.salary - a.salary || b.match - a.match || a.id.localeCompare(b.id);
+    return a.gaps.length - b.gaps.length || b.salary - a.salary || b.match - a.match || a.id.localeCompare(b.id);
   });
 }
 
@@ -240,6 +241,7 @@ const jobChoice = (i: number): ChoiceDef => ({
   },
   requires: (c) => !!c.vars[`job${i}`],
   requiresLabel: 'No opening',
+  hidden: (c) => !c.vars[`job${i}`],
   resolve: (c) => {
     const id = String(c.vars[`job${i}`]);
     const job = allJobs(c.s.enabledPacks).find((j) => j.id === id);

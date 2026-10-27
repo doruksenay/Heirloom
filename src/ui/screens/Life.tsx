@@ -133,7 +133,7 @@ export function Life({ app }: { app: AppApi }) {
 
       {s.daily && <DailyStrip app={app} />}
 
-      <div class="ledger" role="list">
+      <div class="ledger" role="list" data-n={tiles.length}>
         {tiles.map((t) => (
           <div class="ledger-item" role="listitem" key={t.k}>
             <span class="k">{t.k}</span>

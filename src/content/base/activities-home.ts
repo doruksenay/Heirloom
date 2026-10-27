@@ -404,7 +404,7 @@ const TRICKS: Partial<Record<PetKind, [string, string][]>> = {
     ['give a paw', 'pati vermeyi'],
     ['play dead', 'ölü taklidi yapmayı'],
     ['fetch your slippers', 'terliklerini getirmeyi'],
-    ['sit and wait for the simit', 'simit için oturup beklemeyi'],
+    ['sit and wait politely for a treat', 'simit için oturup beklemeyi'],
   ],
   cat: [
     ['high-five', 'beşlik çakmayı'],

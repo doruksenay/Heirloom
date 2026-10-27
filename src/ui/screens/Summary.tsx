@@ -128,7 +128,7 @@ export function Summary({ app }: { app: AppApi }) {
 
       {kids.length > 0 && !handed && !onlyNiblings && (
         <Tip app={app} id="continue" icon="family">
-          {T('This is where Heirloom begins. Continue as one of your children: they inherit your home, your heirlooms and most of your money.')}
+          {T('This is where Heirloom begins. Continue as one of your children: they inherit the family home, the heirlooms and their share of your money.')}
         </Tip>
       )}
       {onlyNiblings && (

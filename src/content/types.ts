@@ -70,6 +70,11 @@ export interface ChoiceDef {
   requires?: (c: Ctx) => boolean;
   /** Shown as badge when `requires` fails, e.g. "Needs Smarts 80+". */
   requiresLabel?: string;
+  /**
+   * Leaves the choice out entirely (no rng; checked when the event opens). For slot choices with nothing in the slot,
+   * such as the third child in a will with two children, which otherwise showed as a disabled "—".
+   */
+  hidden?: (c: Ctx) => boolean;
   /** Applies effects and returns the life-log line. */
   resolve: (c: Ctx) => string;
   tone?: Tone | ((c: Ctx) => Tone);

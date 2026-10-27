@@ -20,6 +20,8 @@ export interface HeirView {
   /** Starting cash, when the engine can say. */
   money?: number;
   home?: boolean;
+  /** What the home is worth, when the engine can say. */
+  homeValue?: number;
   heirlooms: number;
   kids: number;
   named?: boolean;
@@ -34,6 +36,7 @@ export const fromCard = (c: HeirInfo): HeirView => ({
   closeness: c.closeness,
   money: c.money,
   home: c.home,
+  homeValue: c.homeValue,
   heirlooms: c.heirlooms.length,
   kids: c.kids,
   named: c.named,
@@ -92,10 +95,16 @@ export function HeirCardView({ v, s, lang, onPick, selected, cta, label }: { v: 
               </span>
             </span>
           )}
-          {v.money !== undefined && <span class="fact num">{fmtShort(v.money, s.player.countryId, lang)}</span>}
           {v.home && (
-            <span class="fact">
-              <Icon name="home" size={13} /> {T('Home')}
+            <span class="fact" title={T('Home')}>
+              <Icon name="home" size={13} /> {v.homeValue ? <span class="num">{fmtShort(v.homeValue, s.player.countryId, lang)}</span> : T('Home')}
+            </span>
+          )}
+          {/* the home counts towards the heir's part: when it is worth more than their share there is no cash on top,
+              so a bare "$0" next to a valuable home is left out rather than shown as if they inherit nothing */}
+          {v.money !== undefined && (v.money > 0 || !v.home) && (
+            <span class="fact num" title={T('Cash')}>
+              {v.home ? T('+{amount} cash', { amount: fmtShort(v.money, s.player.countryId, lang) }) : fmtShort(v.money, s.player.countryId, lang)}
             </span>
           )}
           {v.heirlooms > 0 && (

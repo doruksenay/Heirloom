@@ -200,6 +200,7 @@ const fairChoice = (i: number): ChoiceDef => ({
   label: (c) => (c.vars[`job${i}`] ? String(c.vars[`title${i}`]) : '—'),
   requires: (c) => !!c.vars[`job${i}`],
   requiresLabel: 'No opening',
+  hidden: (c) => !c.vars[`job${i}`],
   resolve: (c) => {
     if (c.rng.chance(hireChance(c))) {
       const cur = c.p.jobId && !c.p.retired ? c.h.jobTitle() ?? '' : '';

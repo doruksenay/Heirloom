@@ -241,11 +241,12 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 .life-meta b { color: var(--text-soft); font-weight: 700; }
 
 /* money and pack values: one slim row, scrolls sideways when a pack adds more */
-.ledger { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
-.ledger::-webkit-scrollbar { display: none; }
-.ledger-item { flex: 1 0 auto; min-width: 92px; display: flex; flex-direction: column; gap: 1px; padding: 7px 12px 8px; border-radius: var(--radius-m); background: var(--surface); }
-.ledger-item .k { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
-.ledger-item .v { font-family: var(--font-display); font-size: 17px; font-weight: 700; white-space: nowrap; }
+/* the money row wraps instead of scrolling: three to a row, four as a 2×2 grid, so a pack or pet tile never gets cut off at the screen edge */
+.ledger { display: flex; flex-wrap: wrap; gap: 6px; }
+.ledger-item { flex: 1 1 96px; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 7px 12px 8px; border-radius: var(--radius-m); background: var(--surface); }
+.ledger[data-n='4'] .ledger-item { flex-basis: calc(50% - 3px); }
+.ledger-item .k { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ledger-item .v { font-family: var(--font-display); font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ledger-item .v.bad { color: var(--bad); }
 .ledger-item .v.accent { color: var(--accent); }
 
