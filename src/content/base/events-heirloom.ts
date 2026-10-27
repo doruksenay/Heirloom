@@ -56,7 +56,7 @@ const BEAT = 'hl_beat';
 const beat = (base: number) => (c: Ctx) => {
   if (inMourning(c.s)) return 0;
   const since = c.s.year - (c.p.flags[BEAT] ?? c.p.birthYear);
-  return since < 4 ? 0 : since < 6 ? base * 0.5 : base * 6;
+  return since < 4 ? 0 : since < 6 ? base * 0.25 : base * 3;
 };
 
 /** Picks one heirloom of the list into vars.hid with one rng call, and marks the beat. */
@@ -928,7 +928,7 @@ export const heirloomEvents: EventDef[] = [
     category: 'heirloom',
     minAge: 22,
     cooldown: 15,
-    weight: beat(10),
+    weight: beat(7),
     when: (c) => repairReady(c).length > 0 && familySince(c, 'repair') >= 8,
     setup: (c) => {
       pickFrom(c, repairReady(c));
@@ -1119,7 +1119,7 @@ export const heirloomEvents: EventDef[] = [
     category: 'heirloom',
     minAge: 18,
     cooldown: 20,
-    weight: beat(8),
+    weight: beat(5),
     when: (c) => scareReady(c).length > 0 && familySince(c, 'scare') >= 12,
     setup: (c) => {
       pickFrom(c, scareReady(c));
@@ -1185,7 +1185,7 @@ export const heirloomEvents: EventDef[] = [
     category: 'heirloom',
     minAge: 20,
     cooldown: 10,
-    weight: beat(10),
+    weight: beat(6),
     when: (c) => has(c),
     setup: (c) => {
       pickItem(c);

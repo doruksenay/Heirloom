@@ -15,6 +15,10 @@ import { petEvents } from './events-pets';
 import { heirloomEvents } from './events-heirloom';
 import { keepsakeEvents } from './events-keepsakes';
 import { expansionEvents } from './events-expansion';
+import { variantEvents } from './events-variants';
+import { growingEvents } from './events-growing';
+import { lifestageEvents } from './events-lifestage';
+import { echoEvents } from './events-echoes';
 import { homeActivities, homeOnInherit, homeOnYear, homeTiles } from './activities-home';
 import { griefEvents } from './events-grief';
 import { adoptionActivities, adoptionEvents } from './adoption';
@@ -38,6 +42,10 @@ export const basePack: ContentPack = {
     ...heirloomEvents,
     ...keepsakeEvents,
     ...expansionEvents,
+    ...variantEvents,
+    ...growingEvents,
+    ...lifestageEvents,
+    ...echoEvents,
     ...scheduledEvents,
     ...griefEvents,
     ...adoptionEvents,

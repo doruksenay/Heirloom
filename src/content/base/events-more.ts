@@ -2,7 +2,7 @@ import type { ChoiceDef, Ctx, EventDef } from '../types';
 import { acc, cap, da, dat, gen, kin, loc, nm, single, wage, who, wth, employee, workKind, type WorkKind, quietInMourning } from './util';
 import { catName, syncFlagCat } from '../../engine/pets';
 import { pickIndex } from './lines';
-import { byCountry, cityOf, didFor, He, him, his, markFor, settled } from './events-flavour';
+import { cityOf, didFor, He, him, his, markFor, settled } from './events-flavour';
 
 /** base.coworker_birthday: two cake lines for each kind of workplace. */
 const CAKE: Partial<Record<WorkKind, [string, string][]>> = {
@@ -467,41 +467,6 @@ export const moreEvents: EventDef[] = [
         label: (c) => c.t('Politely decline', 'Kibarca reddet'),
         resolve: (c) =>
           c.t('You declined. Your cousin called you "a sheep" at dinner.', 'Reddettin. Kuzenin yemekte sana "koyun" dedi.'),
-      },
-    ],
-  },
-  {
-    id: 'base.neighbor',
-    category: 'random',
-    minAge: 20,
-    cooldown: 8,
-    title: (c) =>
-      c.t('Your neighbor drills into the wall every Sunday at 8 a.m.', 'Komşun her pazar sabah sekizde duvarı matkapla deliyor.'),
-    text: (c) => c.t('You are starting to hear drills in your dreams.', 'Rüyalarında bile matkap sesi duymaya başladın.'),
-    choices: [
-      {
-        id: 'knock',
-        label: (c) => c.t('Knock and talk', 'Kapısını çal, konuş'),
-        resolve: (c) => {
-          if (c.rng.chance(0.6))
-            return c.t(
-              `You talked. He apologized and brought you ${byCountry(c, { tr: 'baklava', other: 'a tin of cookies' })}. Peace achieved.`,
-              `Konuştunuz. Özür diledi ve sana ${byCountry(c, { tr: 'baklava', other: 'bir kutu kurabiye' })} getirdi. Barış sağlandı.`,
-            );
-          c.h.stat('happiness', -3);
-          return c.t('You talked. He started drilling on Saturdays too.', 'Konuştunuz. Artık cumartesileri de deliyor.');
-        },
-      },
-      {
-        id: 'music',
-        label: (c) => c.t('Play loud music back', 'Müziği sonuna kadar aç'),
-        resolve: (c) => {
-          c.h.stat('happiness', 2);
-          return c.t(
-            'You played opera at full volume. The drilling stopped. So did the greetings in the hallway.',
-            'Son ses opera açtın. Matkap sustu. Merdivendeki selamlaşmalar da.',
-          );
-        },
       },
     ],
   },

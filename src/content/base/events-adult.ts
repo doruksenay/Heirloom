@@ -561,39 +561,6 @@ export const adultEvents: EventDef[] = [
     tone: 'bad',
   },
   {
-    id: 'base.checkup',
-    category: 'health',
-    minAge: 40,
-    title: (c) => c.t('Your doctor found something odd on a scan.', 'Doktorun tomografide tuhaf bir şey gördü.'),
-    text: (c) => c.t('It is probably nothing. Probably.', 'Muhtemelen bir şey değil. Muhtemelen.'),
-    choices: [
-      {
-        id: 'tests',
-        label: (c) => c.t('Get more tests', 'Ek tetkik yaptır'),
-        resolve: (c) => {
-          c.h.money(-wage(c, 1200));
-          c.h.stat('health', 4);
-          return c.t(
-            'More tests caught it early. A small procedure and you were fine.',
-            'Tetkikler sayesinde erken yakalandı. Ufak bir müdahale ve turp gibisin.',
-          );
-        },
-      },
-      {
-        id: 'ignore',
-        label: (c) => c.t('Ignore it', 'Takma kafana'),
-        badge: 'Risky',
-        resolve: (c) => {
-          if (c.rng.chance(0.3)) {
-            c.h.stat('health', -20);
-            return c.t('It was not nothing. Your health took a serious hit.', 'Bir şeymiş. Sağlığın ciddi bir darbe aldı.');
-          }
-          return c.t('It really was nothing. Lucky.', 'Gerçekten bir şey değilmiş. Şanslısın.');
-        },
-      },
-    ],
-  },
-  {
     id: 'base.illness',
     category: 'health',
     minAge: 50,
@@ -680,43 +647,6 @@ export const adultEvents: EventDef[] = [
 
   // ------------------------------------------------------------ money & random
   {
-    id: 'base.wallet',
-    category: 'random',
-    minAge: 10,
-    cooldown: 12, // a found wallet is a story, not a yearly income
-    setup: (c) => {
-      c.vars.amt = wage(c, c.rng.int(80, 600));
-    },
-    title: (c) =>
-      c.t(
-        `You found a wallet with ${c.h.fmt(Number(c.vars.amt))} inside.`,
-        `İçinde ${c.h.fmt(Number(c.vars.amt))} olan bir cüzdan buldun.`,
-      ),
-    text: (c) => c.t('There is an ID card in it with an address.', 'İçinde adresli bir kimlik kartı var.'),
-    choices: [
-      {
-        id: 'return',
-        label: (c) => c.t('Return it', 'Sahibine geri ver'),
-        resolve: (c) => {
-          c.h.stat('happiness', 5);
-          return c.t(
-            'You returned the wallet. The owner cried and baked you a cake.',
-            'Cüzdanı geri verdin. Sahibi ağladı ve sana kek yaptı.',
-          );
-        },
-      },
-      {
-        id: 'keep',
-        label: (c) => c.t('Keep the cash', 'Parayı cebe at'),
-        resolve: (c) => {
-          c.h.money(Number(c.vars.amt));
-          c.h.stat('happiness', -2);
-          return c.t('You kept the cash. The ID photo haunts your dreams.', 'Parayı cebe attın. Kimlikteki fotoğraf rüyalarına giriyor.');
-        },
-      },
-    ],
-  },
-  {
     id: 'base.stray_cat',
     category: 'random',
     minAge: 18,
@@ -797,6 +727,8 @@ export const adultEvents: EventDef[] = [
     category: 'heirloom',
     minAge: 25,
     cooldown: 15,
+    // a dilemma, not a beat: rare enough that selling the family treasure stays a real decision
+    weight: 3,
     when: (c) => c.s.dynasty.heirlooms.length > 0 && c.p.money < wage(c, 5000),
     setup: (c) => {
       const item = c.rng.pick(c.s.dynasty.heirlooms);
