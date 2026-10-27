@@ -42,6 +42,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Campus: pick a major, chase a 4.0, join clubs, land internships, study abroad, go all the way to a PhD.
 > • Lineage: a crest, a family seat, a rule for who comes next, an old feud, and a letter to those who follow.
 > • Property: a flat to let, a few shares, a plot of land and the choices around money that sits still.
+> • Care: look after the people who looked after you, and meet the slower years of your own body.
 > • Crime World (18+): street hustles, heists, trials, prison, and the long road back.
 >
 > Play in English or Turkish.
@@ -85,6 +86,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Kampüs: bölümünü seç, 4,00 ortalamanın peşine düş, kulüplere katıl, staj bul, Erasmus'a git, doktoraya kadar uzan.
 > • Soy: bir arma, bir aile köşkü, sıradakinin nasıl seçileceğine dair bir kural, eski bir husumet ve ardından gelenlere bir mektup.
 > • Mülk ve Yatırım: kiraya verilecek bir daire, birkaç hisse, bir parça arsa ve duran paranın etrafındaki kararlar.
+> • Bakım ve Yaşlanma: sana bakanlara bak ve kendi bedeninin yavaşlayan yıllarıyla tanış.
 > • Suç Dünyası (18+): sokak işleri, soygunlar, mahkemeler, cezaevi ve düze çıkmanın uzun yolu.
 >
 > Oyun baştan sona Türkçe: isim ekleri bile doğru.
