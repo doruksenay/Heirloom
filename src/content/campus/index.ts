@@ -4,6 +4,7 @@ import { isCareerUpgrade, titleFor } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
 import { isCoastal } from '../../engine/places';
+import { campusMoreEvents } from './events-more';
 import { say, sayWith, type Pair } from '../base/lines';
 import { grandmaAlive, motherAlive } from '../fame/util';
 import {
@@ -1490,7 +1491,7 @@ export const campusPack: ContentPack = {
   description: 'University life: pick a major, chase a 4.0, join clubs, land internships, study abroad and go all the way to a PhD.',
   rating: 'all',
   entitlement: CAMPUS_ENTITLEMENT,
-  events,
+  events: [...events, ...campusMoreEvents],
   activities,
   jobs: [
     {

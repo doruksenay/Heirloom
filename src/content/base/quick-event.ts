@@ -24,6 +24,8 @@ export interface QuickOption {
   closeness?: { kinds: RelationKind[]; delta: number };
   /** Flags set when this option is picked (they carry the year, so a later event can ask how long ago). */
   flags?: string[];
+  /** Anything the plain numbers cannot say (a pack's own state). Must not draw from rng, so seeds stay put. */
+  apply?: (c: Ctx) => void;
   tone?: Tone;
   result: Pair;
 }
@@ -63,6 +65,7 @@ export function quickEvent(q: QuickEvent): EventDef {
       if (o.legacy) c.s.dynasty.legacyScore = Math.max(0, c.s.dynasty.legacyScore + o.legacy);
       if (o.closeness) for (const r of c.h.relatives(o.closeness.kinds)) c.h.closeness(r.person.id, o.closeness.delta);
       for (const f of o.flags ?? []) c.h.flag(f);
+      o.apply?.(c);
       return c.t(...o.result);
     },
   }));

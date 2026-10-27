@@ -3,6 +3,7 @@ import type { Player } from '../../engine/types';
 import { loc } from '../base/util';
 import { cityName } from '../../engine/places';
 import { crimeActivities } from './activities';
+import { crimeMoreEvents } from './events-more';
 import { afterEvents } from './events-after';
 import { justiceEvents } from './events-justice';
 import { prisonEvents } from './events-prison';
@@ -37,7 +38,7 @@ export const crimePack: ContentPack = {
   description: 'Gangs, heists, trials and prison life. Every choice has a cost, and your family remembers.',
   rating: 'mature',
   entitlement: CRIME_ENTITLEMENT,
-  events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents],
+  events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents, ...crimeMoreEvents],
   activities: crimeActivities,
 
   onYear: (c) => {
