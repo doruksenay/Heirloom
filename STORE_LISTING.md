@@ -44,6 +44,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Property: a flat to let, a few shares, a plot of land and the choices around money that sits still.
 > • Care: look after the people who looked after you, and meet the slower years of your own body.
 > • Homestead: a plot of earth, hens, bees, an orchard and a village that notices everything.
+> • Abroad: family far away, a contract in another country, a language that splits in two, and the long way home.
 > • Crime World (18+): street hustles, heists, trials, prison, and the long road back.
 >
 > Play in English or Turkish.
@@ -89,6 +90,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Mülk ve Yatırım: kiraya verilecek bir daire, birkaç hisse, bir parça arsa ve duran paranın etrafındaki kararlar.
 > • Bakım ve Yaşlanma: sana bakanlara bak ve kendi bedeninin yavaşlayan yıllarıyla tanış.
 > • Köy ve Toprak: bir parça toprak, tavuklar, arılar, bir meyve bahçesi ve her şeyi fark eden bir köy.
+> • Gurbet: uzaktaki aile, başka bir ülkede bir sözleşme, ikiye bölünen bir dil ve eve dönen uzun yol.
 > • Suç Dünyası (18+): sokak işleri, soygunlar, mahkemeler, cezaevi ve düze çıkmanın uzun yolu.
 >
 > Oyun baştan sona Türkçe: isim ekleri bile doğru.
