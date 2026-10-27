@@ -93,7 +93,7 @@ const ribbons: RibbonDef[] = [
     desc: 'Owned a flat to let, and lived to tell the tale.',
     nameTr: 'Ev Sahibi',
     descTr: 'Kiraya verilecek bir daireye sahip oldu ve anlatacak hikâyesi var.',
-    test: (_r, p) => flag(p, 'prop_flat') || flag(p, 'prop_shop'),
+    test: (r, p) => (letsFlat(p) || letsShop(p)) && r.age >= 65,
   },
   {
     id: 'patient_investor',

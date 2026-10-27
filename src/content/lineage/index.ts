@@ -83,7 +83,7 @@ const ribbons: RibbonDef[] = [
     desc: 'Bought the family seat and kept it standing.',
     nameTr: 'Evin Bekçisi',
     descTr: 'Aile köşkünü satın aldı ve ayakta tuttu.',
-    test: (_r, p) => hasFlag(p, 'lin_seat') && !hasFlag(p, 'lin_seat_sold'),
+    test: (r, p) => hasFlag(p, 'lin_seat') && !hasFlag(p, 'lin_seat_sold') && r.age >= 60,
   },
   {
     id: 'letter_writer',
