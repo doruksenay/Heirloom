@@ -95,11 +95,11 @@ function play(seed: number, p: Profile, countryId = 'tr'): GameState {
 }
 
 describe('Türkiye culture pack', () => {
-  it('plays 200 Turkish lives: every event fires, every activity runs, no English in Turkish', { timeout: 120_000 }, () => {
+  it('plays 320 Turkish lives: every event fires, every activity runs, no English in Turkish', { timeout: 240_000 }, () => {
     const fired = new Map<string, number>();
     const ribbons = new Map<string, number>();
     let worth = 0;
-    for (let seed = 1; seed <= 200; seed++) {
+    for (let seed = 1; seed <= 320; seed++) {
       const s = play(seed, profile([cultureTrPack.entitlement!]));
       expect(s.enabledPacks).toContain('culture_tr');
       for (const id of Object.keys(s.player.eventLastAge)) if (id.startsWith('tr.')) fired.set(id, (fired.get(id) ?? 0) + 1);
@@ -121,7 +121,7 @@ describe('Türkiye culture pack', () => {
     // pack ribbons are checked before the base ones, so they must stay rare
     const packRibbons = (ribbons.get('mahalle_muhtari') ?? 0) + (ribbons.get('altin_bilezik') ?? 0);
     expect(packRibbons).toBeLessThan(40);
-    expect(worth / 200).toBeLessThan(5_000_000);
+    expect(worth / 320).toBeLessThan(5_000_000);
   });
 
   it('every title, body, choice label and outcome reads in Turkish', () => {

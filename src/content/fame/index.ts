@@ -4,6 +4,7 @@ import { aOrAn, cap, gen, wage } from '../base/util';
 import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, pathOrLast, payingFans, peekFame, songTitle, type FamePath } from './state';
 import { compact, fameOf, free, hasPath, motherAlive } from './util';
 import { moreFameEvents } from './events-more';
+import { lateFameEvents } from './events-late';
 import { moreFameActivities } from './activities-more';
 import { pickIndex, say, sayWith, type Pair } from '../base/lines';
 
@@ -958,7 +959,7 @@ export const famePack: ContentPack = {
   description: 'Music, social media and acting. Form a band, write songs, release albums, go viral, survive scandals.',
   rating: 'all',
   entitlement: FAME_ENTITLEMENT,
-  events: [...events, ...moreFameEvents],
+  events: [...events, ...moreFameEvents, ...lateFameEvents],
   activities: [...activities, ...moreFameActivities],
   onYear,
   onInherit,

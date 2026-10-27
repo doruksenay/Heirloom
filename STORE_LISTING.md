@@ -36,7 +36,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > Every life gets three goals and ends with a ribbon: Soulmates, Black Sheep, Centenarian, Tycoon, Superstar… Collect them all.
 >
 > EXPANSIONS
-> • Fame: form a band, write songs, release albums, go on tour from 5 cities to 50, go viral, survive scandals.
+> • Fame: form a band, write songs, release albums, go on tour from 5 cities to 50, go viral, survive scandals, and live the quiet years after the spotlight.
 > • Boss: start a café, a tea brand, a tech startup or a game studio. Raise money, IPO, or go bust. Pass the family business down.
 > • Türkiye: the university exam, military service, henna nights, bayram visits and the neighbor auntie.
 > • Campus: pick a major, chase a 4.0, join clubs, land internships, study abroad, go all the way to a PhD.
@@ -45,6 +45,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Care: look after the people who looked after you, and meet the slower years of your own body.
 > • Homestead: a plot of earth, hens, bees, an orchard and a village that notices everything.
 > • Abroad: family far away, a contract in another country, a language that splits in two, and the long way home.
+> • Eras: the calendar moves on. The quiet screens, the warm decades, the long mend, the far shore: each generation meets a different world.
 > • Crime World (18+): street hustles, heists, trials, prison, and the long road back.
 >
 > Play in English or Turkish.

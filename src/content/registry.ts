@@ -11,6 +11,7 @@ import { campusPack } from './campus';
 import { lineagePack } from './lineage';
 import { propertyPack } from './property';
 import { carePack } from './care';
+import { erasPack } from './eras';
 import { homesteadPack } from './homestead';
 import { abroadPack } from './abroad';
 
@@ -20,7 +21,7 @@ import { abroadPack } from './abroad';
  * require the player to opt in to adult content (with an 18+ confirmation).
  * New expansions: create a folder next to base/ and crime/, export a ContentPack, add it here.
  */
-export const PACKS: ContentPack[] = [basePack, famePack, bossPack, campusPack, cultureTrPack, lineagePack, propertyPack, carePack, homesteadPack, abroadPack, crimePack];
+export const PACKS: ContentPack[] = [basePack, famePack, bossPack, campusPack, cultureTrPack, lineagePack, propertyPack, carePack, homesteadPack, abroadPack, erasPack, crimePack];
 
 export function getPack(id: string): ContentPack | undefined {
   return PACKS.find((p) => p.id === id);
