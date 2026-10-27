@@ -1,5 +1,5 @@
 import type { Category, ChoiceDef, Ctx, EventDef } from '../types';
-import type { StatKey, Tone } from '../../engine/types';
+import type { RelationKind, StatKey, Tone } from '../../engine/types';
 import type { Pair } from './lines';
 import { inMourning } from '../../engine/context';
 import { wage } from './util';
@@ -18,6 +18,10 @@ export interface QuickOption {
   stats?: Partial<Record<StatKey, number>>;
   /** Money in US dollars before the country's wage factor; negative costs money and disables the option without it. */
   usd?: number;
+  /** Points added to (or taken from) the family's legacy score, which every later life of the dynasty keeps. */
+  legacy?: number;
+  /** Closeness change for everyone of the given kinds, e.g. every child. */
+  closeness?: { kinds: RelationKind[]; delta: number };
   /** Flags set when this option is picked (they carry the year, so a later event can ask how long ago). */
   flags?: string[];
   tone?: Tone;
@@ -39,6 +43,9 @@ export interface QuickEvent {
   options: QuickOption[];
 }
 
+/** Years since a flag was set in this life, or -1 when it never was (the first half of a two-part story). */
+export const since = (c: Ctx, flag: string): number => (c.p.flags[flag] === undefined ? -1 : c.s.year - c.p.flags[flag]);
+
 const isCost = (o: QuickOption) => (o.usd ?? 0) < 0;
 
 export function quickEvent(q: QuickEvent): EventDef {
@@ -53,6 +60,8 @@ export function quickEvent(q: QuickEvent): EventDef {
     resolve: (c) => {
       for (const [stat, delta] of Object.entries(o.stats ?? {}) as [StatKey, number][]) c.h.stat(stat, delta);
       if (o.usd) c.h.money(wage(c, o.usd));
+      if (o.legacy) c.s.dynasty.legacyScore = Math.max(0, c.s.dynasty.legacyScore + o.legacy);
+      if (o.closeness) for (const r of c.h.relatives(o.closeness.kinds)) c.h.closeness(r.person.id, o.closeness.delta);
       for (const f of o.flags ?? []) c.h.flag(f);
       return c.t(...o.result);
     },

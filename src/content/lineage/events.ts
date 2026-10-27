@@ -1,0 +1,302 @@
+import type { EventDef } from '../types';
+import { quickEvent, since, type QuickEvent } from '../base/quick-event';
+
+// "Lineage": the family name as something you keep. A crest, a seat, a rule for who comes next, an old feud, a letter
+// to the ones who will read it. Standing is the dynasty's legacy score, which every later life keeps.
+// Quick events (base/quick-event.ts): no rng, so they shift nobody's seed.
+
+const L = { category: 'family' } as const;
+
+const LINEAGE: QuickEvent[] = [
+  {
+    ...L,
+    id: 'lin.crest',
+    ages: [22, 60],
+    once: true,
+    title: ['Someone suggests the family should have a crest.', 'Biri ailenin bir arması olması gerektiğini söylüyor.'],
+    text: ['A cousin has drawn one already. It has a lion, a pair of crossed spoons and a motto that is mostly in Latin and partly in a typing error.', 'Bir kuzen çoktan çizmiş. Bir aslan, çapraz iki kaşık ve çoğu Latince, bir kısmı yazım hatası olan bir slogan var.'],
+    options: [
+      { id: 'adopt', label: ['Adopt it, spoons and all', 'Kaşıklarıyla birlikte benimse'], legacy: 40, stats: { happiness: 3 }, flags: ['lin_crest'], tone: 'good', result: ['It went on a mug, a gate and the back of a very small cushion. Visitors ask about the spoons. The answer changes with who is telling it.', 'Bir kupaya, bir kapıya ve çok küçük bir yastığın arkasına işlendi. Misafirler kaşıkları soruyor. Cevap, anlatana göre değişiyor.'] },
+      { id: 'redo', label: ['Pay a proper artist to redo it', 'Düzgün bir sanatçıya yeniden çizdir'], usd: -150, legacy: 60, stats: { looks: 1, happiness: 2 }, flags: ['lin_crest'], result: ['The artist kept the lion and quietly removed the spoons. The cousin has not spoken to you since, but the crest looks like it has been in the family for centuries.', 'Sanatçı aslanı bıraktı ve kaşıkları sessizce çıkardı. Kuzen o günden beri seninle konuşmuyor ama arma sanki yüzyıllardır ailede.'] },
+      { id: 'skip', label: ['Say a family is not a logo', 'Bir ailenin logo olmadığını söyle'], stats: { smarts: 1 }, result: ['You said it kindly. The cousin put the drawing in a drawer, where it lives with the other great ideas.', 'Nazikçe söyledin. Kuzen çizimi, öbür büyük fikirlerin yaşadığı çekmeceye koydu.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.motto',
+    ages: [25, 60],
+    once: true,
+    title: ['The family needs a motto.', 'Ailenin bir sloganı olmalı.'],
+    text: ['At the long table, everyone has a suggestion. The loudest is “Never Hungry”. The wisest is “Enough”.', 'Uzun masada herkesin bir önerisi var. En gürültülüsü “Asla Aç Kalma”. En bilgesi “Yeter”.'],
+    options: [
+      { id: 'hungry', label: ['“Never Hungry”', '“Asla Aç Kalma”'], stats: { happiness: 3 }, legacy: 20, flags: ['lin_motto'], tone: 'good', result: ['It went on the kitchen wall. Every child who has ever visited has been fed at least twice, and the family cook has become a person of influence.', 'Mutfak duvarına asıldı. Ziyaret eden her çocuk en az iki kez doyuruldu ve aile aşçısı nüfuzlu biri oldu.'] },
+      { id: 'enough', label: ['“Enough”', '“Yeter”'], stats: { smarts: 2 }, legacy: 20, flags: ['lin_motto'], result: ['One word, painted over the door. Strangers think it is a warning and relatives think it is advice. It is both.', 'Kapının üstüne boyanmış tek bir kelime. Yabancılar uyarı, akrabalar öğüt sanıyor. İkisi de.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.seat',
+    ages: [30, 65],
+    once: true,
+    title: ['The old house at the edge of the village is for sale.', 'Köyün kenarındaki eski ev satılık.'],
+    text: ['It has a leaking roof, twelve rooms and a garden full of things that were once vegetables. Four generations of your family were born in or near it.', 'Çatısı akıyor, on iki odası var ve bahçesi bir zamanlar sebze olan şeylerle dolu. Ailenin dört kuşağı onun içinde ya da yakınında doğmuş.'],
+    options: [
+      { id: 'buy', label: ['Buy it, roof and all', 'Çatısıyla birlikte satın al'], usd: -9000, legacy: 120, stats: { happiness: 6 }, flags: ['lin_seat'], tone: 'big', result: ['You took the keys on a Tuesday. By Friday, three relatives had arrived with ladders and an opinion about every room. It is the family seat now, and it leaks.', 'Anahtarları bir salı günü aldın. Cumaya üç akraba merdivenlerle ve her oda hakkında bir fikirle geldi. Artık ailenin köşkü ve damlıyor.'] },
+      { id: 'walk', label: ['Walk the rooms once, and leave', 'Odaları bir kez gez ve ayrıl'], stats: { happiness: -1, smarts: 1 }, result: ['You walked every room and stood in the kitchen for a while. Someone else bought it. You pass it sometimes, and tell the story of the roof.', 'Her odayı gezdin ve mutfakta bir süre durdun. Başkası satın aldı. Bazen önünden geçiyorsun ve çatı hikâyesini anlatıyorsun.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.seat_repair',
+    ages: [32, 85],
+    cooldown: 10,
+    when: (c) => since(c, 'lin_seat') >= 2,
+    title: ['The family house needs work again.', 'Aile evi yine bakım istiyor.'],
+    text: ['A damp patch has appeared on the ceiling of the room where everyone is born, or at least photographed.', 'Herkesin doğduğu, ya da en azından fotoğraf çektirdiği odanın tavanında nemli bir leke çıktı.'],
+    options: [
+      { id: 'fix', label: ['Repair it properly', 'Düzgünce onar'], usd: -1800, legacy: 25, stats: { happiness: 2 }, result: ['A builder who had worked on the house for forty years did it for less than he should have and told you why. The patch is gone. The story of the patch remains.', 'Evde kırk yıl çalışmış bir usta olması gerekenden ucuza yaptı ve nedenini anlattı. Leke gitti. Lekenin hikâyesi kaldı.'] },
+      { id: 'later', label: ['Put a bucket under it and wait', 'Altına kova koy ve bekle'], stats: { happiness: -2 }, legacy: -10, result: ['The bucket became a feature. Visitors step round it respectfully, like a monument to deferred maintenance.', 'Kova bir özellik hâline geldi. Misafirler ona, ertelenmiş bakıma dikilmiş bir anıt gibi saygıyla basmadan geçiyor.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.succession',
+    ages: [45, 78],
+    once: true,
+    title: ['Your relatives want to know how the family will decide who comes next.', 'Akrabaların ailede bir sonrakinin nasıl belirleneceğini bilmek istiyor.'],
+    text: ['They have been politely not asking for years. Today a cousin asked, at dinner, in front of the soup.', 'Yıllardır nazikçe sormuyorlardı. Bugün bir kuzen yemekte, çorbanın önünde sordu.'],
+    options: [
+      { id: 'eldest', label: ['The eldest child, always', 'Hep en büyük çocuk'], legacy: 30, stats: { smarts: 1 }, flags: ['lin_rule_eldest'], result: ['Clear and simple. The eldest nodded. The youngest looked at the soup. You wrote it down so that nobody could pretend otherwise later.', 'Açık ve basit. En büyük başını salladı. En küçük çorbasına baktı. Sonra kimse inkâr etmesin diye yazıya geçirdin.'] },
+      { id: 'fit', label: ['Whoever is best suited', 'Kim uygunsa o'], legacy: 30, stats: { smarts: 2, happiness: -1 }, flags: ['lin_rule_fit'], result: ['Fairer on paper. Every child began to behave impeccably around you, which made the next few years very pleasant and slightly exhausting.', 'Kâğıt üstünde daha adil. Her çocuk senin yanında kusursuz davranmaya başladı; sonraki yıllar çok hoş ve biraz yorucu geçti.'] },
+      { id: 'stays', label: ['The one who stays and looks after the house', 'Kalıp eve bakan'], legacy: 30, stats: { happiness: 2 }, flags: ['lin_rule_stays'], result: ['It rewarded the one who stayed, and quietly told the others they would be welcome and loved, but not in charge. Nobody argued. One of them cried in the garden.', 'Kalanı ödüllendirdi ve ötekilere sevgiyle karşılanacaklarını ama yönetmeyeceklerini sessizce söyledi. Kimse itiraz etmedi. Biri bahçede ağladı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.succession_doubt',
+    ages: [55, 90],
+    once: true,
+    when: (c) => since(c, 'lin_rule_eldest') >= 5 || since(c, 'lin_rule_fit') >= 5 || since(c, 'lin_rule_stays') >= 5,
+    title: ['Your rule for who comes next is being tested.', 'Bir sonrakinin kim olacağına dair kuralın sınanıyor.'],
+    text: ['A grandchild asks, innocently, why the rule is the rule. Everyone else suddenly finds something to do in the kitchen.', 'Bir torun masumca kuralın neden böyle olduğunu soruyor. Herkesin aniden mutfakta bir işi çıkıyor.'],
+    options: [
+      { id: 'explain', label: ['Explain it honestly, including the flaws', 'Kusurlarıyla birlikte dürüstçe anlat'], legacy: 30, stats: { smarts: 2, happiness: 2 }, tone: 'good', result: ['It took an hour. When you finished, the child said, “So it is a bit unfair but you tried.” You decided that would do as the family’s second motto.', 'Bir saat sürdü. Bitirince çocuk “Yani biraz haksız ama denemişsin” dedi. Bunun ailenin ikinci sloganı olabileceğine karar verdin.'] },
+      { id: 'change', label: ['Say you will think about changing it', 'Değiştirmeyi düşüneceğini söyle'], stats: { smarts: 1 }, legacy: 10, result: ['You said you would think about it. You did, for a week. The rule stayed, but now it came with a sentence that begins, “Because I once asked myself.”', 'Düşüneceğini söyledin. Bir hafta düşündün. Kural kaldı ama artık “Çünkü bir zamanlar kendime sordum” diye başlayan bir cümlesi vardı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.alliance',
+    ages: [22, 42],
+    once: true,
+    light: true,
+    title: ['A well-known family has a proposal: a match between your households.', 'Tanınmış bir aile iki hanenin birleşmesini öneriyor.'],
+    text: ['They have land, a good name and a son or daughter who looks at the floor. Your relatives are thrilled. You are not sure you were asked.', 'Toprakları, iyi bir adları ve yere bakan bir oğulları ya da kızları var. Akrabaların çok heyecanlı. Sana sorulduğundan emin değilsin.'],
+    options: [
+      { id: 'meet', label: ['Agree to meet, on your own terms', 'Kendi koşullarınla tanışmayı kabul et'], legacy: 40, stats: { smarts: 1 }, tone: 'good', result: ['You met in a café, with a chaperone you had chosen yourself (a cousin who talks). It did not become a marriage, but it became two families that spoke well of one another, which was the point.', 'Bir kafede, kendi seçtiğin bir refakatçiyle (çok konuşan bir kuzen) buluştunuz. Evlilik olmadı ama birbirini iyi anan iki aile oldu; asıl amaç buydu.'] },
+      { id: 'refuse', label: ['Decline: this is your life, not a treaty', 'Reddet: bu bir anlaşma değil, senin hayatın'], stats: { happiness: 4 }, legacy: -20, result: ['The relatives were upset for a month and gossiped for a year. You were happier by the second week. Your grandmother, in secret, sent you a coin.', 'Akrabalar bir ay üzüldü, bir yıl dedikodu yaptı. İkinci haftada sen daha mutluydun. Büyükannen sana gizlice bir bozuk para yolladı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.feud',
+    ages: [25, 65],
+    once: true,
+    title: ['Your family has not spoken to the family across the valley for sixty years.', 'Ailen vadinin karşısındaki aileyle altmış yıldır konuşmuyor.'],
+    text: ['Nobody remembers why. The best theory involves a donkey. The second involves a wall.', 'Kimse nedenini hatırlamıyor. En iyi teori bir eşekle ilgili. İkincisi bir duvarla.'],
+    options: [
+      { id: 'end', label: ['Go over with a gift and end it', 'Bir hediyeyle git ve bitir'], usd: -40, legacy: 60, stats: { happiness: 5 }, flags: ['lin_feud_ended'], tone: 'good', result: ['An old man opened the door, looked at the gift, looked at you and said, “At last.” It turned out they had been waiting for sixty years for somebody else to go first.', 'Yaşlı bir adam kapıyı açtı, hediyeye baktı, sana baktı ve “Sonunda” dedi. Altmış yıldır birinin önce gitmesini bekliyorlarmış.'] },
+      { id: 'keep', label: ['Keep it going: it is tradition', 'Sürsün: gelenek bu'], stats: { happiness: -1 }, legacy: -10, result: ['You kept the silence. At the next funeral both families sat on opposite sides of the aisle and pretended to look at the ceiling.', 'Sessizliği sürdürdün. Bir sonraki cenazede iki aile koridorun iki yanında oturdu ve tavana bakıyormuş gibi yaptı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.feud_reward',
+    ages: [30, 90],
+    once: true,
+    when: (c) => since(c, 'lin_feud_ended') >= 3,
+    title: ['The family across the valley invite you to a wedding.', 'Vadinin karşısındaki aile seni bir düğüne çağırıyor.'],
+    text: ['It is their grandson’s wedding. The invitation says: “Come, and bring the donkey story.”', 'Torunlarının düğünü. Davetiyede şöyle yazıyor: “Gel ve eşek hikâyesini getir.”'],
+    options: [
+      { id: 'go', label: ['Go, and bring the whole family', 'Git ve bütün aileyi getir'], usd: -60, legacy: 50, stats: { happiness: 6 }, tone: 'good', result: ['The two families danced in a line that nobody could decide whose it was. The donkey story had three endings by midnight, all of them true.', 'İki aile, kimin olduğuna kimsenin karar veremediği bir sıra hâlinde dans etti. Eşek hikâyesinin gece yarısına kadar üç sonu oldu; hepsi doğruydu.'] },
+      { id: 'send', label: ['Send a card and your regrets', 'Kart ve özür gönder'], stats: { happiness: 1 }, legacy: 10, result: ['You sent a card. They sent a photograph of everyone dancing, with a small arrow pointing to an empty chair labelled “yours”.', 'Kart gönderdin. Onlar da herkesin dans ettiği bir fotoğraf yolladı; üzerinde “seninki” yazan boş bir sandalyeyi gösteren küçük bir ok vardı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.portraits',
+    ages: [40, 85],
+    once: true,
+    title: ['The hallway wall is bare, and the family has opinions about it.', 'Koridor duvarı boş ve ailenin bu konuda fikirleri var.'],
+    text: ['A photographer is offering a package of portraits of everyone, going back as far as anyone has a photograph.', 'Bir fotoğrafçı herkesin, elde fotoğrafı olan en eski kuşağa kadar portrelerini içeren bir paket öneriyor.'],
+    options: [
+      { id: 'hang', label: ['Hang them all, in order', 'Hepsini sırayla as'], usd: -220, legacy: 50, stats: { happiness: 4 }, tone: 'good', result: ['Thirty faces along one wall. Children walk down it slowly and say, “Who’s that?” and somebody always knows, and if not, makes it up well.', 'Bir duvar boyunca otuz yüz. Çocuklar yavaşça yürüyüp “Bu kim?” diyor ve her zaman biri biliyor; bilmiyorsa iyi uyduruyor.'] },
+      { id: 'few', label: ['Hang only the ones you remember', 'Sadece hatırladıklarını as'], legacy: 20, stats: { happiness: 2 }, result: ['Seven photographs, a long gap, and then a very formal man with a moustache no one can place.', 'Yedi fotoğraf, uzun bir boşluk ve ardından kimsenin yerini tam bulamadığı bıyıklı, çok resmî bir adam.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.donate',
+    ages: [38, 80],
+    once: true,
+    title: ['The village school needs a new roof.', 'Köy okulunun yeni bir çatıya ihtiyacı var.'],
+    text: ['The headteacher sits in your kitchen with a folder and the dignity of someone who has asked many people already.', 'Müdür, dosyası ve çok kişiye sormuş birinin ağırbaşlılığıyla mutfağında oturuyor.'],
+    options: [
+      { id: 'give', label: ['Pay for the roof, in the family’s name', 'Çatıyı ailenin adına öde'], usd: -2500, legacy: 120, stats: { happiness: 5 }, tone: 'big', result: ['A small brass plate now sits by the door with your family name on it. Children rub it for luck on exam days. It is slowly turning gold.', 'Kapının yanında artık ailenin adını taşıyan küçük bir pirinç levha var. Çocuklar sınav günlerinde şans için ona dokunuyor. Yavaşça altın rengine dönüyor.'] },
+      { id: 'anon', label: ['Give anonymously', 'İsimsiz bağışla'], usd: -1200, legacy: 40, stats: { happiness: 6 }, result: ['The money arrived without a name. The headteacher guessed within a day and has never said it out loud. You like it that way.', 'Para isimsiz geldi. Müdür bir gün içinde tahmin etti ve hiç yüksek sesle söylemedi. Böylesini seviyorsun.'] },
+      { id: 'no', label: ['Say that you cannot this year', 'Bu yıl yapamayacağını söyle'], stats: { happiness: -2 }, result: ['The headteacher said she understood and probably did. The roof was paid for by a bake sale and a raffle you bought four tickets for.', 'Müdür anladığını söyledi ve muhtemelen anladı. Çatıyı bir kek satışı ve dört bilet aldığın bir piyango ödedi.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.stranger_kin',
+    ages: [24, 70],
+    once: true,
+    title: ['A stranger with your surname says you are related.', 'Soyadını taşıyan bir yabancı akraba olduğunuzu söylüyor.'],
+    text: ['He has a folder, a family tree drawn on the back of a calendar and a very firm handshake.', 'Elinde bir dosya, bir takvimin arkasına çizilmiş bir soy ağacı ve çok sıkı bir tokalaşma var.'],
+    options: [
+      { id: 'check', label: ['Check it carefully', 'Dikkatle araştır'], stats: { smarts: 2 }, legacy: 30, result: ['It took three weeks of letters. He was a fourth cousin, once removed, through a woman whose name no one in the family had ever mentioned. You added her name to the tree, in ink.', 'Üç haftalık mektuplaşma sürdü. Dördüncü dereceden bir kuzendi, adı ailede hiç anılmamış bir kadın üzerinden. Onun adını soy ağacına mürekkeple ekledin.'] },
+      { id: 'welcome', label: ['Welcome him in without checking', 'Araştırmadan kabul et'], stats: { happiness: 4 }, result: ['He stayed for dinner and told eleven stories, four of them about people you had never heard of. You will never know whether any of it was true, and you enjoyed all of it.', 'Yemeğe kaldı ve on bir hikâye anlattı; dördü hiç duymadığın kişilerle ilgiliydi. Hangisinin doğru olduğunu asla bilemeyeceksin ve hepsinden keyif aldın.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.reunion_grand',
+    ages: [40, 85],
+    cooldown: 12,
+    light: true,
+    title: ['The great family gathering is this summer, and you are hosting.', 'Büyük aile buluşması bu yaz ve ev sahibi sensin.'],
+    text: ['Eighty-one people have said yes. Nobody has said what they will bring. Somebody has already asked about the seating.', 'Seksen bir kişi evet dedi. Kimse ne getireceğini söylemedi. Biri şimdiden oturma düzenini sordu.'],
+    options: [
+      { id: 'big', label: ['Do it properly: tents, tables, music', 'Düzgün yap: çadırlar, masalar, müzik'], usd: -800, legacy: 60, stats: { happiness: 7 }, closeness: { kinds: ['child', 'sibling', 'grandparent'], delta: 4 }, tone: 'good', result: ['It rained for twenty minutes, which turned out to be the best part. Four generations sheltered under one tent and sang, badly.', 'Yirmi dakika yağmur yağdı ve bu en güzel kısım oldu. Dört kuşak tek bir çadırın altına sığındı ve kötü şarkı söyledi.'] },
+      { id: 'potluck', label: ['Make it a potluck and ask everyone to bring a chair', 'Herkes yemek ve sandalye getirsin'], stats: { happiness: 4 }, legacy: 30, closeness: { kinds: ['child', 'sibling'], delta: 2 }, result: ['Forty-one cakes, eleven kinds of salad and chairs that did not match. Everyone left with a plate and a story.', 'Kırk bir pasta, on bir çeşit salata ve birbirine uymayan sandalyeler. Herkes bir tabak ve bir hikâyeyle ayrıldı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.attic_letters',
+    ages: [50, 90],
+    once: true,
+    title: ['In the attic you find a bundle of letters your grandmother never mentioned.', 'Tavan arasında büyükannenin hiç bahsetmediği bir mektup destesi buldun.'],
+    text: ['They are tied with a blue ribbon. The handwriting is a stranger’s, and the last letter is dated the year before she was married.', 'Mavi bir kurdeleyle bağlı. El yazısı bir yabancıya ait ve son mektubun tarihi evlenmesinden bir önceki yıl.'],
+    options: [
+      { id: 'read', label: ['Read them all, and tell the family', 'Hepsini oku ve aileye anlat'], stats: { smarts: 2, happiness: 2 }, legacy: 50, tone: 'good', result: ['It was a love that did not happen, written with such care that the whole family went quiet. Then a great-aunt said, “She never stopped keeping the ribbon.” Everyone understood.', 'Olmamış bir aşktı ve o kadar özenle yazılmıştı ki bütün aile sustu. Sonra bir teyze “Kurdeleyi hiç atmadı” dedi. Herkes anladı.'] },
+      { id: 'close', label: ['Retie the ribbon and put them back', 'Kurdeleyi yeniden bağla ve geri koy'], stats: { happiness: 1 }, legacy: 15, result: ['Some stories belong to the person who kept them. You put the bundle back, a little neater, and never mentioned it.', 'Bazı hikâyeler onları saklayana aittir. Deste yerine, biraz daha düzgün olarak, geri koydun ve hiç bahsetmedin.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.honour',
+    ages: [42, 80],
+    once: true,
+    title: ['The town wants to give you an honorary role.', 'Kasaba sana fahri bir görev vermek istiyor.'],
+    text: ['“Elder of the Square”. It comes with a sash, a bench with your name on it and the duty to judge the annual pie contest.', '“Meydanın Büyüğü”. Bir kuşak, adının yazılı olduğu bir bank ve her yıl pasta yarışmasını yargılama görevi geliyor.'],
+    options: [
+      { id: 'accept', label: ['Accept, sash and all', 'Kuşağıyla birlikte kabul et'], legacy: 70, stats: { happiness: 4, health: -1 }, tone: 'good', result: ['You judged forty-one pies in one afternoon. You gave first prize to a man who had clearly bought his from a shop, and he cried with joy. You do not regret it.', 'Bir öğleden sonra kırk bir pastayı yargıladın. Birinciliği, pastasını belli ki dükkândan almış bir adama verdin ve adam sevinçten ağladı. Pişman değilsin.'] },
+      { id: 'decline', label: ['Decline gracefully', 'Nazikçe reddet'], stats: { happiness: 1 }, legacy: 10, result: ['They offered it to someone else. The bench with your name on it, however, was already cast; it stands in the square to this day, slightly puzzling.', 'Başkasına verdiler. Ancak adının yazılı olduğu bank çoktan dökülmüştü; bugün hâlâ meydanda duruyor ve biraz şaşırtıcı.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.disown',
+    ages: [40, 80],
+    once: true,
+    title: ['A relative’s behaviour is starting to bring the family name into disrepute.', 'Bir akrabanın davranışı aile adını yıpratmaya başlıyor.'],
+    text: ['It is not a crime, just very loud and often. People in the shop have started to say “Oh, that family.”', 'Suç değil, sadece çok yüksek sesle ve sık. Dükkândaki insanlar “Ha, o aile” demeye başladı.'],
+    options: [
+      { id: 'talk', label: ['Sit down and talk to them, kindly and plainly', 'Oturup nazik ve açık konuş'], stats: { smarts: 1, happiness: -2 }, legacy: 30, closeness: { kinds: ['sibling'], delta: 2 }, result: ['It was a hard hour and then a long, quiet one. They said they had not realised. The loudness did not vanish, but it came with a small glance in your direction first.', 'Zor bir saat ve ardından uzun, sessiz bir saat oldu. Fark etmediklerini söylediler. Gürültü gitmedi ama artık önce sana küçük bir bakış atılıyor.'] },
+      { id: 'cut', label: ['Distance yourself publicly', 'Herkesin önünde uzaklaş'], stats: { happiness: -4 }, legacy: 10, closeness: { kinds: ['sibling'], delta: -8 }, tone: 'bad', result: ['The shop went quiet and then talked about something else. Your relative sent no message. You heard nothing for a year and understood how much that cost.', 'Dükkân sustu ve sonra başka bir şeyden konuştu. Akraban mesaj göndermedi. Bir yıl hiç ses çıkmadı ve bunun neye mal olduğunu anladın.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.museum',
+    ages: [55, 90],
+    once: true,
+    when: (c) => c.s.dynasty.heirlooms.length > 0,
+    title: ['The local museum would like to borrow a family heirloom.', 'Yerel müze bir aile yadigârını ödünç almak istiyor.'],
+    text: ['They promise a glass case, a small card with your family’s name and a guard who “loves old things”.', 'Bir cam vitrin, ailenin adının yazılı küçük bir kart ve “eski şeyleri seven” bir güvenlik görevlisi vaat ediyorlar.'],
+    options: [
+      { id: 'lend', label: ['Lend it for a year', 'Bir yıllığına ödünç ver'], legacy: 80, stats: { happiness: 3 }, tone: 'good', result: ['The card read “On loan from the family”. Strangers stood in front of it for a long time. When it came home it had a new smell, of cedar and well-meaning attention.', 'Kartta “Aileden ödünç” yazıyordu. Yabancılar önünde uzun süre durdu. Eve döndüğünde yeni bir kokusu vardı: sedir ve iyi niyetli ilgi.'] },
+      { id: 'keep', label: ['Keep it at home where it belongs', 'Ait olduğu evde tut'], stats: { happiness: 1 }, legacy: 10, result: ['You said no, politely. The curator looked a little hurt, and you felt a little proud, which you found confusing.', 'Kibarca hayır dedin. Küratör biraz kırılmış göründü, sen biraz gurur duydun ve bunu kafa karıştırıcı buldun.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.scholarship',
+    ages: [58, 90],
+    once: true,
+    title: ['A lawyer asks whether you would like to set up a scholarship.', 'Bir avukat bir burs kurmak ister misin diye soruyor.'],
+    text: ['It would carry the family name and help one student a year, for as long as the money lasts. A very long time, if invested well.', 'Aile adını taşıyacak ve para yettiği sürece her yıl bir öğrenciye yardım edecek. İyi yatırılırsa çok uzun bir süre.'],
+    options: [
+      { id: 'fund', label: ['Set it up', 'Kur'], usd: -5000, legacy: 180, stats: { happiness: 6 }, flags: ['lin_scholarship'], tone: 'big', result: ['The first student wrote you a letter, in pencil, four pages long. You read it twice and put it with the others. There are more now than you can quickly count.', 'İlk öğrenci sana kurşun kalemle dört sayfalık bir mektup yazdı. İki kez okuyup diğerlerinin yanına koydun. Artık çabucak sayamayacağın kadar çok var.'] },
+      { id: 'mentor', label: ['Offer your time instead: mentor one student', 'Onun yerine zamanını ver: bir öğrenciye akıl hocalığı yap'], legacy: 30, stats: { happiness: 4, smarts: 1 }, result: ['You met every other Sunday for a year. The student passed the exam and sent you a card saying, "You never once told me what to do, and I knew exactly what to do."', 'Bir yıl boyunca iki haftada bir pazar buluştunuz. Öğrenci sınavı geçti ve şöyle yazan bir kart yolladı: "Bana bir kez bile ne yapmam gerektiğini söylemedin ve ben tam olarak ne yapacağımı bildim."'] },
+      { id: 'small', label: ['Give a smaller sum to the school instead', 'Onun yerine okula daha küçük bir bağış yap'], usd: -800, legacy: 40, stats: { happiness: 3 }, result: ['It bought books. The librarian put a small plate inside each one: “From a friend of the school.”', 'Kitap alındı. Kütüphaneci her birinin içine küçük bir levha koydu: “Okulun bir dostundan.”'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.grave_garden',
+    ages: [45, 85],
+    once: true,
+    title: ['The old family graves are overgrown.', 'Eski aile mezarları ot bürümüş.'],
+    text: ['Three of them lean. One has lost its stone. The cemetery keeper says he does what he can, in the tone of someone who has done a great deal.', 'Üçü eğilmiş. Birinin taşı kaybolmuş. Mezarlık bekçisi elinden geleni yaptığını, çok şey yapmış birinin tonuyla söylüyor.'],
+    options: [
+      { id: 'restore', label: ['Restore them, and replace the stone', 'Onar ve taşı yenile'], usd: -600, legacy: 70, stats: { happiness: 3 }, tone: 'good', result: ['A mason spent a week there. The new stone has the old words, copied from a photograph. Standing in front of it, you felt that someone had finally been told.', 'Bir taş ustası orada bir hafta çalıştı. Yeni taşta eski sözcükler var, bir fotoğraftan kopyalanmış. Önünde dururken sanki birine sonunda haber verilmiş gibi hissettin.'] },
+      { id: 'tidy', label: ['Pull the weeds and plant something', 'Otları temizle ve bir şey dik'], legacy: 25, stats: { happiness: 3, health: 1 }, result: ['You spent a morning on your knees with a trowel and came home muddy and quiet. You planted rosemary, which does not need much.', 'Bir sabahı mala ile diz çökerek geçirdin ve çamurlu ve sessiz eve döndün. Fazla bakım istemeyen biberiye diktin.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.chronicle_news',
+    ages: [30, 75],
+    cooldown: 15,
+    title: ['A local newspaper wants to write about your family.', 'Yerel bir gazete ailen hakkında yazı yazmak istiyor.'],
+    text: ['“Four generations in one village.” The journalist is young, polite and, you suspect, already knows the ending.', '“Bir köyde dört kuşak.” Gazeteci genç, kibar ve, şüphelendiğin gibi, sonunu çoktan biliyor.'],
+    options: [
+      { id: 'talk', label: ['Tell the stories you are proud of', 'Gurur duyduğun hikâyeleri anlat'], legacy: 50, stats: { happiness: 3 }, tone: 'good', result: ['The article ran on page five and was cut out and pinned to six kitchen walls. A cousin called to say that you had left out the donkey. You had.', 'Yazı beşinci sayfada çıktı ve altı mutfak duvarına kesilip asıldı. Bir kuzen eşeği atladığını söylemek için aradı. Atlamıştın.'] },
+      { id: 'private', label: ['Say that the family prefers privacy', 'Ailenin mahremiyeti tercih ettiğini söyle'], stats: { happiness: 1 }, result: ['The journalist wrote about a different family. Yours was described, in a footnote, as “reserved”. You liked the word and used it on a card.', 'Gazeteci başka bir aileyi yazdı. Seninkine dipnotta “çekingen” dendi. Kelimeyi beğendin ve bir kartta kullandın.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.teach_heir',
+    ages: [50, 80],
+    once: true,
+    when: (c) => c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 15),
+    title: ['One of your children asks you to show them “how it all works”.', 'Çocuklarından biri sana “her şeyin nasıl işlediğini” göstermeni istiyor.'],
+    text: ['They mean the accounts, the house, the relatives, the rituals and the unspoken rules. You have been carrying it all in your head.', 'Hesapları, evi, akrabaları, gelenekleri ve yazılı olmayan kuralları kastediyor. Hepsini kafanda taşıyordun.'],
+    options: [
+      { id: 'book', label: ['Write it all down in a notebook', 'Hepsini bir deftere yaz'], legacy: 90, stats: { smarts: 2, happiness: 3 }, closeness: { kinds: ['child'], delta: 6 }, flags: ['lin_notebook'], tone: 'good', result: ['It took a winter. The notebook has a chapter called “Things Nobody Will Admit They Do” and another called “Who Not To Seat Together”. It is the most valuable object in the house.', 'Bir kış sürdü. Defterin “Kimsenin Yaptığını İtiraf Etmeyeceği Şeyler” adında bir bölümü ve “Kimler Yan Yana Oturtulmamalı” adında bir bölümü var. Evdeki en değerli nesne.'] },
+      { id: 'walk', label: ['Show them as you go, year by year', 'Yıl yıl, işi yaparken göster'], legacy: 40, stats: { happiness: 2 }, closeness: { kinds: ['child'], delta: 4 }, result: ['It was slow. Some things you showed twice, and one thing you showed only when it happened. Your child said afterwards, “So that’s how.”', 'Yavaştı. Bazı şeyleri iki kez gösterdin, bir şeyi de yalnızca olduğunda. Çocuğun sonra “Demek böyleymiş” dedi.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.letter_heir',
+    ages: [62, 95],
+    once: true,
+    title: ['You have decided to write a letter to the family that follows you.', 'Senden sonra gelecek aileye bir mektup yazmaya karar verdin.'],
+    text: ['A blank page, a good pen, and a very long list of things that seem both too small and too important to say.', 'Boş bir sayfa, iyi bir kalem ve söylemek için hem çok küçük hem çok önemli görünen şeylerden oluşan çok uzun bir liste.'],
+    options: [
+      { id: 'write', label: ['Write it properly and seal it', 'Düzgünce yaz ve mühürle'], legacy: 150, stats: { happiness: 6, smarts: 1 }, flags: ['lin_letter'], tone: 'big', result: ['You wrote three drafts and kept the last, which was shorter than the first and said more. You gave it to the oldest grandchild to open “when it is needed”. Nobody has yet decided when that is.', 'Üç taslak yazdın ve sonuncusunu sakladın; ilkinden kısaydı ve daha çok şey söylüyordu. En büyük toruna “gerektiğinde” açması için verdin. Bunun ne zaman olduğuna henüz kimse karar vermedi.'] },
+      { id: 'tell', label: ['Tell it aloud at the next gathering instead', 'Onun yerine bir sonraki toplantıda sesli söyle'], legacy: 60, stats: { happiness: 4 }, result: ['You stood up at the table and said it, badly, and it was perfect. Someone recorded it on a phone. It is the most replayed thing in the family.', 'Masada ayağa kalkıp söyledin, kötü bir şekilde ve mükemmeldi. Biri telefonla kaydetti. Ailede en çok tekrar dinlenen şey bu.'] },
+    ],
+  },
+  {
+    ...L,
+    id: 'lin.heirloom_exhibit',
+    ages: [35, 85],
+    cooldown: 20,
+    light: true,
+    when: (c) => c.s.dynasty.heirlooms.length >= 2,
+    title: ['You decide to lay out all the family’s treasures on one table.', 'Ailenin bütün hazinelerini tek bir masaya sermeye karar veriyorsun.'],
+    text: ['It has never been done. Each object has a story, and some stories do not quite agree with one another.', 'Daha önce hiç yapılmadı. Her nesnenin bir hikâyesi var ve bazı hikâyeler birbirine tam uymuyor.'],
+    options: [
+      { id: 'tell', label: ['Invite the family and tell every story', 'Aileyi çağır ve her hikâyeyi anlat'], legacy: 70, stats: { happiness: 5 }, closeness: { kinds: ['child', 'sibling'], delta: 3 }, tone: 'good', result: ['It took all evening. By the end the contradictions had become part of the show, and one aunt suggested charging admission.', 'Bütün akşam sürdü. Sonunda çelişkiler gösterinin parçası oldu ve bir teyze giriş ücreti almayı önerdi.'] },
+      { id: 'quiet', label: ['Look at them alone for a while', 'Bir süre onlara yalnız başına bak'], stats: { happiness: 3, smarts: 1 }, legacy: 20, result: ['You sat among the objects until the light changed. Nobody had asked you for anything, and it was oddly like being forgiven.', 'Işık değişene kadar nesnelerin arasında oturdun. Kimse senden bir şey istememişti ve bu, garip biçimde affedilmek gibiydi.'] },
+    ],
+  },
+];
+
+export const lineageEvents: EventDef[] = LINEAGE.map(quickEvent);

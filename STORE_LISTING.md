@@ -40,6 +40,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Boss: start a café, a tea brand, a tech startup or a game studio. Raise money, IPO, or go bust. Pass the family business down.
 > • Türkiye: the university exam, military service, henna nights, bayram visits and the neighbor auntie.
 > • Campus: pick a major, chase a 4.0, join clubs, land internships, study abroad, go all the way to a PhD.
+> • Lineage: a crest, a family seat, a rule for who comes next, an old feud, and a letter to those who follow.
 > • Crime World (18+): street hustles, heists, trials, prison, and the long road back.
 >
 > Play in English or Turkish.
@@ -81,6 +82,7 @@ Karakter sınırları parantez içinde. Fiyatları ve ekran görüntülerini ma�
 > • Patron: kafe, çay markası, teknoloji girişimi ya da oyun stüdyosu kur; halka arz et ya da batır. Aile şirketini çocuğuna bırak.
 > • Türkiye: YKS, askerlik, kına gecesi, bayram ziyaretleri ve komşu teyze.
 > • Kampüs: bölümünü seç, 4,00 ortalamanın peşine düş, kulüplere katıl, staj bul, Erasmus'a git, doktoraya kadar uzan.
+> • Soy: bir arma, bir aile köşkü, sıradakinin nasıl seçileceğine dair bir kural, eski bir husumet ve ardından gelenlere bir mektup.
 > • Suç Dünyası (18+): sokak işleri, soygunlar, mahkemeler, cezaevi ve düze çıkmanın uzun yolu.
 >
 > Oyun baştan sona Türkçe: isim ekleri bile doğru.
