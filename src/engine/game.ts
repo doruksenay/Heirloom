@@ -366,7 +366,8 @@ function yearlyTick(c: Ctx): string | null {
   else h.stat('health', rng.int(0, 1));
   if (age >= 12 && age <= 22) h.stat('looks', rng.int(-1, 2));
   if (age > 45) h.stat('looks', -rng.int(0, 1));
-  h.stat('happiness', Math.round((60 - p.stats.happiness) * 0.08) + rng.int(-3, 3));
+  // life settles back towards the middle, and faster from the top than from the bottom
+  h.stat('happiness', Math.round((60 - p.stats.happiness) * (p.stats.happiness > 60 ? 0.14 : 0.08)) + rng.int(-3, 3));
   if (p.money < 0 && age >= 18) h.stat('happiness', -4);
 
   // --- heirloom effects (data: src/engine/heirlooms.ts)
@@ -452,7 +453,12 @@ function yearlyTick(c: Ctx): string | null {
     // debt the home's value does not cover, past about a year and a half of living costs: the bank writes
     const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
     const last = p.eventLastAge['base.debt_letter'];
-    if (unsecured > 1.5 * country.costOfLiving && (last === undefined || age - last >= 5)) scheduled = 'base.debt_letter';
+    // each letter buys a longer silence (5, 8, 11 ... years, at most 20): the bank does not write every few years for ever
+    const gap = Math.min(20, 5 + 3 * (engineExt(p).debtLetters ?? 0));
+    if (unsecured > 1.5 * country.costOfLiving && (last === undefined || age - last >= gap)) {
+      scheduled = 'base.debt_letter';
+      engineExt(p).debtLetters = (engineExt(p).debtLetters ?? 0) + 1;
+    }
   }
   if (!scheduled && age >= 35 && age <= 45 && p.jailYears === 0 && !p.relations.some((r) => r.kind === 'child') && p.eventLastAge['base.family_name'] === undefined && rng.chance(0.2)) {
     scheduled = 'base.family_name'; // once per life, for a player without children
@@ -541,6 +547,8 @@ function yearlyTick(c: Ctx): string | null {
 interface EngineExt {
   /** A scheduled life-stage event that a death in the family pushed to next year. */
   deferred?: string;
+  /** Letters the bank has sent so far (they come further apart). */
+  debtLetters?: number;
   /** The child or partner most recently lost (for the grief events and the quiet year after). */
   loss?: string;
 }

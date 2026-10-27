@@ -9,13 +9,14 @@ const H = { category: 'health' } as const;
 const F = { category: 'family' } as const;
 
 const elderParent = (c: Ctx) => c.h.relatives(['mother', 'father']).some((r) => c.h.ageOf(r.person) >= 62);
-const carer = (c: Ctx) => since(c, 'care_parent') >= 0 && c.h.relatives(['mother', 'father']).length > 0;
+/** Looking after a parent, whether you took it on or only keep an eye out. */
+const carer = (c: Ctx) => (since(c, 'care_parent') >= 0 || since(c, 'care_noticed') >= 0) && c.h.relatives(['mother', 'father']).length > 0;
 const unwell = (c: Ctx) => since(c, 'care_condition') >= 0;
 
 const CARE: QuickEvent[] = [
   // ---------------------------------------------------------------- a parent grows older
   {
-    ...F, id: 'care.first_signs', ages: [30, 70], once: true, when: elderParent,
+    ...F, id: 'care.first_signs', ages: [30, 70], once: true, weight: 30, when: elderParent,
     title: ['Your parent repeats a story twice in one afternoon.', 'Ebeveynin bir öğleden sonra aynı hikâyeyi iki kez anlatıyor.'],
     text: ['It is a lovely story. You have heard it forty times. This time you notice that the ending changed.', 'Güzel bir hikâye. Kırk kez dinledin. Bu sefer sonunun değiştiğini fark ediyorsun.'],
     options: [

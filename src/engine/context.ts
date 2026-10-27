@@ -133,6 +133,16 @@ export function yearsAtLevel(s: GameState): number {
 }
 const extOf = (p: GameState['player']) => (p.ext ??= {}) as PeopleExt;
 
+/**
+ * Happiness is meant to be hard to max out: the higher you are, the less a good thing adds, and the more a bad thing takes.
+ * Plain arithmetic, no rng, so a seed plays the same life in both languages.
+ */
+export function hardenHappiness(now: number, d: number): number {
+  if (d > 0) return Math.round(d * (now >= 88 ? 0.25 : now >= 75 ? 0.5 : now >= 65 ? 0.8 : 1));
+  if (d < 0 && now >= 80) return Math.round(d * 1.25);
+  return d;
+}
+
 export function makeCtx(s: GameState, vars: Record<string, string | number> = {}): Ctx {
   const p = s.player;
   const rng = createRng(s.rng, (v) => (s.rng = v));
@@ -140,6 +150,7 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
 
   const h: Helpers = {
     stat(k, d) {
+      if (k === 'happiness') d = hardenHappiness(p.stats.happiness, d);
       p.stats[k] = clamp(p.stats[k] + d);
     },
     money(d) {

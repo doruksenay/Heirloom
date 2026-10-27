@@ -1320,9 +1320,10 @@ export const teenEvents: EventDef[] = [
     id: 'base.moving_out',
     category: 'milestone',
     minAge: 18,
-    maxAge: 24,
+    maxAge: 26,
     once: true,
-    weight: 10,
+    // heavy on purpose: leaving home is the milestone that opens the flatmate, visit and move-back events
+    weight: 45,
     // only someone still in the parents' home, with no partner, spouse or children of their own
     when: (c) => hasParent(c) && !c.h.has('teen_moved_out') && c.p.school !== 'university' && !settled(c) && atParents(c),
     setup: pickParent,
