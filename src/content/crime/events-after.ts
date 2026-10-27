@@ -195,14 +195,14 @@ export const afterEvents: EventDef[] = [
     category: 'crime',
     minAge: 21,
     maxAge: 80,
-    weight: 12,
+    weight: 50,
     cooldown: 4,
     // after "Not yet" the youth center waits a good while before asking again
     when: (c) =>
       free(c) &&
       c.p.criminalRecord > 0 &&
       !peekCrime(c.p)?.fugitive &&
-      goneStraight(c, 3) &&
+      goneStraight(c, 2) &&
       !c.p.achievements.includes('reformed') &&
       !('crime_talk_later' in c.p.flags && c.s.year - c.p.flags.crime_talk_later < 10),
     title: (c) => c.t('The youth center wants you to give a talk.', 'Gençlik merkezi senden bir konuşma yapmanı istiyor.'),

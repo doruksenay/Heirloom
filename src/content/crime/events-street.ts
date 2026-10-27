@@ -3,7 +3,7 @@ import { acc, cap, gen, nm, officeJob, wage } from '../base/util';
 import { companyOf } from '../boss/state';
 import { say, sayWith, type Pair } from '../base/lines';
 import { inTr } from '../base/events-flavour';
-import { arrest, convict, convictFor, crimeState, free, gotAway, heatOf, peekCrime, petty, sentenceFor } from './state';
+import { arrest, visit, convict, convictFor, crimeState, free, gotAway, heatOf, peekCrime, petty, sentenceFor } from './state';
 
 // The crime ladder: from market-stall knockoffs to a crew heist, plus white-collar crime.
 
@@ -15,6 +15,42 @@ export const TARGETS = [
 ] as const;
 /** Accusative forms for "___ soymaya karar verdin". */
 const TARGETS_TR_ACC = ['çarşıdaki kuyumcuyu', 'kumarhanenin para sayım odasını', 'zenginlerle dolu bir yardım galasını'];
+
+// ------------------------------------------------------------ the same job, the second and third time
+// Burglary, knockoffs and car theft are offered at most PETTY_VISITS times a life (see activities.ts); each visit
+// reads differently, so the ladder looks like a career and not a loop.
+type VisitLines = readonly [Pair, Pair, Pair];
+const pickVisit = (c: Ctx, lines: VisitLines) => c.t(...lines[Math.min(2, Number(c.vars.visit ?? 0))]);
+const BURGLARY_TITLE: VisitLines = [
+  ['The house on the corner is empty for the weekend.', 'Köşedeki ev hafta sonu boş.'],
+  ['Another quiet street, another empty house.', 'Başka bir sessiz sokak, başka bir boş ev.'],
+  ['A bigger house this time, on the hill.', 'Bu sefer daha büyük bir ev, tepede.'],
+];
+const BURGLARY_TEXT: VisitLines = [
+  ['Your friend says the back door does not lock.', 'Arkadaşına göre arka kapı kilitlenmiyormuş.'],
+  ['Word has got around. A neighbour three doors down is "away until Monday", and the dog goes with them.', 'Haber yayıldı. Üç kapı ilerideki komşu "pazartesiye kadar yok", köpek de onlarla.'],
+  ['You tell yourself it is the last one. You told yourself the same last time.', 'Kendine bunun sonuncu olduğunu söylüyorsun. Geçen sefer de aynısını söylemiştin.'],
+];
+const KNOCKOFFS_TITLE: VisitLines = [
+  ['A man at the market has a van full of "designer" goods.', 'Pazardaki bir adamın minibüs dolusu "markalı" malı var.'],
+  ['The man from the market is back, with a bigger van.', 'Pazardaki adam geri döndü, minibüsü daha büyük.'],
+  ['The van man has a new warehouse and an old grin.', 'Minibüsçünün yeni bir deposu ve eski bir sırıtışı var.'],
+];
+const KNOCKOFFS_TEXT: VisitLines = [
+  ['He says it all fell off a truck. What will you sell?', 'Hepsinin bir kamyondan düştüğünü söylüyor. Sen hangisini satacaksın?'],
+  ['He remembers you, which is not necessarily a good sign. Same truck, different story.', 'Seni hatırlıyor; bu mutlaka iyi bir işaret değil. Aynı kamyon, başka hikâye.'],
+  ['The labels are better now. So are the lawyers on the other side.', 'Etiketler artık daha iyi. Karşı taraftaki avukatlar da.'],
+];
+const CAR_TITLE: VisitLines = [
+  ['A sports car is idling outside the bakery.', 'Fırının önünde motoru çalışan bir spor araba duruyor.'],
+  ['An old estate stands outside the post office, keys in the visor.', 'Postanenin önünde güneşlikte anahtarı duran eski bir station duruyor.'],
+  ['A black saloon is parked outside the town hall, and nobody is watching it.', 'Belediyenin önünde siyah bir sedan park etmiş ve kimse ona bakmıyor.'],
+];
+const CAR_TEXT: VisitLines = [
+  ['The owner went in for bread. That was four minutes ago.', 'Sahibi ekmek almaya girdi. Dört dakika oldu.'],
+  ['The owner is in the queue behind a man with eleven parcels. You have time. That is exactly the problem.', 'Sahibi on bir paketli bir adamın arkasında sırada. Vaktin var. Sorun da tam bu.'],
+  ['It is a car with a driver who will notice. You think about this for longer than you should.', 'Fark edecek bir sürücüsü olan bir araba. Bunu olması gerekenden uzun düşünüyorsun.'],
+];
 
 // ------------------------------------------------------------ outcome lines
 // The ladder events come back every few years for a career criminal, so each outcome draws from a pool with
@@ -145,8 +181,9 @@ export const streetEvents: EventDef[] = [
     id: 'crime.burglary',
     category: 'crime',
     scheduled: true,
-    title: (c) => c.t('The house on the corner is empty for the weekend.', 'Köşedeki ev hafta sonu boş.'),
-    text: (c) => c.t('Your friend says the back door does not lock.', 'Arkadaşına göre arka kapı kilitlenmiyormuş.'),
+    setup: (c) => void (c.vars.visit = visit(c, 'burglary')),
+    title: (c) => pickVisit(c, BURGLARY_TITLE),
+    text: (c) => pickVisit(c, BURGLARY_TEXT),
     choices: [
       {
         id: 'careful',
@@ -240,8 +277,9 @@ export const streetEvents: EventDef[] = [
     id: 'crime.knockoffs',
     category: 'crime',
     scheduled: true,
-    title: (c) => c.t('A man at the market has a van full of "designer" goods.', 'Pazardaki bir adamın minibüs dolusu "markalı" malı var.'),
-    text: (c) => c.t('He says it all fell off a truck. What will you sell?', 'Hepsinin bir kamyondan düştüğünü söylüyor. Sen hangisini satacaksın?'),
+    setup: (c) => void (c.vars.visit = visit(c, 'knockoffs')),
+    title: (c) => pickVisit(c, KNOCKOFFS_TITLE),
+    text: (c) => pickVisit(c, KNOCKOFFS_TEXT),
     choices: [
       {
         id: 'bags',
@@ -296,8 +334,9 @@ export const streetEvents: EventDef[] = [
     id: 'crime.car_theft',
     category: 'crime',
     scheduled: true,
-    title: (c) => c.t('A sports car is idling outside the bakery.', 'Fırının önünde motoru çalışan bir spor araba duruyor.'),
-    text: (c) => c.t('The owner went in for bread. That was four minutes ago.', 'Sahibi ekmek almaya girdi. Dört dakika oldu.'),
+    setup: (c) => void (c.vars.visit = visit(c, 'car_theft')),
+    title: (c) => pickVisit(c, CAR_TITLE),
+    text: (c) => pickVisit(c, CAR_TEXT),
     choices: [
       {
         id: 'joyride',

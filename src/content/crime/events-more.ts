@@ -112,7 +112,7 @@ const MORE: QuickEvent[] = [
     ],
   },
   {
-    ...J, id: 'crime.library_book', ages: [18, 90], cooldown: 4, when: inside,
+    ...J, id: 'crime.library_book', ages: [18, 90], once: true, when: inside,
     title: ['The prison library gets a donation of old paperbacks.', 'Cezaevi kütüphanesi eski ciltsiz kitaplardan bir bağış alıyor.'],
     text: ['Westerns, cookery books, a manual for tropical fish. At the bottom of the box, a thick novel with a cracked spine and a sticker: “Do not give up on page 80.”', 'Kovboy romanları, yemek kitapları, tropik balık el kitabı. Kutunun dibinde sırtı çatlak kalın bir roman ve bir etiket: “80. sayfada pes etme.”'],
     options: [

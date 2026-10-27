@@ -1,6 +1,6 @@
 import type { Ctx, EventDef, ChoiceDef, ActivityDef } from '../content/types';
 import type { GameState, LifeRecord, Person, Player, Profile, Gender, Education } from './types';
-import { makeCtx, ageOf, clamp, freshFirstNames } from './context';
+import { makeCtx, ageOf, clamp, freshFirstNames, inMourning } from './context';
 import { createRng, randomSeed, type Rng } from './rng';
 import { getCountry } from './world';
 import { BASE_JOBS, EDUCATION_RANK, salaryFor, titleFor } from './careers';
@@ -10,6 +10,7 @@ import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
 import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, inheritanceTax, safetyNet, yearBudget } from './economy';
 import { cityName } from './places';
+import { carryFamilyStory, relabelFounder } from './dynasty';
 import { applyYearlyPassives, closenessBonus, heirloomArrivedThisYear, heirloomDef, isHeirloomType } from './heirlooms';
 import { ensureGrandkids, type Grandkid } from '../content/base/events-elder';
 import { say, type Pair } from '../content/base/lines';
@@ -317,7 +318,9 @@ export function refreshPacks(s: GameState, profile: Profile) {
 export function annualMortality(age: number, health: number, shift = 0): number {
   const base = age < 1 ? 0.002 : 0.000012 * Math.exp(0.11 * age);
   const healthFactor = Math.max(0.8, Math.min(2.5, 1 + (80 - health) / 50));
-  return Math.min(0.95, base * healthFactor * (1 + shift * 5) + 0.0002);
+  // a healthy person under 50 rarely dies out of the blue: the playtest's "rare infection at 37, three children" felt unfair
+  const youngAndWell = age < 50 && health >= 50 ? 0.4 : 1;
+  return Math.min(0.95, base * youngAndWell * healthFactor * (1 + shift * 5) + 0.0002);
 }
 
 /**
@@ -364,6 +367,8 @@ function yearlyTick(c: Ctx): string | null {
   if (p.school) h.stat('smarts', rng.int(0, 2));
   if (age > 40) h.stat('health', -rng.int(0, age > 70 ? 3 : age > 55 ? 2 : 1));
   else h.stat('health', rng.int(0, 1));
+  // the last chapter: from 78 the body slows down year by year (plain arithmetic, no rng), so a long life has a slower end
+  if (age >= 78 && p.stats.health > 30) h.stat('health', age >= 84 ? -2 : -1);
   if (age >= 12 && age <= 22) h.stat('looks', rng.int(-1, 2));
   if (age > 45) h.stat('looks', -rng.int(0, 1));
   // life settles back towards the middle, and faster from the top than from the bottom
@@ -430,6 +435,8 @@ function yearlyTick(c: Ctx): string | null {
   }
   if (age >= 18) {
     const kids = h.relatives('child').filter((k) => h.ageOf(k.person) < 18).length + raisedGrandkids(s).filter((g) => ageOf(s, g) < 18).length;
+    // a full house wears you down a little: from the fifth child under 18, one happiness point each per year
+    if (kids > 4) h.stat('happiness', -(kids - 4));
     const b = yearBudget(p, age, salary, !!h.partner(), kids);
     const net = safetyNet(p, age, b);
     h.money(b.pay + b.support + net - b.cost);
@@ -470,6 +477,7 @@ function yearlyTick(c: Ctx): string | null {
   // --- relatives
   const heirloomCloseness = closenessBonus(s);
   let loss: { person: Person; kind: 'child' | 'spouse' } | undefined;
+  let lostParent: Person | undefined;
   for (const rel of p.relations) {
     const person = s.people[rel.personId];
     if (!person || person.deathYear !== undefined) continue;
@@ -513,6 +521,7 @@ function yearlyTick(c: Ctx): string | null {
       // a child or a partner: the year belongs to the loss (playtest 3: a class reunion right after a daughter died)
       if (rel.kind === 'child' && loss?.kind !== 'child') loss = { person, kind: 'child' };
       else if ((rel.kind === 'spouse' || rel.kind === 'partner') && !loss) loss = { person, kind: 'spouse' };
+      if ((rel.kind === 'mother' || rel.kind === 'father') && !rel.step && !lostParent) lostParent = person;
       const parentLike = (rel.kind === 'mother' || rel.kind === 'father' || rel.kind === 'grandparent') && !rel.step;
       const lucky = parentLike && rng.chance(0.6);
       // a parent who handed the family over left you your share of what they kept: spent down by the years
@@ -531,6 +540,13 @@ function yearlyTick(c: Ctx): string | null {
     }
   }
   syncGrandkids(c);
+  // a parent's death in the player's adult years: a quiet year, and a short event of its own (never pushes a loss aside)
+  if (!loss && lostParent && age >= 26) { // a younger player has base.grief_parent (growing up without them)
+    h.flag('mourning');
+    eng.parentLoss = lostParent.id;
+    if (!scheduled) scheduled = 'base.grief_parent_adult';
+    else if (!eng.deferred) eng.deferred = 'base.grief_parent_adult';
+  }
   if (loss) {
     // the grief event takes this year's scheduled slot; whatever it pushed aside opens next year
     h.flag('mourning');
@@ -551,6 +567,8 @@ interface EngineExt {
   debtLetters?: number;
   /** The child or partner most recently lost (for the grief events and the quiet year after). */
   loss?: string;
+  /** The parent who died this year (for base.grief_parent). */
+  parentLoss?: string;
 }
 const engineExt = (p: Player): EngineExt => ((p.ext ??= {}).engine ??= {}) as EngineExt;
 
@@ -827,7 +845,8 @@ export function doActivity(s: GameState, id: string): void {
   s.player.actionsThisYear[id] = (s.player.actionsThisYear[id] ?? 0) + 1;
   const result = def.run(c);
   if (typeof result === 'string') {
-    c.h.log(result);
+    // a year of mourning: the cheerful family and love lines stand aside (plain index, no rng)
+    c.h.log(inMourning(s) && MOURNING_GROUPS.has(def.group) ? mourningLine(c) : result);
   } else {
     const found = findEvent(result.event);
     if (found) openEvent(s, found.def);
@@ -835,6 +854,22 @@ export function doActivity(s: GameState, id: string): void {
   checkGoals(s);
   if (s.player.deathCause && !s.pending) finishLife(s);
 }
+
+const MOURNING_GROUPS = new Set(['Love', 'Family']);
+const MOURNING_LINES: [string, string][] = [
+  ['You tried to carry on as usual. It was not usual, and everybody was gentle about it.', 'Her zamanki gibi devam etmeye çalıştın. Her zamanki gibi değildi ve herkes çok nazik davrandı.'],
+  ['You sat with it for a while. Some years are for sitting.', 'Bir süre onunla oturdun. Bazı yıllar oturmak içindir.'],
+  ['The day was quiet. You made tea and drank half of it.', 'Gün sessiz geçti. Çay demledin ve yarısını içtin.'],
+  ['You did what you could, and it was enough, or it had to be.', 'Elinden geleni yaptın ve bu yetti; ya da yetmesi gerekiyordu.'],
+  ['Somebody brought soup. You ate it standing up, and it was exactly right.', 'Biri çorba getirdi. Ayakta yedin ve tam da ihtiyacın olan şeydi.'],
+  ['You looked at an old photograph for longer than you meant to, and put it back where it lives.', 'Eski bir fotoğrafa niyetinden uzun baktın ve yaşadığı yere geri koydun.'],
+  ['People spoke softly around you. You were grateful and a little tired of being grateful.', 'İnsanlar çevrende yumuşak konuştu. Minnettardın ve minnettar olmaktan biraz yorulmuştun.'],
+  ['The ordinary things went on, which was both a comfort and an insult.', 'Sıradan şeyler devam etti; bu hem teselliydi hem hakaret.'],
+];
+const mourningLine = (c: Ctx): string => {
+  const [en, tr] = MOURNING_LINES[(c.s.year + c.age) % MOURNING_LINES.length];
+  return c.t(en, tr);
+};
 
 export function buyFurniture(s: GameState, id: string): boolean {
   const item = furniture(id);
@@ -1199,6 +1234,9 @@ export function continueAsChild(s: GameState, heirId: string): void {
     rel.sinceYear = Math.max(child.birthYear + 18, wedding);
     for (const r of np.relations) if (r.kind === 'child' && s.people[r.personId] && !s.people[r.personId].coParentId) s.people[r.personId].coParentId = spouse.id;
   }
+  // the family's story goes with the family: events an ancestor lived through do not start over, and what the family
+  // owns and has settled (the seat, the feud, the flat, the plot) stays flagged. The pack hooks below add their own.
+  carryFamilyStory(prev, np, eventsFor(s.enabledPacks), age, s.year);
   for (const pack of enabledPacks(s.enabledPacks)) {
     const line = pack.onInherit?.(prev, np, s);
     if (line) c2.h.log(line, 'big');
@@ -1211,8 +1249,10 @@ export function continueAsChild(s: GameState, heirId: string): void {
     lastLife.heirloomItem = s.dynasty.heirlooms[0].name;
     lastLife.heirName = child.firstName;
   }
+  const nextGeneration = s.dynasty.generation + (opt.kind === 'grandchild' ? 2 : 1);
   for (const item of s.dynasty.heirlooms) {
     item.generations++;
+    relabelFounder(item, nextGeneration);
     item.story.push(
       s.lang === 'tr'
         ? `${prev.firstName}, ${s.year} yılında onu ${dat(child.firstName)} bıraktı.`

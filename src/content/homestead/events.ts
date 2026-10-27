@@ -1,5 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { quickEvent, since, type QuickEvent } from '../base/quick-event';
+import { wage } from '../base/util';
 
 // "Homestead": a plot of earth, the seasons, animals and a village that notices everything. Mostly gentle, sometimes
 // hard. Quick events (base/quick-event.ts): no rng, so nobody's seed shifts. Every event keeps at least one free option.
@@ -10,15 +11,16 @@ const FM = { category: 'family' } as const;
 const MN = { category: 'money' } as const;
 
 const grows = (c: Ctx) => since(c, 'home_plot') >= 0 && since(c, 'home_sold') < 0;
-const hasHens = (c: Ctx) => since(c, 'home_hens') >= 0;
-const hasCow = (c: Ctx) => since(c, 'home_cow') >= 0;
-const hasBees = (c: Ctx) => since(c, 'home_bees') >= 0;
+const afford = (c: Ctx, usd: number) => c.p.money >= wage(c, usd);
+const hasHens = (c: Ctx) => grows(c) && since(c, 'home_hens') >= 0;
+const hasCow = (c: Ctx) => grows(c) && since(c, 'home_cow') >= 0;
+const hasBees = (c: Ctx) => grows(c) && since(c, 'home_bees') >= 0;
 const hasAnimals = (c: Ctx) => hasHens(c) || hasCow(c);
 
 const HOME: QuickEvent[] = [
   // ---------------------------------------------------------------- the first plot
   {
-    ...R, id: 'hs.plot', ages: [20, 70], once: true,
+    ...R, id: 'hs.plot', ages: [20, 70], once: true, when: (c) => !grows(c) && since(c, 'home_sold') < 0,
     title: ['An old neighbour offers you the use of his vegetable plot.', 'Yaşlı bir komşu sebze bahçesini kullanmanı öneriyor.'],
     text: ['“My knees have retired,” he says. The plot has a shed, a rusty fork and a scarecrow he calls Hasan.', '“Dizlerim emekli oldu” diyor. Bahçenin bir kulübesi, paslı bir çatalı ve ona Hasan dediği bir korkuluğu var.'],
     options: [
@@ -83,7 +85,7 @@ const HOME: QuickEvent[] = [
   },
   // ---------------------------------------------------------------- animals
   {
-    ...R, id: 'hs.hens', ages: [20, 85], once: true,
+    ...R, id: 'hs.hens', ages: [20, 85], once: true, when: (c) => grows(c) && afford(c, 60),
     title: ['A neighbour is giving away six hens.', 'Bir komşu altı tavuk dağıtıyor.'],
     text: ['“They are retired,” he says, “but still working.” One of them looks at you in a way that already seems like a complaint.', '“Emekliler,” diyor, “ama hâlâ çalışıyorlar.” İçlerinden biri sana şimdiden bir şikâyet gibi görünen bir bakışla bakıyor.'],
     options: [
@@ -101,7 +103,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.cow', ages: [25, 80], once: true,
+    ...R, id: 'hs.cow', ages: [25, 80], once: true, when: (c) => grows(c) && afford(c, 700),
     title: ['A farmer offers you a young cow for a fair price.', 'Bir çiftçi sana adil bir fiyata genç bir inek öneriyor.'],
     text: ['She has large patient eyes and a name which is longer than your own. Every morning she will want milking.', 'Büyük sabırlı gözleri ve seninkinden uzun bir adı var. Her sabah sağılmak isteyecek.'],
     options: [
@@ -119,7 +121,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.bees', ages: [22, 85], once: true,
+    ...R, id: 'hs.bees', ages: [22, 85], once: true, when: (c) => grows(c) && afford(c, 300),
     title: ['A beekeeper at the market offers to teach you.', 'Pazarda bir arıcı sana öğretmeyi teklif ediyor.'],
     text: ['“It is mostly patience and a hat,” he says. He has a scar on each hand and a smile you trust.', '“Çoğu sabır ve bir şapka” diyor. Her elinde bir yara izi ve güvenebileceğin bir gülümsemesi var.'],
     options: [
@@ -138,7 +140,7 @@ const HOME: QuickEvent[] = [
   },
   // ---------------------------------------------------------------- land and trees
   {
-    ...R, id: 'hs.orchard', ages: [25, 70], once: true,
+    ...R, id: 'hs.orchard', ages: [25, 70], once: true, when: (c) => grows(c) && afford(c, 250),
     title: ['A nursery is selling young fruit trees at half price.', 'Bir fidanlık genç meyve ağaçlarını yarı fiyatına satıyor.'],
     text: ['Apple, plum, quince and one fig of dubious origin. A tree takes years to repay you, and decades to forgive you.', 'Elma, erik, ayva ve kökeni şüpheli bir incir. Bir ağaç sana karşılığını yıllar sonra, seni de onlarca yıl sonra bağışlıyor.'],
     options: [
@@ -147,7 +149,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.blossom', ages: [28, 100], once: true, when: (c) => since(c, 'home_orchard') >= 4,
+    ...R, id: 'hs.blossom', ages: [28, 100], once: true, when: (c) => grows(c) && since(c, 'home_orchard') >= 4,
     title: ['The orchard flowers for the first time.', 'Meyve bahçesi ilk kez çiçek açıyor.'],
     text: ['Overnight the whole row went white. Bees you have never seen arrived to attend to it, like guests.', 'Bir gecede sıranın tamamı beyaza boyandı. Hiç görmediğin arılar misafir gibi ilgilenmeye geldi.'],
     options: [
@@ -174,7 +176,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.storm', ages: [20, 95], once: true,
+    ...R, id: 'hs.storm', ages: [20, 95], once: true, when: grows,
     title: ['A storm takes half the roof off the barn.', 'Bir fırtına ahırın çatısının yarısını götürdü.'],
     text: ['In the morning the sky is innocent and blue. A sheet of tin is in the neighbour’s hedge, a quarter-mile away.', 'Sabah gökyüzü masum ve mavi. Bir levha teneke, çeyrek mil ötede komşunun çitinde.'],
     options: [
@@ -184,7 +186,7 @@ const HOME: QuickEvent[] = [
   },
   // ---------------------------------------------------------------- village life
   {
-    ...R, id: 'hs.feast', ages: [18, 95], cooldown: 6, light: true,
+    ...R, id: 'hs.feast', ages: [18, 95], cooldown: 6, light: true, when: grows,
     title: ['The village harvest feast is on Saturday.', 'Köyün hasat şöleni cumartesi günü.'],
     text: ['Long tables in the square, a band with one trumpet, and an old man whose duty it is to taste every dish.', 'Meydanda uzun masalar, tek trompetli bir bando ve her yemeği tatmakla görevli yaşlı bir adam.'],
     options: [
@@ -193,7 +195,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.wedding', ages: [20, 90], cooldown: 9, light: true,
+    ...R, id: 'hs.wedding', ages: [20, 90], cooldown: 9, light: true, when: grows,
     title: ['A village wedding: everyone is invited, which means everyone.', 'Bir köy düğünü: herkes davetli, yani gerçekten herkes.'],
     text: ['It begins at noon and will probably end sometime next week. Food has been cooking since Wednesday.', 'Öğlen başlıyor ve muhtemelen gelecek hafta bir ara bitecek. Yemekler çarşambadan beri pişiyor.'],
     options: [
@@ -202,7 +204,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.help_hay', ages: [20, 85], cooldown: 8,
+    ...R, id: 'hs.help_hay', ages: [20, 85], cooldown: 8, when: grows,
     title: ['A neighbour’s hay must be in before the rain.', 'Bir komşunun samanı yağmurdan önce toplanmalı.'],
     text: ['His sons are away. His tractor is making a noise that tractors should not make. The sky is turning the colour of a pigeon.', 'Oğulları uzakta. Traktörü traktörlerin çıkarmaması gereken bir ses çıkarıyor. Gökyüzü güvercin rengine dönüyor.'],
     options: [
@@ -211,7 +213,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.firewood', ages: [20, 95], cooldown: 8, light: true,
+    ...R, id: 'hs.firewood', ages: [20, 95], cooldown: 8, light: true, when: grows,
     title: ['It is time to lay in wood for the winter.', 'Kış için odun stoklama zamanı.'],
     text: ['A pile of logs outside the gate, a splitter, a borrowed saw and a sky that is making promises about snow.', 'Kapının önünde bir odun yığını, bir yarma bıçağı, ödünç bir testere ve kar hakkında vaatler veren bir gökyüzü.'],
     options: [
@@ -220,7 +222,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.snowed_in', ages: [18, 95], cooldown: 10,
+    ...R, id: 'hs.snowed_in', ages: [18, 95], cooldown: 10, when: grows,
     title: ['Snow closes the road for four days.', 'Kar yolu dört gün boyunca kapatıyor.'],
     text: ['The village is silent in a way it is not at any other time. Smoke goes straight up from every chimney.', 'Köy, başka hiçbir zaman olmadığı kadar sessiz. Her bacadan duman dümdüz yükseliyor.'],
     options: [
@@ -229,7 +231,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.old_neighbour', ages: [30, 90], once: true,
+    ...R, id: 'hs.old_neighbour', ages: [30, 90], once: true, when: grows,
     title: ['The old woman next door can no longer manage her garden.', 'Yan kapıdaki yaşlı kadın artık bahçesini idare edemiyor.'],
     text: ['She has grown the same roses for sixty years. This spring they were not pruned, and she did not mention it, which is how you know.', 'Altmış yıldır aynı gülleri yetiştirdi. Bu bahar budanmadılar ve o bundan söz etmedi; bundan anlıyorsun.'],
     options: [
@@ -238,12 +240,12 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.school', ages: [28, 80], once: true,
+    ...R, id: 'hs.school', ages: [28, 80], once: true, when: grows,
     title: ['The village school may close for lack of pupils.', 'Köy okulu öğrenci azlığından kapanabilir.'],
     text: ['There are nine children and one teacher who also drives the bus. The notice from the authority is two lines long and extremely calm.', 'Dokuz çocuk ve aynı zamanda servisi süren bir öğretmen var. Yetkili kurumun bildirimi iki satır uzunluğunda ve son derece sakin.'],
     options: [
       { id: 'fight', label: ['Organise a petition and a school open day', 'Dilekçe ve okul açık kapı günü düzenle'], stats: { smarts: 2, happiness: 3 }, tone: 'good', result: ['Four hundred signatures, a tray of pastries and a roomful of cheerful children singing slightly out of tune. A letter came: “Under review”, which in that office means “for now, yes”.', 'Dört yüz imza, bir tepsi poğaça ve hafif sapık şarkı söyleyen neşeli çocuklarla dolu bir oda. Bir mektup geldi: “İnceleme altında”; o dairede bu “şimdilik, evet” demek.'] },
-      { id: 'accept', label: ['Accept that it is what it is', 'Olacağı olacak de'], stats: { happiness: -2 }, result: ['The school closed in June. The bell was given to the church. Now, in the mornings, the village is quieter than it ought to be.', 'Okul haziranda kapandı. Zil kiliseye verildi. Şimdi sabahları köy olması gerekenden daha sessiz.'] },
+      { id: 'accept', label: ['Accept that it is what it is', 'Olacağı olacak de'], stats: { happiness: -2 }, result: ['The school closed in June. The bell was given to the village hall. Now, in the mornings, the village is quieter than it ought to be.', 'Okul haziranda kapandı. Zil köy odasına verildi. Şimdi sabahları köy olması gerekenden daha sessiz.'] },
     ],
   },
   {
@@ -256,7 +258,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...MN, id: 'hs.coop', ages: [26, 80], once: true, when: (c) => grows(c) || hasAnimals(c),
+    ...MN, id: 'hs.coop', ages: [26, 80], once: true, when: grows,
     title: ['Local growers want to set up a cooperative.', 'Yerel üreticiler bir kooperatif kurmak istiyor.'],
     text: ['A shared van, a shared stall, shared prices and, inevitably, a shared argument about the logo.', 'Ortak bir minibüs, ortak bir tezgâh, ortak fiyatlar ve kaçınılmaz olarak logo hakkında ortak bir tartışma.'],
     options: [
@@ -283,7 +285,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.oven', ages: [20, 95], once: true, light: true,
+    ...R, id: 'hs.oven', ages: [20, 95], once: true, light: true, when: grows,
     title: ['The old communal bread oven is to be fired up again.', 'Eski ortak ekmek fırını yeniden yakılacak.'],
     text: ['It has not been lit since the winter of the great snow. Each household brings dough and a story about who made the best loaf.', 'Büyük kar kışından beri yakılmamıştı. Her hane hamur ve en iyi somunu kimin yaptığına dair bir hikâye getiriyor.'],
     options: [
@@ -301,7 +303,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.stars', ages: [18, 100], cooldown: 12, light: true,
+    ...R, id: 'hs.stars', ages: [18, 100], cooldown: 12, light: true, when: grows,
     title: ['A clear night, no moon, and no light for miles.', 'Berrak bir gece, ay yok ve kilometrelerce ışık yok.'],
     text: ['The sky is thick with stars. You can even see the soft band of the Milky Way going over the barn.', 'Gökyüzü yıldızlarla dolu. Samanlığın üzerinden geçen Samanyolu’nun yumuşak şeridini bile görebiliyorsun.'],
     options: [
@@ -310,7 +312,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'hs.mill', ages: [30, 90], once: true,
+    ...R, id: 'hs.mill', ages: [30, 90], once: true, when: grows,
     title: ['The old water mill by the stream is falling apart.', 'Deredeki eski su değirmeni dağılıyor.'],
     text: ['The wheel has stopped. Moss has taken the steps. The village used to bring grain here in carts, and the miller sang.', 'Çark durmuş. Yosun basamakları ele geçirmiş. Köy buraya arabalarla tahıl getirirdi ve değirmenci şarkı söylerdi.'],
     options: [
@@ -319,7 +321,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...FM, id: 'hs.scarecrow', ages: [20, 80], cooldown: 12, light: true,
+    ...FM, id: 'hs.scarecrow', ages: [20, 80], cooldown: 12, light: true, when: grows,
     title: ['The village is holding a scarecrow contest.', 'Köy bir korkuluk yarışması düzenliyor.'],
     text: ['Every household makes one. Last year’s winner was a scarecrow dressed as the mayor, which was not a coincidence.', 'Her hane bir tane yapıyor. Geçen yılın kazananı belediye başkanı gibi giyinmiş bir korkuluktu; bu tesadüf değildi.'],
     options: [
@@ -337,7 +339,7 @@ const HOME: QuickEvent[] = [
     ],
   },
   {
-    ...FM, id: 'hs.child_garden', ages: [25, 70], cooldown: 12, when: (c) => c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 3 && c.h.ageOf(k.person) <= 14) && grows(c),
+    ...FM, id: 'hs.child_garden', ages: [25, 70], cooldown: 12, when: (c) => grows(c) && c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 3 && c.h.ageOf(k.person) <= 14) && grows(c),
     title: ['Your child wants a corner of the garden to call their own.', 'Çocuğun bahçeden kendine ait bir köşe istiyor.'],
     text: ['They have chosen the sunny corner with the stone, a packet of sunflower seeds, and a spade that is half their height.', 'Taşlı güneşli köşeyi, bir paket ayçiçeği tohumunu ve boylarının yarısı kadar bir küreği seçmişler.'],
     options: [

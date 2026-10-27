@@ -176,7 +176,7 @@ const MORE: QuickEvent[] = [
     text: ['You have an address from 1931, a photograph and a hunch. The village has probably moved on without telling you.', '1931’den kalma bir adres, bir fotoğraf ve bir önsezin var. Köy muhtemelen sana haber vermeden ilerlemiş.'],
     options: [
       { id: 'go', label: ['Go, and take the photograph with you', 'Git ve fotoğrafı yanında götür'], usd: -700, legacy: 90, stats: { happiness: 6, smarts: 1 }, tone: 'big', result: ['An old woman in the square looked at the picture and said, “That is the door.” It is still there, painted a different colour. You touched it, and found you had nothing to say.', 'Meydandaki yaşlı bir kadın fotoğrafa baktı ve “İşte kapı” dedi. Hâlâ orada, başka bir renge boyanmış. Dokundun ve söyleyecek bir şey bulamadın.'] },
-      { id: 'photo', label: ['Study maps and old records instead', 'Onun yerine haritalara ve eski kayıtlara bak'], legacy: 30, stats: { smarts: 2, happiness: 1 }, result: ['You found a street, a church and a name. You printed them on a card and put it in the album, for whoever goes next.', 'Bir sokak, bir kilise ve bir isim buldun. Bir karta basıp albüme koydun; bir sonraki gidecek kişi için.'] },
+      { id: 'photo', label: ['Study maps and old records instead', 'Onun yerine haritalara ve eski kayıtlara bak'], legacy: 30, stats: { smarts: 2, happiness: 1 }, result: ['You found a street, a doorway and a name. You printed them on a card and put it in the album, for whoever goes next.', 'Bir sokak, bir kapı eşiği ve bir isim buldun. Bir karta basıp albüme koydun; bir sonraki gidecek kişi için.'] },
     ],
   },
   {

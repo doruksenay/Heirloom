@@ -126,6 +126,10 @@ export interface Company {
   client?: number;
   /** One-time milestones already celebrated: 'ten', 'fifty', 'portrait', 'firsthire'. */
   marks?: string[];
+  /** Funding rounds taken so far (the investors' lines and terms change round by round). */
+  rounds?: number;
+  /** Consecutive yearly ticks with negative cash (a long overdraft ends in bankruptcy). */
+  broke?: number;
   /** Person id of the child named in this company's succession plan (boss.successor). Cleared on hand-over. */
   heirId?: string;
   /** Year the board last asked for a successor and was told "not yet". */
@@ -139,6 +143,8 @@ export interface BossState {
   peakValuation: number;
   /** Year the last company was sold or went bust (added in v0.8; older saves have none). */
   lastEnd?: number;
+  /** Consecutive years the owner's health has sat at 5 or below (added with the burnout fix). */
+  frailYears?: number;
 }
 
 /** Years before a new company can be founded after one ends: 8, then 11, then 14 (capped at 15), so serial flipping slows down. */

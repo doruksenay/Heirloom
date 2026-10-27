@@ -56,6 +56,24 @@ const SPOUSE_TITLES: [string, string][] = [
   ['There is one chair too many at the table.', 'Sofrada bir sandalye fazla.'],
 ];
 
+/** The parent the engine recorded as this year's loss (falls back to the most recently deceased parent). */
+function lostParentId(c: Ctx): string | undefined {
+  const eng = c.p.ext?.engine as { parentLoss?: string } | undefined;
+  if (eng?.parentLoss && c.s.people[eng.parentLoss]) return eng.parentLoss;
+  return c.p.relations
+    .filter((r) => (r.kind === 'mother' || r.kind === 'father') && c.s.people[r.personId]?.deathYear !== undefined)
+    .sort((a, b) => c.s.people[b.personId].deathYear! - c.s.people[a.personId].deathYear!)[0]?.personId;
+}
+const kindOfLost = (c: Ctx): 'mother' | 'father' => (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.kind === 'father' ? 'father' : 'mother');
+const parentWord = (c: Ctx) => (kindOfLost(c) === 'father' ? c.t('father', 'baban') : c.t('mother', 'annen'));
+const otherParentAlive = (c: Ctx) => c.h.relatives(['mother', 'father']).length > 0;
+
+const PARENT_TITLES: [string, string][] = [
+  ['You are nobody’s child any more, in the way that counts.', 'Artık, önemli olan anlamda, kimsenin çocuğu değilsin.'],
+  ['The phone number still comes up first on the list.', 'Numara hâlâ listenin en başında çıkıyor.'],
+  ['The house smells of them, and it will for a while.', 'Ev onların kokuyor ve bir süre daha öyle kalacak.'],
+];
+
 export const griefEvents: EventDef[] = [
   {
     id: 'base.grief_child',
@@ -227,7 +245,12 @@ export const griefEvents: EventDef[] = [
       const n = lost(c).firstName;
       const years = Number(c.vars.years);
       const base = !Number(c.vars.married)
-        ? c.t(`You and ${n} never got round to the wedding. Now there are forms to sign, and none of them has a box for you.`, `${wth(n)} nikâha bir türlü sıra gelmemişti. Şimdi imzalanacak bir sürü kâğıt var ve hiçbirinde senin için bir kutucuk yok.`)
+        ? years >= 12
+          ? c.t(
+              `${years} years with ${n}, and you never made it official. Now there are forms to sign, and none of them has a box for what you were.`,
+              `${wth(n)} tam ${years} yıl geçirdiniz ama hiçbir zaman resmiyete dökmediniz. Şimdi imzalanacak kâğıtlar var ve hiçbirinde sizin ne olduğunuz için bir kutucuk yok.`,
+            )
+          : c.t(`You and ${n} never got round to the wedding. Now there are forms to sign, and none of them has a box for you.`, `${wth(n)} nikâha bir türlü sıra gelmemişti. Şimdi imzalanacak bir sürü kâğıt var ve hiçbirinde senin için bir kutucuk yok.`)
         : years >= 3
           ? Number(c.vars.v) % 2
             ? c.t(`${years} years with ${n}. You still make two cups of tea every morning before you remember.`, `${wth(n)} tam ${years} yıl. Her sabah hâlâ iki bardak çay koyuyorsun, sonra hatırlıyorsun.`)
@@ -284,6 +307,64 @@ export const griefEvents: EventDef[] = [
           return c.t(
             'You kept taking the long walk you used to take together, every day at the same time. Alone, but on the same route.',
             'Eskiden birlikte yaptığınız uzun yürüyüşe her gün aynı saatte çıkmaya devam ettin. Yalnız ama aynı yoldan.',
+          );
+        },
+      },
+    ],
+  },
+  {
+    id: 'base.grief_parent_adult',
+    category: 'family',
+    scheduled: true,
+    setup: (c) => {
+      c.vars.pid = lostParentId(c) ?? '';
+    },
+    title: (c) => {
+      const [en, tr] = PARENT_TITLES[(c.s.year + c.age) % PARENT_TITLES.length];
+      return c.t(en, tr);
+    },
+    text: (c) => {
+      const n = lost(c)?.firstName ?? '';
+      const age = lost(c) ? ageAtDeath(lost(c)) : 0;
+      const w = parentWord(c);
+      const rest = otherParentAlive(c)
+        ? c.t(' The one who is left looks smaller at the funeral than they did last week.', ' Geride kalan, geçen haftadan daha küçük görünüyor cenazede.')
+        : c.t(' There is no one left in the older row now, and the row has moved up to you.', ' Büyükler sırasında artık kimse kalmadı ve sıra sana geldi.');
+      return c.t(`Your ${w} ${n} died at ${age}. The cupboards are full of things nobody else will know the story of.${rest}`, `${w[0].toLocaleUpperCase('tr')}${w.slice(1)} ${n} ${age} yaşında öldü. Dolaplar, hikâyesini başka kimsenin bilmediği eşyalarla dolu.${rest}`);
+    },
+    choices: [
+      {
+        id: 'keep',
+        label: (c) => c.t('Keep one thing that was theirs', 'Onlardan kalan bir şeyi sakla'),
+        resolve: (c) => {
+          c.h.stat('happiness', 1);
+          return c.t(
+            'A scarf, a cup, a pen that no longer writes. You put it where you would see it every day, and mostly you do not look.',
+            'Bir şal, bir fincan, artık yazmayan bir kalem. Her gün göreceğin bir yere koydun ve çoğunlukla bakmıyorsun.',
+          );
+        },
+      },
+      {
+        id: 'family',
+        label: (c) => c.t('Gather the family and tell stories', 'Aileyi topla, hikâyeler anlat'),
+        resolve: (c) => {
+          for (const r of c.h.relatives(['mother', 'father', 'sibling', 'child'])) c.h.closeness(r.person.id, 3);
+          c.h.stat('happiness', 2);
+          return c.t(
+            'By midnight everyone was laughing at a story about a lost umbrella, and nobody could remember who had told it first.',
+            'Gece yarısına kadar herkes kayıp bir şemsiye hikâyesine gülüyordu ve ilk kimin anlattığını kimse hatırlamıyordu.',
+          );
+        },
+      },
+      {
+        id: 'quiet',
+        label: (c) => c.t('Grieve quietly, on your own', 'Sessizce, tek başına yas tut'),
+        resolve: (c) => {
+          c.h.stat('happiness', -1);
+          c.h.stat('health', -1);
+          return c.t(
+            'You did the paperwork, answered the messages and cried in the car, once, for a long time.',
+            'Evrakları halledip mesajlara cevap verdin ve arabada bir kez, uzun uzun ağladın.',
           );
         },
       },

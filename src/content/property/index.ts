@@ -1,9 +1,10 @@
 import type { ActivityDef, ContentPack, Ctx } from '../types';
 import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
-import type { Player } from '../../engine/types';
+import type { GameState, Player } from '../../engine/types';
 import { say, type Pair } from '../base/lines';
 import { wage } from '../base/util';
+import { getCountry } from '../../engine/world';
 import { propertyEvents } from './events';
 
 // "Property" expansion: a flat to let, a few shares, a plot of land and the decisions around money that sits still.
@@ -16,9 +17,15 @@ const letsShop = (p: Player) => flag(p, 'prop_shop');
 const holdings = (p: Player) => [letsFlat(p), letsShop(p), flag(p, 'prop_land'), flag(p, 'prop_summer'), flag(p, 'prop_stocks')].filter(Boolean).length;
 
 /** Yearly rent. No rng, so a pack that is switched on never reshuffles anybody's life. */
+/** Rents follow the calendar: +1.2% a year from 2026, plain arithmetic (no rng). */
+export const rentFactor = (year: number) => 1 + 0.012 * Math.max(0, year - 2026);
+
 function onYear(c: Ctx): void {
-  const flat = letsFlat(c.p) ? wage(c, 500) : 0;
-  const shop = letsShop(c.p) ? wage(c, 700) : 0;
+  const k = rentFactor(c.s.year);
+  const reno = flag(c.p, 'prop_reno') ? 1.15 : 1;
+  const flats = (letsFlat(c.p) ? 1 : 0) + (flag(c.p, 'prop_flat2') && flag(c.p, 'prop_flat') ? 1 : 0);
+  const flat = Math.round(wage(c, 500) * flats * k * reno);
+  const shop = letsShop(c.p) ? Math.round(wage(c, 700) * k) : 0;
   if (!flat && !shop) return;
   c.h.money(flat + shop);
   // a line the first year and then every fourth year is enough to remember the income exists
@@ -54,6 +61,7 @@ const activities: ActivityDef[] = [
     minAge: 22,
     run: (c) => {
       c.h.stat('smarts', 1);
+      c.h.flag('prop_browsed'); // a good listing may turn up (prop.listing_*)
       return say(c, 'prop_listings', LISTINGS);
     },
   },
@@ -112,6 +120,17 @@ const goals: GoalDef[] = [
   { id: 'prop_hold', label: 'Hold your shares through a crash', labelTr: 'Hisselerini bir çöküş boyunca elinde tut', check: (s) => flag(s.player, 'prop_held') },
 ];
 
+/** The flat, the shop and the land go to the heir together with the home (the engine carries the flags, see engine/dynasty.ts). */
+function onInherit(prev: Player, next: Player, s: GameState): string | void {
+  // a family trust gives the heir a small head start
+  if (flag(prev, 'prop_trust')) next.money += Math.round(6000 * getCountry(next.countryId).wageFactor);
+  const n = holdings(prev);
+  if (!n) return;
+  return s.lang === 'tr'
+    ? `Aileden kalan mülk de sana geçti (${n} kalem): kira her yıl gelmeye devam edecek.`
+    : `The family's property comes to you too (${n} ${n === 1 ? 'holding' : 'holdings'}). The rent keeps arriving.`;
+}
+
 export const propertyPack: ContentPack = {
   id: 'property',
   title: 'Property',
@@ -121,6 +140,7 @@ export const propertyPack: ContentPack = {
   events: propertyEvents,
   activities,
   onYear,
+  onInherit,
   ribbons,
   goals,
   lifeTiles: (s) => {

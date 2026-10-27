@@ -2,7 +2,7 @@ import type { ActivityDef } from '../types';
 import { wage } from '../base/util';
 import { say, sayWith, type Pair } from '../base/lines';
 import { deskJob } from './events-street';
-import { convict, convictFor, crimeState, free, inside, peekCrime, petty } from './state';
+import { convict, convictFor, crimeState, free, goneStraight, inside, peekCrime, petty, PETTY_VISITS, visitsOf } from './state';
 
 const SHOPLIFT_LINES: ((v: string) => [string, string])[] = [
   (v) => [`You walked out with ${v} worth of stuff under your jacket.`, `Montunun altında ${v} değerinde eşyayla dışarı çıktın.`],
@@ -124,7 +124,7 @@ export const crimeActivities: ActivityDef[] = [
     group: 'After dark',
     minAge: 18,
     maxAge: 75,
-    available: free,
+    available: (c) => free(c) && visitsOf(c.p, 'burglary') < PETTY_VISITS,
     run: () => ({ event: 'crime.burglary' }),
   },
   {
@@ -134,7 +134,7 @@ export const crimeActivities: ActivityDef[] = [
     group: 'After dark',
     minAge: 18,
     maxAge: 75,
-    available: free,
+    available: (c) => free(c) && visitsOf(c.p, 'knockoffs') < PETTY_VISITS,
     run: () => ({ event: 'crime.knockoffs' }),
   },
   {
@@ -144,8 +144,20 @@ export const crimeActivities: ActivityDef[] = [
     group: 'After dark',
     minAge: 18,
     maxAge: 75,
-    available: free,
+    available: (c) => free(c) && visitsOf(c.p, 'car_theft') < PETTY_VISITS,
     run: () => ({ event: 'crime.car_theft' }),
+  },
+  {
+    // the way out: after two quiet years a record is a story you can tell, not only a mark
+    id: 'crime_straight',
+    label: (c) => c.t('Go to the youth center', 'Gençlik merkezine git'),
+    description: (c) => c.t('Offer to talk to teenagers about your past', 'Gençlere geçmişini anlatmayı öner'),
+    group: 'Mind & Body',
+    minAge: 21,
+    maxAge: 80,
+    available: (c) => free(c) && c.p.criminalRecord > 0 && !c.p.achievements.includes('reformed') && goneStraight(c, 2) && !peekCrime(c.p)?.fugitive,
+    hideWhenUnavailable: true,
+    run: () => ({ event: 'crime.redemption' }),
   },
   {
     id: 'crime_heist',

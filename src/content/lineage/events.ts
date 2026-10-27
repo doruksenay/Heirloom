@@ -38,7 +38,7 @@ const LINEAGE: QuickEvent[] = [
     id: 'lin.seat',
     ages: [30, 65],
     once: true,
-    title: ['The old house at the edge of the village is for sale.', 'Köyün kenarındaki eski ev satılık.'],
+    title: ['The old house at the edge of town is for sale.', 'Kasabanın kenarındaki eski ev satılık.'],
     text: ['It has a leaking roof, twelve rooms and a garden full of things that were once vegetables. Four generations of your family were born in or near it.', 'Çatısı akıyor, on iki odası var ve bahçesi bir zamanlar sebze olan şeylerle dolu. Ailenin dört kuşağı onun içinde ya da yakınında doğmuş.'],
     options: [
       { id: 'buy', label: ['Buy it, roof and all', 'Çatısıyla birlikte satın al'], usd: -9000, legacy: 120, stats: { happiness: 6 }, flags: ['lin_seat'], tone: 'big', result: ['You took the keys on a Tuesday. By Friday, three relatives had arrived with ladders and an opinion about every room. It is the family seat now, and it leaks.', 'Anahtarları bir salı günü aldın. Cumaya üç akraba merdivenlerle ve her oda hakkında bir fikirle geldi. Artık ailenin köşkü ve damlıyor.'] },
@@ -139,7 +139,7 @@ const LINEAGE: QuickEvent[] = [
     id: 'lin.donate',
     ages: [38, 80],
     once: true,
-    title: ['The village school needs a new roof.', 'Köy okulunun yeni bir çatıya ihtiyacı var.'],
+    title: ['The local school needs a new roof.', 'Yerel okulun yeni bir çatıya ihtiyacı var.'],
     text: ['The headteacher sits in your kitchen with a folder and the dignity of someone who has asked many people already.', 'Müdür, dosyası ve çok kişiye sormuş birinin ağırbaşlılığıyla mutfağında oturuyor.'],
     options: [
       { id: 'give', label: ['Pay for the roof, in the family’s name', 'Çatıyı ailenin adına öde'], usd: -2500, legacy: 120, stats: { happiness: 5 }, tone: 'big', result: ['A small brass plate now sits by the door with your family name on it. Children rub it for luck on exam days. It is slowly turning gold.', 'Kapının yanında artık ailenin adını taşıyan küçük bir pirinç levha var. Çocuklar sınav günlerinde şans için ona dokunuyor. Yavaşça altın rengine dönüyor.'] },
@@ -252,7 +252,7 @@ const LINEAGE: QuickEvent[] = [
     ages: [30, 75],
     cooldown: 15,
     title: ['A local newspaper wants to write about your family.', 'Yerel bir gazete ailen hakkında yazı yazmak istiyor.'],
-    text: ['“Four generations in one village.” The journalist is young, polite and, you suspect, already knows the ending.', '“Bir köyde dört kuşak.” Gazeteci genç, kibar ve, şüphelendiğin gibi, sonunu çoktan biliyor.'],
+    text: ['“Four generations, one family name.” The journalist is young, polite and, you suspect, already knows the ending.', '“Dört kuşak, tek bir soyad.” Gazeteci genç, kibar ve, şüphelendiğin gibi, sonunu çoktan biliyor.'],
     options: [
       { id: 'talk', label: ['Tell the stories you are proud of', 'Gurur duyduğun hikâyeleri anlat'], legacy: 50, stats: { happiness: 3 }, tone: 'good', result: ['The article ran on page five and was cut out and pinned to six kitchen walls. A cousin called to say that you had left out the donkey. You had.', 'Yazı beşinci sayfada çıktı ve altı mutfak duvarına kesilip asıldı. Bir kuzen eşeği atladığını söylemek için aradı. Atlamıştın.'] },
       { id: 'private', label: ['Say that the family prefers privacy', 'Ailenin mahremiyeti tercih ettiğini söyle'], stats: { happiness: 1 }, result: ['The journalist wrote about a different family. Yours was described, in a footnote, as “reserved”. You liked the word and used it on a card.', 'Gazeteci başka bir aileyi yazdı. Seninkine dipnotta “çekingen” dendi. Kelimeyi beğendin ve bir kartta kullandın.'] },

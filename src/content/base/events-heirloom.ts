@@ -865,7 +865,7 @@ export const heirloomEvents: EventDef[] = [
     text: (c) => {
       const it = item(c);
       if (established(c, it) && it.generations >= 2)
-        return c.t(`It has been in the family since ${it.sinceYear}, through ${it.generations} keepers.`, `${it.sinceYear} yılından beri ailede; bugüne kadar ${it.generations} kişinin elinden geçti.`);
+        return c.t(`It has been in the family since ${it.sinceYear}, through ${it.generations} keepers before you.`, `${it.sinceYear} yılından beri ailede; senden önce ${it.generations} kişinin elinden geçti.`);
       return c.t(`It has been in the family since ${it.sinceYear}.`, `${it.sinceYear} yılından beri ailede.`);
     },
     choices: [

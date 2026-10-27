@@ -1,5 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { quickEvent, since, type QuickEvent } from '../base/quick-event';
+import { isAbroad } from '../base/events-flavour';
 
 // "Abroad" (gurbet): the pull between two places. Family far away, a contract in another country, a language that
 // splits in two, the long way home. Nothing here moves the player's country or city: working abroad is a contract
@@ -15,10 +16,27 @@ const R = { category: 'random' } as const;
 export const abroadNow = (c: Ctx): boolean => since(c, 'abroad_stint') >= 0 && since(c, 'abroad_stint') <= 8 && since(c, 'abroad_home') < 0 && since(c, 'abroad_stayed') < 0;
 const stintYears = (c: Ctx): number => since(c, 'abroad_stint');
 
+// Who these stories are about. A home-born player with no link to another country never sees them. The link is one of:
+// working abroad on a contract (or having settled there), a stated family background overseas (flag abroad_roots, set by
+// the "Write to relatives overseas" activity), or a child who emigrated (flag abroad:<id>, see base.child_abroad).
+/** Living in the other country: on a contract, or settled there. */
+export const away = (c: Ctx): boolean => abroadNow(c) || since(c, 'abroad_stayed') >= 0;
+/** Family overseas as a way of life, said so by the player; it ends for good once back home. */
+export const rooted = (c: Ctx): boolean => since(c, 'abroad_roots') >= 0 && since(c, 'abroad_home') < 0;
+/** Living kin on the home side (the people at "home"). */
+const homeKin = (c: Ctx): boolean => c.h.relatives(['mother', 'father', 'sibling', 'grandparent']).length > 0;
+const kidsAway = (c: Ctx): boolean => c.h.relatives('child').some((k) => isAbroad(c, k.person.id));
+/** Between two places: lives away, or has family roots overseas. */
+export const twoPlaces = (c: Ctx): boolean => away(c) || rooted(c);
+/** "Back home" stories: living kin on the home side, and you are the one who is away (or from away). */
+export const homeSide = (c: Ctx): boolean => twoPlaces(c) && homeKin(c);
+/** Far-away family stories: the home side, or a child who emigrated. */
+export const farFamily = (c: Ctx): boolean => homeSide(c) || kidsAway(c);
+
 const ABROAD: QuickEvent[] = [
   // ---------------------------------------------------------------- family far away
   {
-    ...F, id: 'ab.parcel', ages: [14, 90], cooldown: 8, light: true,
+    ...F, id: 'ab.parcel', ages: [14, 90], cooldown: 8, light: true, when: farFamily,
     title: ['A parcel arrives from a relative abroad.', 'Yurt dışındaki bir akrabadan koli geliyor.'],
     text: ['It is wrapped in four layers of tape and one of newspaper. It smells of home, or what home smells like from a long way off.', 'Dört kat bant ve bir kat gazeteyle sarılı. Ev gibi, ya da evin çok uzaktan nasıl koktuğu gibi kokuyor.'],
     options: [
@@ -27,7 +45,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.video_call', ages: [14, 95], cooldown: 6, light: true,
+    ...F, id: 'ab.video_call', ages: [14, 95], cooldown: 6, light: true, when: farFamily,
     title: ['The weekly video call with the relatives abroad.', 'Yurt dışındaki akrabalarla haftalık görüntülü arama.'],
     text: ['Six faces in boxes, none of them looking at the camera. Someone has muted themselves while telling a long story.', 'Kutularda altı yüz, hiçbiri kameraya bakmıyor. Biri uzun bir hikâye anlatırken kendini sessize almış.'],
     options: [
@@ -36,17 +54,18 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.homecoming_summer', ages: [16, 85], cooldown: 4, light: true,
+    ...F, id: 'ab.homecoming_summer', ages: [16, 85], cooldown: 4, light: true, when: homeSide,
     title: ['Summer: the whole family goes back for the holidays.', 'Yaz: bütün aile tatil için memlekete dönüyor.'],
     text: ['The suitcases are heavier than the people. Half the weight is gifts, and a third of the gifts are for someone you have not met.', 'Bavullar insanlardan ağır. Ağırlığın yarısı hediye ve hediyelerin üçte biri henüz tanışmadığın biri için.'],
     options: [
       { id: 'go', label: ['Go for the whole month', 'Bir ayın tamamı için git'], usd: -700, stats: { happiness: 7, health: 1 }, closeness: { kinds: ['sibling', 'child', 'mother', 'father', 'grandparent'], delta: 4 }, tone: 'big', result: ['The first morning, you woke before dawn to the sound of the neighbour’s rooster and lay there smiling like an idiot. Every meal was a proof of love. You left with three kilos of food and one of sorrow.', 'İlk sabah, komşunun horozunun sesiyle şafaktan önce uyandın ve aptal gibi gülümseyerek yattın. Her öğün bir sevgi kanıtıydı. Üç kilo yiyecek ve bir kilo hüzünle ayrıldın.'] },
       { id: 'week', label: ['Go for a week', 'Bir haftalığına git'], usd: -250, stats: { happiness: 4 }, closeness: { kinds: ['sibling', 'mother', 'father', 'grandparent'], delta: 2 }, result: ['A week is too short for everything and just right for the main things: a table, a grave, a beach. You were driven to the airport by three people in two cars.', 'Bir hafta her şey için kısa ama temel şeyler için yeterli: bir sofra, bir mezar, bir sahil. Havalimanına iki arabayla üç kişi seni götürdü.'] },
+      { id: 'video', label: ['Join the big family meal by video', 'Büyük aile yemeğine görüntülü bağlan'], stats: { happiness: 2 }, closeness: { kinds: ['sibling', 'mother', 'father', 'grandparent'], delta: 1 }, result: ['They propped the phone against the water jug. You ate your supper at their lunch, and were passed the bread by a cousin who held the screen up to the dish. It was nearly the same table.', 'Telefonu su sürahisine yasladılar. Sen akşam yemeğini onların öğle yemeğinde yedin; bir kuzen ekranı tabağa doğru tutup ekmeği sana uzattı. Neredeyse aynı sofraydı.'] },
       { id: 'stay', label: ['Stay and call them instead', 'Kal ve onun yerine ara'], stats: { happiness: -2 }, closeness: { kinds: ['grandparent'], delta: -2 }, result: ['You told yourself there would be other summers, in the voice of someone who has said it before.', 'Başka yazlar olacağını, bunu daha önce söylemiş birinin sesiyle kendine söyledin.'] },
     ],
   },
   {
-    ...F, id: 'ab.send_money', ages: [20, 80], cooldown: 6,
+    ...F, id: 'ab.send_money', ages: [20, 80], cooldown: 6, when: homeSide,
     title: ['A relative back home needs help with a roof.', 'Memleketteki bir akrabanın çatı için yardıma ihtiyacı var.'],
     text: ['It is not stated as a request. It is stated as “the rain has started, you know how it is”.', 'İstek olarak söylenmiyor. “Yağmur başladı, nasıl olduğunu biliyorsun” diye söyleniyor.'],
     options: [
@@ -55,7 +74,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.airport', ages: [14, 90], cooldown: 8, light: true,
+    ...F, id: 'ab.airport', ages: [14, 90], cooldown: 8, light: true, when: farFamily,
     title: ['You are at the airport again, saying goodbye.', 'Yine havalimanındasın ve vedalaşıyorsun.'],
     text: ['A line of people hugging for too long. A child cries, a grandmother does not. A trolley has been abandoned in the middle, heaped with parcels.', 'Fazla uzun sarılan bir insan sırası. Bir çocuk ağlıyor, bir büyükanne ağlamıyor. Ortada paketlerle dolu bırakılmış bir arabacık.'],
     options: [
@@ -64,7 +83,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.funeral_far', ages: [25, 90], once: true,
+    ...F, id: 'ab.funeral_far', ages: [25, 90], once: true, when: homeSide,
     title: ['A relative far away has died, and the funeral is in three days.', 'Uzaktaki bir akraba vefat etti ve cenaze üç gün sonra.'],
     text: ['Flights are expensive and short notice. You hear a lot of crying over the phone, and someone says, “Don’t worry, we understand.”', 'Uçaklar pahalı ve haber kısa. Telefonda çok ağlama sesi duyuyorsun ve biri “Merak etme, anlıyoruz” diyor.'],
     options: [
@@ -73,7 +92,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.bad_news', ages: [20, 85], once: true,
+    ...F, id: 'ab.bad_news', ages: [20, 85], once: true, when: homeSide,
     title: ['Bad news from home: a flood has swept through the village.', 'Memleketten kötü haber: köyü sel bastı.'],
     text: ['The photographs are brown and wet. No one is hurt, but half the street is mud and the school has lost its roof.', 'Fotoğraflar kahverengi ve ıslak. Kimse yaralı değil ama sokağın yarısı çamur ve okulun çatısı gitmiş.'],
     options: [
@@ -82,7 +101,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.grandparent_visit', ages: [18, 70], once: true, when: (c) => c.h.relatives('grandparent').length > 0,
+    ...F, id: 'ab.grandparent_visit', ages: [18, 70], once: true, when: (c) => homeSide(c) && c.h.relatives('grandparent').length > 0,
     title: ['Your grandparent comes to visit from far away.', 'Büyükanne ya da büyükbaban uzaktan ziyarete geliyor.'],
     text: ['They have never been on a plane before this one. They have brought two suitcases of food and an extremely small bag of clothes.', 'Bu uçaktan önce hiç uçağa binmemişler. İki bavul yiyecek ve çok küçük bir kıyafet çantasıyla gelmişler.'],
     options: [
@@ -91,7 +110,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.mixed_families', ages: [22, 60], once: true, when: (c) => !!c.h.partner(),
+    ...F, id: 'ab.mixed_families', ages: [22, 60], once: true, when: (c) => twoPlaces(c) && !!c.h.partner(),
     title: ['Your partner’s family and yours finally meet.', 'Eşinin ailesi ile seninki sonunda tanışıyor.'],
     text: ['Two sets of grandparents, no shared language, a lot of gestures. Someone has brought a gift that is, in the other culture, a quiet insult.', 'İki grup büyükanne ve büyükbaba, ortak dil yok, çok jest. Biri, diğer kültürde sessiz bir hakaret sayılan bir hediye getirmiş.'],
     options: [
@@ -155,7 +174,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...W, id: 'ab.reverse', ages: [24, 80], once: true, when: (c) => since(c, 'abroad_home') >= 1,
+    ...W, id: 'ab.reverse', ages: [24, 80], once: true, weight: 40, when: (c) => since(c, 'abroad_home') >= 1 && since(c, 'abroad_home') <= 3,
     title: ['Back home, nothing is quite where you left it.', 'Evde, hiçbir şey bıraktığın yerde değil.'],
     text: ['The bakery is now a phone shop. Your friends have children and different jokes. You say “back where I lived” without meaning to.', 'Fırın artık bir telefon dükkânı. Arkadaşlarının çocukları ve farklı şakaları var. İstemeden “yaşadığım yerde” diyorsun.'],
     options: [
@@ -174,7 +193,7 @@ const ABROAD: QuickEvent[] = [
   },
   // ---------------------------------------------------------------- everyday life between places
   {
-    ...R, id: 'ab.homesick', ages: [16, 90], cooldown: 8,
+    ...R, id: 'ab.homesick', ages: [16, 90], cooldown: 8, when: (c) => twoPlaces(c) && c.h.relatives(['mother', 'father', 'grandparent']).length > 0,
     title: ['A smell from a street stall brings your whole childhood back.', 'Bir sokak tezgâhından gelen bir koku bütün çocukluğunu getiriyor.'],
     text: ['Onions in butter, or toasted bread, or something close enough. You stand there until the vendor asks if you are all right.', 'Tereyağında soğan, ya da kızarmış ekmek, ya da yeterince yakın bir şey. Satıcı iyi olup olmadığını soruncaya kadar orada duruyorsun.'],
     options: [
@@ -183,7 +202,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.food_shop', ages: [16, 90], once: true,
+    ...R, id: 'ab.food_shop', ages: [16, 90], once: true, when: twoPlaces,
     title: ['You find a small shop that sells food from home.', 'Memleket yiyeceklerini satan küçük bir dükkân buluyorsun.'],
     text: ['A shelf of jars with familiar labels, a smell of dried herbs, and a man behind the counter who says, in your own dialect, “Welcome, my friend.”', 'Tanıdık etiketli kavanozlarla dolu bir raf, kurutulmuş otların kokusu ve tezgâhın arkasında kendi lehçenle “Hoş geldin, dostum” diyen bir adam.'],
     options: [
@@ -192,7 +211,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.name', ages: [14, 80], once: true,
+    ...R, id: 'ab.name', ages: [14, 80], once: true, when: twoPlaces,
     title: ['Nobody can pronounce your name, and you are tired of correcting them.', 'Kimse adını doğru söyleyemiyor ve düzeltmekten yoruldun.'],
     text: ['They are kind about it, which is worse. Today a barista wrote your name on a cup and it came out as a different, quite pleasant, word.', 'Bu konuda nazikler; bu daha kötü. Bugün bir barista adını bir bardağa yazdı ve farklı, oldukça hoş bir kelime çıktı.'],
     options: [
@@ -201,7 +220,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.newcomer', ages: [22, 85], once: true,
+    ...R, id: 'ab.newcomer', ages: [22, 85], once: true, when: twoPlaces,
     title: ['A new family has moved in next door, and they look rather lost.', 'Yan kapıya yeni bir aile taşındı ve oldukça kaybolmuş görünüyorlar.'],
     text: ['They have a lot of boxes, a small child holding a toy and a mother consulting a translation app with great concentration.', 'Çok koli, oyuncak tutan küçük bir çocuk ve büyük bir dikkatle çeviri uygulamasına bakan bir anne var.'],
     options: [
@@ -210,7 +229,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.translate', ages: [14, 70], once: true,
+    ...R, id: 'ab.translate', ages: [14, 70], once: true, when: twoPlaces,
     title: ['You are asked to translate for a relative at the doctor’s.', 'Doktorda bir akraba için tercümanlık yapmanız isteniyor.'],
     text: ['The doctor uses words that you have only heard in films. Your relative looks at you, trusting, and the whole room waits.', 'Doktor yalnızca filmlerde duyduğun kelimeler kullanıyor. Akraban sana güvenle bakıyor ve bütün oda bekliyor.'],
     options: [
@@ -219,7 +238,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.festival', ages: [16, 90], cooldown: 8, light: true,
+    ...R, id: 'ab.festival', ages: [16, 90], cooldown: 8, light: true, when: twoPlaces,
     title: ['The town holds a festival of food from every country.', 'Kasaba her ülkeden yemeklerin yer aldığı bir festival düzenliyor.'],
     text: ['Forty stalls, a stage and a smell like the whole world frying. A woman asks if you would like to hold a stall for your homeland.', 'Kırk tezgâh, bir sahne ve bütün dünyanın kızardığı bir koku. Bir kadın memleketin için bir tezgâh açmak isteyip istemediğini soruyor.'],
     options: [
@@ -228,7 +247,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.homeland_news', ages: [18, 90], cooldown: 12,
+    ...R, id: 'ab.homeland_news', ages: [18, 90], cooldown: 12, when: twoPlaces,
     title: ['A big match, an election, a headline: all the family are glued to the news from home.', 'Büyük bir maç, bir seçim, bir manşet: bütün aile memleketten haberlere kilitlenmiş.'],
     text: ['Three phones, one television and an argument that starts in the front room and finishes in a different decade.', 'Üç telefon, bir televizyon ve ön odada başlayıp farklı bir on yılda biten bir tartışma.'],
     options: [
@@ -237,7 +256,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.diaspora', ages: [22, 80], once: true,
+    ...R, id: 'ab.diaspora', ages: [22, 80], once: true, when: twoPlaces,
     title: ['A friend invites you to a gathering of people from your homeland.', 'Bir arkadaş seni memleketinden insanların toplantısına davet ediyor.'],
     text: ['A rented room, a long table, dialects from six provinces and a very old record player. “We meet on the first Sunday,” she says.', 'Kiralık bir oda, uzun bir masa, altı ilden lehçeler ve çok eski bir pikap. “Her ayın ilk pazarı buluşuyoruz” diyor.'],
     options: [
@@ -246,7 +265,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.village', ages: [25, 90], once: true,
+    ...R, id: 'ab.village', ages: [25, 90], once: true, when: twoPlaces,
     title: ['You visit the village where the family began.', 'Ailenin başladığı köyü ziyaret ediyorsun.'],
     text: ['The road is paved now. The houses have satellite dishes. An old man at the café says, “You are Mehmet’s grandchild, I see it in the ears.”', 'Yol artık asfalt. Evlerde uydu çanakları var. Kahvehanedeki yaşlı bir adam “Mehmet’in torunusun, kulaklardan belli” diyor.'],
     options: [
@@ -255,16 +274,17 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.build_home', ages: [30, 75], once: true,
+    ...R, id: 'ab.build_home', ages: [30, 75], once: true, when: (c) => homeSide(c) && since(c, 'abroad_plot') < 0,
     title: ['A neighbour says the plot next to your parents’ house is for sale.', 'Bir komşu ailenin evinin yanındaki arsanın satılık olduğunu söylüyor.'],
     text: ['You have always said “one day, a house of my own, back there”. The plot has a fig tree and a view of the hill.', 'Hep “bir gün, orada kendi evim” dedin. Arsada bir incir ağacı ve tepe manzarası var.'],
     options: [
-      { id: 'buy', label: ['Buy it and start building', 'Satın al ve inşaata başla'], usd: -5000, stats: { happiness: 5 }, closeness: { kinds: ['mother', 'father', 'sibling'], delta: 4 }, tone: 'big', result: ['The foundations went in the next spring. It took three years, four builders and every relative’s opinion about windows. Now, in July, there is a house waiting for you with the door open.', 'Temel ertesi bahar atıldı. Üç yıl, dört müteahhit ve her akrabanın pencereler hakkındaki fikri gerekti. Şimdi temmuzda kapısı açık seni bekleyen bir ev var.'] },
+      { id: 'buy', label: ['Buy it and start building', 'Satın al ve inşaata başla'], usd: -5000, flags: ['abroad_plot'], stats: { happiness: 5 }, closeness: { kinds: ['mother', 'father', 'sibling'], delta: 4 }, tone: 'big', result: ['The plot is yours on paper now, walled on three sides, with a fig tree and a view of the hill. The house exists in three drawings and every relative’s opinion about windows. Each July you stand in it and see the rooms.', 'Arsa artık kâğıt üzerinde senin; üç yanı duvarlı, bir incir ağacı ve tepe manzarasıyla. Ev üç çizimde ve her akrabanın pencereler hakkındaki fikrinde duruyor. Her temmuz içinde durup odaları görüyorsun.'] },
+      { id: 'share', label: ['Go halves with a cousin', 'Bir kuzenle yarı yarıya al'], usd: -1600, flags: ['abroad_plot'], stats: { happiness: 3 }, closeness: { kinds: ['sibling'], delta: 2 }, result: ['You split the plot and the arguing. His half has the fig tree, yours has the view, and a rope between them that both of you are careful not to call a fence.', 'Arsayı ve tartışmayı yarı yarıya böldünüz. Onun yarısında incir ağacı, seninkinde manzara var; arada ikinizin de çit demediği bir ip.'] },
       { id: 'dream', label: ['Keep the dream, as a dream', 'Hayali hayal olarak tut'], stats: { happiness: 1 }, result: ['The plot was bought by a cousin who promised to keep a room for you. You say “next year”, and he nods, because it is how everyone has always said it.', 'Arsayı sana bir oda ayıracağına söz veren bir kuzen aldı. “Gelecek yıl” diyorsun ve o başını sallıyor, çünkü herkes hep böyle söyledi.'] },
     ],
   },
   {
-    ...F, id: 'ab.children_language', ages: [26, 60], once: true, when: (c) => c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 2 && c.h.ageOf(k.person) <= 14),
+    ...F, id: 'ab.children_language', ages: [26, 60], once: true, when: (c) => twoPlaces(c) && c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 2 && c.h.ageOf(k.person) <= 14),
     title: ['Your child answers you in the language of the street.', 'Çocuğun sana sokağın diliyle cevap veriyor.'],
     text: ['You spoke in your own language and they replied in the other, easily, without noticing. Their grandmother, on the video call, looks as if she has heard something fall.', 'Sen kendi dilinde konuştun ve onlar fark etmeden, kolayca, diğer dille cevap verdi. Büyükanne, görüntülü aramada, bir şey düşmüş gibi bakıyor.'],
     options: [
@@ -273,7 +293,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.heritage_talk', ages: [26, 75], once: true, when: (c) => c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 6 && c.h.ageOf(k.person) <= 18),
+    ...F, id: 'ab.heritage_talk', ages: [26, 75], once: true, when: (c) => twoPlaces(c) && c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 6 && c.h.ageOf(k.person) <= 18),
     title: ['Your child has to give a talk at school about their family’s roots.', 'Çocuğun okulda ailesinin kökleri hakkında bir konuşma yapacak.'],
     text: ['They have asked you for a story. They want something that is both true and impressive. You have both.', 'Senden bir hikâye istedi. Hem doğru hem etkileyici bir şey istiyor. İkisi de sende var.'],
     options: [
@@ -282,7 +302,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.passport', ages: [18, 85], cooldown: 12,
+    ...R, id: 'ab.passport', ages: [18, 85], cooldown: 12, when: twoPlaces,
     title: ['Your passport is about to expire, and the embassy is a long way off.', 'Pasaportunun süresi dolmak üzere ve konsolosluk çok uzakta.'],
     text: ['Forms, photographs, a queue. A clerk with a stamp says, “Come back Thursday”, and means a day that has not been invented yet.', 'Formlar, fotoğraflar, bir kuyruk. Damgalı bir memur “Perşembe gelin” diyor ve henüz icat edilmemiş bir günü kastediyor.'],
     options: [
@@ -300,7 +320,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.retire_where', ages: [58, 85], once: true,
+    ...F, id: 'ab.retire_where', ages: [58, 85], once: true, when: (c) => away(c) && c.h.relatives('child').length > 0,
     title: ['Where do you want to grow old?', 'Nerede yaşlanmak istiyorsun?'],
     text: ['Home has the sea, the family graves and a shop that remembers your name. Here has the children, the doctor you trust and a bench you have grown to love.', 'Memlekette deniz, aile mezarları ve adını hatırlayan bir dükkân var. Burada çocuklar, güvendiğin doktor ve sevmeye başladığın bir bank var.'],
     options: [
@@ -309,7 +329,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.recipe_letter', ages: [20, 90], once: true, when: (c) => c.h.relatives(['mother', 'father', 'grandparent']).length > 0,
+    ...R, id: 'ab.recipe_letter', ages: [20, 90], once: true, when: (c) => homeSide(c) && c.h.relatives(['mother', 'father', 'grandparent']).length > 0,
     title: ['A letter arrives with a recipe you have been trying to remember for years.', 'Yıllardır hatırlamaya çalıştığın bir tarifin yazılı olduğu mektup geliyor.'],
     text: ['It is in handwriting you recognise at once, with “a handful”, “until it looks right” and a little drawing of a pot.', 'Hemen tanıdığın bir el yazısıyla yazılmış; “bir avuç”, “güzel görünene kadar” ve küçük bir tencere çizimi var.'],
     options: [
@@ -318,7 +338,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.cheap_flight', ages: [20, 75], cooldown: 8, light: true,
+    ...F, id: 'ab.cheap_flight', ages: [20, 75], cooldown: 8, light: true, when: homeSide,
     title: ['A cheap flight comes up for next weekend.', 'Gelecek hafta sonu için ucuz bir uçak bileti çıkıyor.'],
     text: ['It lands at an hour no sensible person would choose. Your phone is already showing a photograph of the kitchen at home.', 'Hiçbir akıllı insanın seçmeyeceği bir saatte iniyor. Telefonun şimdiden evdeki mutfağın fotoğrafını gösteriyor.'],
     options: [
@@ -327,7 +347,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'ab.gift_far', ages: [14, 85], cooldown: 8, light: true,
+    ...F, id: 'ab.gift_far', ages: [14, 85], cooldown: 8, light: true, when: farFamily,
     title: ['It is a relative’s birthday on the far side of the world.', 'Dünyanın öbür ucunda bir akrabanın doğum günü.'],
     text: ['Their evening is your early morning. You could call at an odd hour, or send something, or do both.', 'Onların akşamı senin sabahın erken saati. Garip bir saatte arayabilir ya da bir şey gönderebilir ya da ikisini birden yapabilirsin.'],
     options: [
@@ -336,7 +356,7 @@ const ABROAD: QuickEvent[] = [
     ],
   },
   {
-    ...R, id: 'ab.old_friend', ages: [24, 85], once: true,
+    ...R, id: 'ab.old_friend', ages: [24, 85], once: true, when: twoPlaces,
     title: ['A friend from your childhood visits, and you hardly know each other.', 'Çocukluk arkadaşın ziyarete geliyor ve birbirinizi neredeyse tanımıyorsunuz.'],
     text: ['At the door there is a long moment. Then you both start laughing at the same instant, because each of you has become exactly the person the other predicted.', 'Kapıda uzun bir an var. Sonra ikiniz de aynı anda gülmeye başlıyorsunuz, çünkü her biriniz diğerinin tahmin ettiği kişi olmuş.'],
     options: [

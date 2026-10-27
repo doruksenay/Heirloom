@@ -243,7 +243,8 @@ export const adultEvents: EventDef[] = [
     category: 'family',
     minAge: 30,
     once: true,
-    when: (c) => c.h.relatives(['mother', 'father']).some((r) => c.h.ageOf(r.person) >= 70),
+    // one story: not once the Care pack's move-in or care home has already settled it (flags carry the year)
+    when: (c) => c.h.relatives(['mother', 'father']).some((r) => c.h.ageOf(r.person) >= 70) && c.p.flags.care_home === undefined && c.p.flags.care_moved === undefined,
     setup: (c) => {
       c.vars.pid = c.h.relatives(['mother', 'father']).find((r) => c.h.ageOf(r.person) >= 70)!.person.id;
     },
@@ -257,6 +258,8 @@ export const adultEvents: EventDef[] = [
         id: 'move_in',
         label: (c) => c.t(`Move ${him(who(c))} in with you`, 'Yanına taşınsın'),
         resolve: (c) => {
+          c.h.flag('care_parent'); // the Care pack's events pick the story up from here
+          c.h.flag('care_moved');
           c.h.closeness(String(c.vars.pid), 15);
           c.h.money(-wage(c, 4000));
           c.h.stat('happiness', -2);
@@ -270,6 +273,7 @@ export const adultEvents: EventDef[] = [
         id: 'care_home',
         label: (c) => c.t('Pay for a care home', 'Bakımevi parasını öde'),
         resolve: (c) => {
+          c.h.flag('care_home');
           c.h.money(-wage(c, 18000));
           c.h.closeness(String(c.vars.pid), -4);
           return c.t(
@@ -282,6 +286,7 @@ export const adultEvents: EventDef[] = [
         id: 'visit',
         label: (c) => c.t('Visit more often', 'Daha sık ziyaret et'),
         resolve: (c) => {
+          c.h.flag('care_parent');
           c.h.closeness(String(c.vars.pid), 5);
           c.h.stat('health', -2);
           return c.t(
@@ -571,7 +576,7 @@ export const adultEvents: EventDef[] = [
     choices: [
       {
         id: 'best',
-        label: (c) => c.t('The expensive private clinic', 'Pahalı özel klinik'),
+        label: (c) => c.t(`The private clinic (${c.h.fmt(wage(c, 40000))})`, `Özel klinik (${c.h.fmt(wage(c, 40000))})`),
         requires: (c) => c.p.money >= wage(c, 40000),
         requiresLabel: 'Not enough savings',
         resolve: (c) => {
@@ -582,9 +587,9 @@ export const adultEvents: EventDef[] = [
       },
       {
         id: 'public',
-        label: (c) => c.t('The public hospital', 'Devlet hastanesi'),
+        label: (c) => c.t('The public hospital (a long wait, no promises)', 'Devlet hastanesi (uzun bekleme, söz yok)'),
         resolve: (c) => {
-          if (c.rng.chance(0.25 + (100 - c.p.stats.health) / 400)) {
+          if (c.rng.chance(0.12 + (100 - c.p.stats.health) / 500)) {
             c.h.kill('a long illness');
             return c.t('The treatment did not work.', 'Tedavi işe yaramadı.');
           }

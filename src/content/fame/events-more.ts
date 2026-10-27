@@ -49,6 +49,7 @@ export const moreFameEvents: EventDef[] = [
     category: 'fame',
     minAge: 15,
     cooldown: 6,
+    weight: 40,
     when: (c) => music(c) && free(c) && fs(c).fans >= 15000 && released(c).length > 0,
     setup: (c) => {
       c.vars.star = STARS[c.rng.int(0, STARS.length - 1)];
@@ -230,7 +231,8 @@ export const moreFameEvents: EventDef[] = [
     category: 'fame',
     minAge: 16,
     cooldown: 5,
-    when: (c) => music(c) && free(c) && fs(c).fans >= 80000,
+    weight: 50,
+    when: (c) => music(c) && free(c) && fs(c).fans >= 40000,
     setup: (c) => {
       c.vars.pay = wage(c, Math.min(400000, 20000 + fs(c).fans * 0.02));
     },
@@ -451,6 +453,7 @@ export const moreFameEvents: EventDef[] = [
     category: 'fame',
     minAge: 16,
     once: true,
+    weight: 60,
     when: (c) => music(c) && free(c) && fs(c).fans >= 30000 && fs(c).songs.length > 0,
     title: (c) => c.t('You have been picked to represent the country at the big song contest.', 'Büyük uluslararası şarkı yarışmasında ülkeyi temsil etmek için seçildin.'),
     text: (c) =>

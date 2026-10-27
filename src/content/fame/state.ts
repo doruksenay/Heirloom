@@ -119,9 +119,17 @@ export function compact(n: number, lang: Lang = 'en'): string {
  */
 export const FAN_CAP = 50_000_000;
 
+/**
+ * Momentum: a bigger name is easier to grow. Without it fan growth stays flat once skill and songs are maxed out
+ * (20k fans at 40 and still a "Rising Star" at 60). x1 for a nobody, about x1.2 at 15k fans, x1.4 at 60k, x1.9 at 400k and above.
+ */
+export function momentum(fans: number): number {
+  return 1 + Math.min(0.9, Math.sqrt(Math.max(0, fans)) / 650);
+}
+
 export function gainFans(c: Ctx, f: FameState, n: number): number {
   const room = Math.max(0, FAN_CAP - f.fans);
-  const gained = Math.max(0, Math.round(room * -Math.expm1(-Math.max(0, n) / FAN_CAP)));
+  const gained = Math.max(0, Math.round(room * -Math.expm1(-Math.max(0, n) * momentum(f.fans) / FAN_CAP)));
   f.fans += gained;
   f.lastActiveYear = c.s.year;
   f.peakFame = Math.max(f.peakFame, fameLevel(f.fans));

@@ -12,6 +12,11 @@ const elderParent = (c: Ctx) => c.h.relatives(['mother', 'father']).some((r) => 
 /** Looking after a parent, whether you took it on or only keep an eye out. */
 const carer = (c: Ctx) => (since(c, 'care_parent') >= 0 || since(c, 'care_noticed') >= 0) && c.h.relatives(['mother', 'father']).length > 0;
 const unwell = (c: Ctx) => since(c, 'care_condition') >= 0;
+/** The parent's living arrangements are settled (the base game's parent_care, or this pack's move-in / care home). */
+const placed = (c: Ctx) => since(c, 'care_home') >= 0 || since(c, 'care_moved') >= 0;
+/** A parent who died in the last year or so. */
+const parentJustDied = (c: Ctx) =>
+  c.p.relations.some((r) => (r.kind === 'mother' || r.kind === 'father') && !r.step && c.s.people[r.personId]?.deathYear !== undefined && c.s.year - c.s.people[r.personId].deathYear! <= 1);
 
 const CARE: QuickEvent[] = [
   // ---------------------------------------------------------------- a parent grows older
@@ -25,7 +30,7 @@ const CARE: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'care.doctor_visit', ages: [32, 75], once: true, when: (c) => since(c, 'care_noticed') >= 1 && elderParent(c),
+    ...F, id: 'care.doctor_visit', ages: [32, 75], once: true, when: (c) => since(c, 'care_noticed') >= 1 && elderParent(c) && !placed(c),
     title: ['You take your parent for a check-up.', 'Ebeveynini bir kontrole götürüyorsun.'],
     text: ['They put on their best coat, as if for a wedding. The doctor asks questions in a kind, level voice. Your parent answers with great dignity.', 'En güzel paltosunu giymiş, düğüne gidermiş gibi. Doktor nazik ve düz bir sesle sorular soruyor. Ebeveynin büyük bir vakarla cevaplıyor.'],
     options: [
@@ -34,11 +39,11 @@ const CARE: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'care.move_in', ages: [34, 75], once: true, when: (c) => elderParent(c) && since(c, 'care_noticed') >= 0,
+    ...F, id: 'care.move_in', ages: [34, 75], once: true, when: (c) => elderParent(c) && since(c, 'care_noticed') >= 0 && !placed(c),
     title: ['Your parent can no longer manage the old house alone.', 'Ebeveynin artık eski evde tek başına idare edemiyor.'],
     text: ['The garden is overgrown, the fridge is full of the same jar of pickles and the stairs have become an argument.', 'Bahçe çalılık olmuş, buzdolabı aynı turşu kavanozuyla dolu ve merdivenler bir tartışma konusu oldu.'],
     options: [
-      { id: 'movein', label: ['Invite them to live with you', 'Seninle yaşamaya davet et'], flags: ['care_parent'], stats: { happiness: -2, health: -1 }, closeness: { kinds: ['mother', 'father'], delta: 10 }, tone: 'good', result: ['The spare room became theirs by the end of the week, along with the best chair and a say in the thermostat. It is crowded, and it is warm.', 'Hafta sonuna kadar boş oda onların oldu; en iyi koltuk ve termostat üzerindeki söz hakkı da. Kalabalık, ama sıcak.'] },
+      { id: 'movein', label: ['Invite them to live with you', 'Seninle yaşamaya davet et'], flags: ['care_parent', 'care_moved'], stats: { happiness: -2, health: -1 }, closeness: { kinds: ['mother', 'father'], delta: 10 }, tone: 'good', result: ['The spare room became theirs by the end of the week, along with the best chair and a say in the thermostat. It is crowded, and it is warm.', 'Hafta sonuna kadar boş oda onların oldu; en iyi koltuk ve termostat üzerindeki söz hakkı da. Kalabalık, ama sıcak.'] },
       { id: 'help', label: ['Arrange help to visit them at home', 'Evde yardım ayarla'], usd: -300, flags: ['care_parent'], stats: { happiness: 1 }, closeness: { kinds: ['mother', 'father'], delta: 3 }, result: ['A helper came three mornings a week and was soon on first-name terms with the pickles. Independence, with a net underneath.', 'Bir yardımcı haftada üç sabah geldi ve çok geçmeden turşularla ahbap oldu. Altında ağ olan bir bağımsızlık.'] },
       { id: 'asis', label: ['Respect their wish to stay as they are', 'Olduğu gibi kalma isteğine saygı göster'], stats: { happiness: -1 }, closeness: { kinds: ['mother', 'father'], delta: -2 }, result: ['They said thank you with a stubborn smile. You phoned more often, and listened carefully to the pauses.', 'İnatçı bir gülümsemeyle teşekkür ettiler. Daha sık aradın ve duraklamaları dikkatle dinledin.'] },
     ],
@@ -62,7 +67,7 @@ const CARE: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'care.sibling_split', ages: [35, 80], once: true, when: (c) => carer(c) && c.h.relatives('sibling').length > 0,
+    ...F, id: 'care.sibling_split', ages: [35, 80], once: true, weight: 25, when: (c) => carer(c) && c.h.relatives('sibling').length > 0,
     title: ['Your sibling says it is not fair that you do most of the caring.', 'Kardeşin bakımın çoğunu senin yapmanın adil olmadığını söylüyor.'],
     text: ['It is the first time anyone has said it out loud. You had been waiting for that for years.', 'Birinin bunu yüksek sesle söylemesi bir ilk. Yıllardır bunu bekliyordun.'],
     options: [
@@ -71,7 +76,7 @@ const CARE: QuickEvent[] = [
     ],
   },
   {
-    ...F, id: 'care.care_home', ages: [38, 85], once: true, when: (c) => carer(c) && since(c, 'care_parent') >= 2,
+    ...F, id: 'care.care_home', ages: [38, 85], once: true, when: (c) => carer(c) && since(c, 'care_parent') >= 2 && !placed(c),
     title: ['A place has come up in a good care home.', 'İyi bir bakımevinde yer çıktı.'],
     text: ['It has a garden, a piano and a nurse who knows everyone’s name. The waiting list was two years long. This is the only chance.', 'Bahçesi, piyanosu ve herkesin adını bilen bir hemşiresi var. Bekleme listesi iki yıllıktı. Tek şans bu.'],
     options: [
@@ -327,7 +332,7 @@ const CARE: QuickEvent[] = [
   },
   {
     ...H, id: 'care.thanks', ages: [40, 100], cooldown: 15,
-    when: (c) => since(c, 'care_parent') >= 3,
+    when: (c) => since(c, 'care_parent') >= 3 && (c.h.relatives(['mother', 'father']).length > 0 || (since(c, 'care_partner') >= 0 && !!c.h.partner())),
     title: ['Someone you looked after says thank you, properly.', 'Baktığın biri sana düzgünce teşekkür ediyor.'],
     text: ['It is not a speech. They say it quietly, over the dishes, looking at the soap.', 'Bir konuşma değil. Bulaşıkların başında, sabuna bakarak sessizce söylüyor.'],
     options: [
@@ -342,6 +347,16 @@ const CARE: QuickEvent[] = [
     options: [
       { id: 'physio', label: ['See a physiotherapist and do the exercises', 'Fizyoterapiste git ve egzersizleri yap'], usd: -120, stats: { health: 3, happiness: 1 }, tone: 'good', result: ['Six sessions, a rubber band and a lecture about stairs. The knee went from a prophet to a quiet colleague.', 'Altı seans, bir lastik bant ve merdivenler üstüne bir ders. Diz bir kâhinden sessiz bir iş arkadaşına dönüştü.'] },
       { id: 'cane', label: ['Buy a stylish walking stick', 'Şık bir baston al'], stats: { happiness: 2 }, result: ['It has a silver handle and a surprisingly good grip. You tap it on the pavement like a retired detective.', 'Gümüş bir sapı ve şaşırtıcı derecede iyi bir tutuşu var. Emekli bir dedektif gibi kaldırıma vuruyorsun.'] },
+    ],
+  },
+  {
+    ...F, id: 'care.farewell', ages: [30, 100], once: true, weight: 60, when: (c) => since(c, 'care_parent') >= 0 && parentJustDied(c),
+    title: ['The house you used to visit every week is quiet now.', 'Her hafta gittiğin ev şimdi sessiz.'],
+    text: ['For years your Sundays had a shape: the bus, the stairs, the kettle. Now the shape is still there and nothing fills it.', 'Yıllarca pazarlarının bir biçimi vardı: otobüs, merdiven, çaydanlık. Şimdi biçim yerinde duruyor ve hiçbir şey onu doldurmuyor.'],
+    options: [
+      { id: 'sunday', label: ['Keep your Sunday free, for a while', 'Pazarını bir süre boş bırak'], stats: { happiness: 1, health: 1 }, tone: 'good', result: ['You sat by the window with the kettle on and, for once, did not mind having nothing to do. It helped more than you expected.', 'Çaydanlık ocakta, pencerenin kenarına oturdun ve ilk kez yapacak bir şeyin olmamasını dert etmedin. Beklediğinden çok işe yaradı.'] },
+      { id: 'thank', label: ['Write down what looking after them taught you', 'Onlara bakmanın sana öğrettiklerini yaz'], stats: { happiness: 2, smarts: 1 }, legacy: 2, tone: 'good', result: ['Two pages, then six. It was mostly about patience, and about a very specific way of folding a tea towel.', 'İki sayfa, sonra altı. Çoğu sabırla ve bir çay bezini katlamanın çok özel bir yoluyla ilgiliydi.'] },
+      { id: 'busy', label: ['Fill the Sundays with errands', 'Pazarları işlerle doldur'], stats: { happiness: -2 }, result: ['The cupboards had never been so tidy. In March you caught yourself reaching for the phone to tell them about it.', 'Dolaplar hiç bu kadar düzenli olmamıştı. Mart ayında bunu onlara anlatmak için telefona uzandığını fark ettin.'] },
     ],
   },
   {

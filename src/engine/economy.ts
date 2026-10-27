@@ -80,7 +80,9 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
   const country = getCountry(p.countryId);
   const pay = salary * NET_PAY;
   if (age < 18) return { pay, cost: 0, support: 0 };
-  let cost = country.costOfLiving * (partner ? 0.7 : 1) * (1 + kidsAtHome * 0.22);
+  // a big household feels it: every child at home past the third costs a little more than the first three did
+  const crowded = Math.max(0, kidsAtHome - 3) * 0.12;
+  let cost = country.costOfLiving * (partner ? 0.7 : 1) * (1 + kidsAtHome * 0.22 + crowded);
   if (p.school === 'university') cost *= 0.2; // student life
   else if (!salary && age < 23 && !p.retired) cost = 0; // still living with the parents
   cost += LIFESTYLE_SHARE * Math.max(0, pay - cost);

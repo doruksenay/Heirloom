@@ -145,6 +145,7 @@ const events: EventDef[] = [
     minAge: 16,
     maxAge: 60,
     once: true,
+    weight: 90, // a milestone: it should not lose to the everyday pool once the fans are there
     when: (c) => isPath(c, 'music') && !fameState(c.p).label && fameState(c.p).fans >= 5000,
     setup: (c) => {
       c.vars.advance = wage(c, c.rng.int(20000, 80000));
@@ -191,6 +192,7 @@ const events: EventDef[] = [
     id: 'fame.viral_song',
     category: 'fame',
     cooldown: 6,
+    weight: 45,
     when: (c) => isPath(c, 'music') && fameState(c.p).songs.some((s) => s.released && s.quality >= 72 && c.s.year - s.year <= 2),
     setup: (c) => {
       const song = fameState(c.p).songs.filter((s) => s.released && s.quality >= 72).pop()!;
@@ -253,8 +255,13 @@ const events: EventDef[] = [
     category: 'fame',
     cooldown: 7,
     when: (c) => fameOf(c) >= 40,
-    title: (c) => c.t('Your old posts from ten years ago have resurfaced.', 'On yıl önceki eski paylaşımların gün yüzüne çıktı.'),
-    text: (c) => c.t('They are... not great. Your name is trending for the wrong reasons.', 'Pek... iç açıcı değiller. Adın yanlış sebeplerle gündemde.'),
+    title: (c) =>
+      isPath(c, 'social')
+        ? c.t('Your old posts from ten years ago have resurfaced.', 'On yıl önceki eski paylaşımların gün yüzüne çıktı.')
+        : isPath(c, 'acting')
+          ? c.t('An interview you gave years ago has resurfaced.', 'Yıllar önce verdiğin bir röportaj yeniden gündemde.')
+          : c.t('A recording from your early gigs has resurfaced.', 'İlk konserlerinden bir kayıt yeniden gündemde.'),
+    text: (c) => c.t('It is... not great. Your name is trending for the wrong reasons.', 'Pek... iç açıcı değil. Adın yanlış sebeplerle gündemde.'),
     choices: [
       {
         id: 'apologize',
@@ -302,10 +309,13 @@ const events: EventDef[] = [
     id: 'fame.award',
     category: 'fame',
     cooldown: 4,
+    weight: 60,
     when: (c) => {
       const f = peekFame(c.p);
-      if (!f || fameLevel(f.fans) < 55) return false;
-      return f.path === 'acting' ? f.roles >= 3 : f.albums.some((a) => a.quality >= 70 && c.s.year - a.year <= 1) || f.path === 'social';
+      if (!f || fameLevel(f.fans) < 45) return false;
+      // music: a decent album in the last few years, or a strong released song; social: simply being big
+      const strong = f.albums.some((a) => a.quality >= 60 && c.s.year - a.year <= 4) || f.songs.some((s) => s.released && s.quality >= 75 && c.s.year - s.year <= 3);
+      return f.path === 'acting' ? f.roles >= 3 : f.path === 'social' || strong;
     },
     title: (c) => c.t('You have been nominated for a major award!', 'Büyük bir ödüle aday gösterildin!'),
     text: (c) => c.t('The ceremony is next month. Your outfit costs more than your first car.', 'Tören gelecek ay. Kıyafetin ilk arabandan pahalı.'),
@@ -350,7 +360,9 @@ const events: EventDef[] = [
     category: 'fame',
     cooldown: 6,
     maxAge: 85,
-    when: (c) => bandAlive(c).length > 0,
+    weight: 16,
+    // a retired musician has no band to quit
+    when: (c) => isPath(c, 'music') && bandAlive(c).length > 0,
     setup: (c) => {
       c.vars.pid = c.rng.pick(bandAlive(c));
     },
@@ -440,6 +452,7 @@ const events: EventDef[] = [
     id: 'fame.tour',
     category: 'fame',
     cooldown: 2,
+    weight: 60,
     when: (c) => {
       if (!isPath(c, 'music') || !free(c)) return false;
       const t = nextTour(fameState(c.p));
@@ -616,6 +629,29 @@ const GIG_OK: ((v: { crowd: string; fans: string; band?: string }) => Pair)[] = 
   ({ crowd, fans, band }) => [`An encore! ${crowd} people would not let ${band ?? 'you'} leave. ${fans} new fans.`, `Bis! ${crowd} kişi ${band ? `${band} grubunu` : 'seni'} sahneden bırakmadı. ${fans} yeni hayran.`],
   ({ crowd, fans, band }) => [`You played a rooftop gig${band ? ` with ${band}` : ''} for ${crowd} people and a few confused pigeons. ${fans} new fans.`, `${band ? `${band} ile ` : ''}${crowd} kişiye ve birkaç şaşkın güvercine çatı konseri verdin. ${fans} yeni hayran.`],
   ({ crowd, fans, band }) => [`The sound engineer said it was the best show of the month${band ? ` for ${band}` : ''}. ${crowd} people agreed. ${fans} new fans.`, `Ses teknisyeni bunun ayın en iyi konseri olduğunu söyledi. ${crowd} kişi de aynı fikirdeydi. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`The power cut out halfway through, so ${band ?? 'you'} finished the set unplugged for ${crowd} people. ${fans} new fans.`, `Elektrikler yarıda kesildi; ${band ? `${band} ile ` : ''}seti ${crowd} kişiye akustik bitirdin. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`${crowd} people, one slightly out-of-tune guitar and a bartender who knew every word${band ? ` of ${band}'s songs` : ''}. ${fans} new fans.`, `${crowd} kişi, hafif akortsuz bir gitar ve${band ? ` ${band} şarkılarının` : ''} her sözünü bilen bir barmen. ${fans} yeni hayran.`],
+  ({ crowd, fans, band }) => [`A rival band watched from the back and clapped, reluctantly, in the end. ${crowd} people came. ${fans} new fans${band ? ` for ${band}` : ''}.`, `Rakip bir grup arkadan izledi ve sonunda isteksizce alkışladı. ${crowd} kişi geldi. ${fans} yeni hayran${band ? ` (${band} için)` : ''}.`],
+  ({ crowd, fans, band }) => [`Rain on the tent roof, ${crowd} people inside and everyone singing louder than the rain. ${fans} new fans${band ? ` for ${band}` : ''}.`, `Çadırın üstünde yağmur, içeride ${crowd} kişi ve herkes yağmurdan yüksek sesle şarkı söylüyor. ${fans} yeni hayran${band ? ` (${band} için)` : ''}.`],
+];
+type SingleV = { title: string; fans: string };
+const SINGLE_LOW: ((v: SingleV) => Pair)[] = [
+  ({ title, fans }) => [`You released "${title}". A few people noticed. ${fans} new fans.`, `"${title}" yayında. Birkaç kişi fark etti. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`"${title}" went out quietly, like a letter without a stamp. ${fans} new fans.`, `"${title}" pulsuz bir mektup gibi sessizce çıktı. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`Your mother played "${title}" for the neighbours twice. ${fans} new fans, mostly them.`, `Annen "${title}" şarkısını komşulara iki kez dinletti. ${fans} yeni hayran; çoğu onlar.`],
+  ({ title, fans }) => [`"${title}" is out. The comment section is empty but polite. ${fans} new fans.`, `"${title}" çıktı. Yorum bölümü boş ama kibar. ${fans} yeni hayran.`],
+];
+const SINGLE_MID: ((v: SingleV) => Pair)[] = [
+  ({ title, fans }) => [`"${title}" got a local radio spot and a playlist or two. ${fans} new fans.`, `"${title}" yerel radyoda ve birkaç listede yer buldu. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`People hummed "${title}" in a queue at the bakery. ${fans} new fans.`, `İnsanlar fırın kuyruğunda "${title}" şarkısını mırıldandı. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`A student radio host called "${title}" "a grower". ${fans} new fans.`, `Bir öğrenci radyocusu "${title}" için "dinledikçe açılan bir şarkı" dedi. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`"${title}" crept up the charts of a country you have never been to. ${fans} new fans.`, `"${title}" hiç gitmediğin bir ülkenin listelerinde yavaşça yükseldi. ${fans} yeni hayran.`],
+];
+const SINGLE_HIGH: ((v: SingleV) => Pair)[] = [
+  ({ title, fans }) => [`You released "${title}". Radio stations picked it up! ${fans} new fans.`, `"${title}" yayında. Radyolar çalmaya başladı! ${fans} yeni hayran.`],
+  ({ title, fans }) => [`"${title}" was in every taxi by the weekend. ${fans} new fans.`, `"${title}" hafta sonuna kadar her taksideydi. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`A stranger on a train asked whether you knew "${title}". You said you had heard of it. ${fans} new fans.`, `Trendeki bir yabancı "${title}" şarkısını bilip bilmediğini sordu. Duymuş olduğunu söyledin. ${fans} yeni hayran.`],
+  ({ title, fans }) => [`"${title}" was used at a wedding, a funeral and an advert, in that order. ${fans} new fans.`, `"${title}" sırasıyla bir düğünde, bir cenazede ve bir reklamda çaldı. ${fans} yeni hayran.`],
 ];
 const ACTING_CLASS: Pair[] = [
   ['Your acting coach made you be a tree for an hour.', 'Oyunculuk hocan bir saat boyunca ağaç olmanı istedi.'],
@@ -650,6 +686,16 @@ const MEET_FANS: ((n: string) => Pair)[] = [
   (n) => [`Fans brought you homemade cakes. You ate a slice of each and regretted nothing. ${n} new fans.`, `Hayranların sana ev yapımı kekler getirdi. Her birinden bir dilim yedin, hiç pişman değilsin. ${n} yeni hayran.`],
   (n) => [`The signing ran so long the shop closed around you. ${n} new fans and a very patient manager.`, `İmza günü o kadar uzadı ki dükkân etrafında kapandı. ${n} yeni hayran ve çok sabırlı bir müdür.`],
 ];
+
+/** The songs an album would take: 3+ unreleased ones, or (no new material) the best 5 released ones as a compilation. */
+function albumTracks(c: Ctx) {
+  const f = fameState(c.p);
+  const fresh = f.songs.filter((s) => !s.released);
+  if (fresh.length >= 3) return fresh;
+  const out = f.songs.filter((s) => s.released);
+  const onAlbums = f.albums.filter((a) => a.title === 'Greatest Hits' && c.s.year - a.year < 6).length;
+  return out.length >= 5 && !onAlbums ? [...out].sort((a, b) => b.quality - a.quality).slice(0, 5) : [];
+}
 
 const activities: ActivityDef[] = [
   {
@@ -692,10 +738,10 @@ const activities: ActivityDef[] = [
       const title = songTitle(c);
       f.songs.push({ title, quality: q, year: c.s.year, released: false });
       if (c.lang === 'tr') {
-        const v = q >= 80 ? 'Hit olabilir.' : q >= 60 ? 'Gayet iyi.' : q >= 40 ? 'Fena değil.' : 'Kötü. Yani gerçekten çok kötü.';
+        const v = q >= 80 ? 'Hit olabilir.' : q >= 65 ? 'Gayet iyi.' : q >= 50 ? 'Fena değil.' : q >= 35 ? 'İdare eder.' : q >= 20 ? 'Zayıf.' : 'Kötü. Yani gerçekten çok kötü.';
         return `"${title}" adında bir şarkı yazdın (kalite ${q}). ${v}`;
       }
-      const verdict = q >= 80 ? 'It might be a hit.' : q >= 60 ? 'It is pretty good.' : q >= 40 ? 'It is fine.' : 'It is bad. Like, really bad.';
+      const verdict = q >= 80 ? 'It might be a hit.' : q >= 65 ? 'It is pretty good.' : q >= 50 ? 'It is fine.' : q >= 35 ? 'It is rough, but it has a spark.' : q >= 20 ? 'It is weak.' : 'It is bad. Like, really bad.';
       return `You wrote a song called "${title}" (quality ${q}). ${verdict}`;
     },
   },
@@ -742,31 +788,37 @@ const activities: ActivityDef[] = [
       song.released = true;
       song.year = c.s.year;
       const g = gainFans(c, f, (song.quality ** 2 / 10) * (1 + f.fans / 20000) * (f.label === 'major' ? 2 : f.label ? 1.3 : 1));
-      return c.t(
-        `You released "${song.title}". ${song.quality >= 70 ? 'Radio stations picked it up!' : 'A few people noticed.'} ${compact(c, g)} new fans.`,
-        `"${song.title}" yayında. ${song.quality >= 70 ? 'Radyolar çalmaya başladı!' : 'Birkaç kişi fark etti.'} ${compact(c, g)} yeni hayran.`,
-      );
+      const tier = song.quality >= 70 ? SINGLE_HIGH : song.quality >= 45 ? SINGLE_MID : SINGLE_LOW;
+      return sayWith(c, song.quality >= 70 ? 'fame_single.high' : song.quality >= 45 ? 'fame_single.mid' : 'fame_single.low', tier, { title: song.title, fans: compact(c, g) });
     },
   },
   {
     id: 'fame_album',
     label: (c) => c.t('Record an album', 'Albüm kaydet'),
-    description: (c) => c.t('Needs 4 unreleased songs', 'Çıkmamış 4 şarkı gerekir'),
+    description: (c) => c.t('Needs 3 unreleased songs, or a "greatest hits" of 5 released ones', 'Çıkmamış 3 şarkı ya da yayınlanmış 5 şarkıyla "en iyiler" albümü gerekir'),
     group: 'Fame',
     minAge: 15,
-    available: (c) => isPath(c, 'music') && fameState(c.p).songs.filter((s) => !s.released).length >= 4 && free(c),
+    available: (c) => isPath(c, 'music') && albumTracks(c).length > 0 && free(c),
     run: (c) => {
       const f = fameState(c.p);
-      const tracks = f.songs.filter((s) => !s.released);
+      const tracks = albumTracks(c);
+      const compilation = tracks.every((s) => s.released);
       const quality = Math.round(tracks.reduce((a, s) => a + s.quality, 0) / tracks.length);
       const cost = f.label ? 0 : wage(c, 4000);
       c.h.money(-cost);
       tracks.forEach((s) => (s.released = true));
-      const title = tracks.sort((a, b) => b.quality - a.quality)[0].title;
-      const sales = Math.round((quality ** 2 / 50) * (1 + Math.sqrt(f.fans / 50000)) * (f.label === 'major' ? 2.5 : f.label ? 1.4 : 1));
+      const title = compilation ? 'Greatest Hits' : [...tracks].sort((a, b) => b.quality - a.quality)[0].title;
+      // a compilation of songs people already own sells a good deal less
+      const sales = Math.round((quality ** 2 / 50) * (1 + Math.sqrt(f.fans / 50000)) * (f.label === 'major' ? 2.5 : f.label ? 1.4 : 1) * (compilation ? 0.5 : 1));
       f.albums.push({ title, year: c.s.year, quality, sales });
       const g = gainFans(c, f, sales * 40);
       c.h.money(wage(c, sales * (f.label === 'major' ? 400 : 800)));
+      if (compilation) {
+        return c.t(
+          `You put out a greatest-hits record (quality ${quality}). It sold ${compact(c, sales * 1000)} copies to people who owned most of it already, and brought ${compact(c, g)} new fans.${cost ? ` Recording cost ${c.h.fmt(cost)}.` : ''}`,
+          `Bir "en iyiler" albümü çıkardın (kalite ${quality}). Çoğuna zaten sahip olan dinleyicilere ${compact(c, sales * 1000)} adet sattı ve ${compact(c, g)} yeni hayran getirdi.${cost ? ` Kayıt masrafı ${c.h.fmt(cost)}.` : ''}`,
+        );
+      }
       return c.t(
         `You released the album "${title}" (quality ${quality}). It sold ${compact(c, sales * 1000)} copies and brought ${compact(c, g)} new fans.${cost ? ` Recording cost ${c.h.fmt(cost)}.` : ''}`,
         `"${title}" albümünü çıkardın (kalite ${quality}). ${compact(c, sales * 1000)} adet sattı ve ${compact(c, g)} yeni hayran getirdi.${cost ? ` Kayıt masrafı ${c.h.fmt(cost)}.` : ''}`,

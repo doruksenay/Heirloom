@@ -26,10 +26,10 @@ const screens = inEra('screens');
 const warm = inEra('warm');
 const mend = inEra('mend');
 const shore = inEra('shore');
-const E = { category: 'random', weight: 7 } as const;
-const W = { category: 'work', weight: 7 } as const;
-const F = { category: 'family', weight: 7 } as const;
-const HL = { category: 'health', weight: 7 } as const;
+const E = { category: 'random', weight: 14 } as const;
+const W = { category: 'work', weight: 12 } as const;
+const F = { category: 'family', weight: 14 } as const;
+const HL = { category: 'health', weight: 12 } as const;
 
 const ERA_EVENTS: QuickEvent[] = [
   // ================================================================ 2026-2039: the quiet screens
@@ -297,4 +297,102 @@ const ERA_EVENTS: QuickEvent[] = [
   },
 ];
 
-export const eraEvents: EventDef[] = ERA_EVENTS.map(quickEvent);
+// -------- the events with a past: an heir (a later generation) meets the era through what the family has handed down
+/** Not the first generation: someone before you lived in an earlier era. */
+export const isHeir = (c: Ctx) => c.s.dynasty.generation > 1;
+const keeps = (c: Ctx) => c.s.dynasty.heirlooms.length > 0;
+const HEIR = { category: 'family', weight: 16, cooldown: 12, when: isHeir } as const;
+
+const HEIR_EVENTS: QuickEvent[] = [
+  {
+    ...HEIR, id: 'era.founder_photo', ages: [18, 100], once: true,
+    title: ['An old photograph turns up of the founder of the family.', 'Ailenin kurucusunun eski bir fotoğrafı çıkıyor.'],
+    text: ['A stiff pose, a borrowed jacket and a look that says the photographer is making them late. You would know the chin anywhere.', 'Dimdik bir poz, ödünç bir ceket ve fotoğrafçının onları geciktirdiğini söyleyen bir bakış. O çeneyi her yerde tanırsın.'],
+    options: [
+      { id: 'frame', label: ['Have it framed and hung', 'Çerçeveletip as'], usd: -40, stats: { happiness: 3 }, legacy: 3, tone: 'good', result: ['It hangs in the hall now. Visitors say “who’s that?”, and you get to tell a story from before the world was like this.', 'Artık koridorda asılı. Misafirler “Bu kim?” diyor; sen de dünyanın böyle olmadığı bir zamandan bir hikâye anlatıyorsun.'] },
+      { id: 'scan', label: ['Scan it for the family archive', 'Aile arşivi için tara'], stats: { smarts: 1, happiness: 2 }, legacy: 2, result: ['The scanner hummed over a face that had never imagined scanners. You zoomed in on the jacket and found a button missing.', 'Tarayıcı, tarayıcıları hiç hayal etmemiş bir yüzün üstünde uğuldadı. Ceketi büyüttün; bir düğme eksikti.'] },
+      { id: 'drawer', label: ['Put it back in the drawer', 'Çekmeceye geri koy'], result: ['The drawer is a kind of time machine, and it only goes one way.', 'Çekmece bir tür zaman makinesi ve yalnızca tek yöne gidiyor.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.heirloom_new_world', ages: [20, 100], when: (c) => isHeir(c) && keeps(c),
+    title: ['The family heirloom looks out of place in the new decade.', 'Aile yadigârı yeni on yılda yersiz görünüyor.'],
+    text: ['Everything around it is smooth and quiet. It is scratched, a little loud and entirely certain of itself.', 'Çevresindeki her şey pürüzsüz ve sessiz. O ise çizik, biraz gürültülü ve kendinden tamamen emin.'],
+    options: [
+      { id: 'center', label: ['Give it pride of place on the shelf', 'Rafta baş köşeye koy'], stats: { happiness: 3 }, legacy: 3, tone: 'good', result: ['You moved the clever gadgets aside. It looked as if it had been waiting for this, which in a way it had.', 'Akıllı gereçleri kenara ittin. Sanki bunu bekliyormuş gibi göründü; bir bakıma gerçekten bekliyordu.'] },
+      { id: 'use', label: ['Use it, properly, in daily life', 'Gündelik hayatta, düzgünce kullan'], stats: { happiness: 2, health: 1 }, legacy: 2, result: ['Things are best remembered when they are handled. It worked a little worse than the new ones and meant a great deal more.', 'Şeyler en iyi, ellendiklerinde hatırlanır. Yenilerinden biraz daha kötü çalıştı ve çok daha fazla şey ifade etti.'] },
+      { id: 'safe', label: ['Wrap it up and keep it safe', 'Sar ve güvenli bir yerde sakla'], stats: { happiness: 1 }, result: ['It went back in its cloth. Some things belong to the future precisely because nobody touches them.', 'Bezine geri sarıldı. Bazı şeyler tam da kimse dokunmadığı için geleceğe aittir.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.recipe_decade', ages: [20, 100],
+    title: ['The family recipe meets a new kind of kitchen.', 'Aile tarifi yeni tür bir mutfakla tanışıyor.'],
+    text: ['The old method says “until it looks right”. The new oven offers six hundred settings and no opinion.', 'Eski yöntem “doğru görününce” diyor. Yeni fırın altı yüz ayar sunuyor ama fikri yok.'],
+    options: [
+      { id: 'old', label: ['Cook it exactly the old way', 'Tam eski usulde pişir'], stats: { happiness: 3 }, legacy: 2, tone: 'good', result: ['It took twice as long and filled the flat with a smell that made a visitor stop mid-sentence. Nothing else did that.', 'İki kat uzun sürdü ve evi, bir misafirin cümlesini yarıda kestiği bir kokuyla doldurdu. Başka hiçbir şey bunu yapmıyor.'] },
+      { id: 'mix', label: ['Adapt it to the new kitchen', 'Yeni mutfağa uyarla'], stats: { happiness: 2, smarts: 1 }, legacy: 1, result: ['Half of the recipe survived and half was improved. Both halves claimed the credit.', 'Tarifin yarısı hayatta kaldı, yarısı iyileşti. İki yarı da övgüyü üstlendi.'] },
+      { id: 'order', label: ['Order something and call it tradition', 'Bir şey söyle ve adına gelenek de'], usd: 0, stats: { happiness: 1 }, result: ['It arrived in a bag that was warm and slightly smug. Nobody argued.', 'Sıcak ve hafif kendini beğenmiş bir poşette geldi. Kimse itiraz etmedi.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.parents_voice', ages: [22, 100], once: true,
+    title: ['You find a recording of an earlier generation’s voice.', 'Önceki kuşaktan birinin sesinin kaydını buluyorsun.'],
+    text: ['Thirty seconds of a kitchen, a kettle and someone laughing at something off-camera. The words are not important. The laugh is.', 'Otuz saniyelik bir mutfak, bir çaydanlık ve kamera dışında bir şeye gülen biri. Sözler önemli değil. Kahkaha önemli.'],
+    options: [
+      { id: 'loop', label: ['Play it again and again', 'Tekrar tekrar dinle'], stats: { happiness: 3 }, tone: 'good', result: ['By the tenth time you could hum the kettle. The room felt as if somebody had walked through it.', 'Onuncu seferde çaydanlığı mırıldanabiliyordun. Oda, biri içinden geçmiş gibi hissettirdi.'] },
+      { id: 'share', label: ['Send it to the rest of the family', 'Ailenin geri kalanına gönder'], stats: { happiness: 2 }, legacy: 3, closeness: { kinds: ['sibling', 'child', 'mother', 'father', 'grandparent'], delta: 3 }, result: ['Replies arrived all evening, mostly one word long, mostly a laugh. That was the right answer.', 'Bütün akşam cevaplar geldi; çoğu bir kelimelik, çoğu bir kahkaha. Doğru cevap buydu.'] },
+      { id: 'pause', label: ['Keep it for a quieter day', 'Daha sakin bir gün için sakla'], result: ['It sits in a folder named “later”, which is the best-kept place in any house.', '“Sonra” adlı bir klasörde duruyor; bir evin en iyi korunan yeri.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.old_address', ages: [22, 100], once: true,
+    title: ['You visit the street where the family began.', 'Ailenin başladığı sokağı ziyaret ediyorsun.'],
+    text: ['The house is gone, or changed beyond saying. A shop, a tree and a gap where something was.', 'Ev yok, ya da söylenemeyecek kadar değişmiş. Bir dükkân, bir ağaç ve bir şeyin durduğu boşluk.'],
+    options: [
+      { id: 'walk', label: ['Walk it slowly and ask the old shopkeeper', 'Yavaş yavaş yürü, yaşlı dükkâncıya sor'], stats: { happiness: 3, smarts: 1 }, legacy: 3, tone: 'good', result: ['He remembered the family’s name, or said he did, which is the same thing on a street like that. He gave you an apple.', 'Ailenin adını hatırladı ya da hatırlıyormuş gibi yaptı; böyle bir sokakta aynı şey. Sana bir elma verdi.'] },
+      { id: 'photo', label: ['Take a photograph from the corner', 'Köşeden bir fotoğraf çek'], stats: { happiness: 2 }, legacy: 2, result: ['Standing where they stood, you took the same photograph in a different century.', 'Onların durduğu yerde durup aynı fotoğrafı başka bir yüzyılda çektin.'] },
+      { id: 'home', label: ['Drive past without stopping', 'Durmadan geç'], stats: { happiness: -1 }, result: ['The window was a screen between you and the street. You were nearly there, and that was all.', 'Pencere seninle sokak arasında bir ekrandı. Neredeyse oradaydın, hepsi bu.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.time_capsule', ages: [25, 100], once: true,
+    title: ['A time capsule from your family’s past is opened.', 'Ailenin geçmişinden bir zaman kapsülü açılıyor.'],
+    text: ['A tin box, buried under a tree by someone who clearly expected the future to be sillier. They were right.', 'Bir ağacın altına, geleceğin daha saçma olacağını beklediği belli biri tarafından gömülmüş teneke bir kutu. Haklıymış.'],
+    options: [
+      { id: 'read', label: ['Read the note inside aloud', 'İçindeki notu yüksek sesle oku'], stats: { happiness: 4 }, legacy: 4, closeness: { kinds: ['child', 'sibling', 'partner', 'spouse'], delta: 2 }, tone: 'good', result: ['“To whoever finds this: I hope you have solved the stairs.” You laughed until you had to sit down on the box.', '“Bunu bulana: Umarım merdivenleri çözmüşsünüzdür.” Kutunun üstüne oturmak zorunda kalana dek güldün.'] },
+      { id: 'add', label: ['Add a note of your own and reseal it', 'Kendi notunu ekle ve yeniden mühürle'], usd: -15, stats: { happiness: 3 }, legacy: 4, result: ['You wrote “Still no solution to the stairs.” The next generation will have to forgive you.', '“Merdivenlere hâlâ çözüm yok.” yazdın. Bir sonraki kuşak seni affetmek zorunda kalacak.'] },
+      { id: 'museum', label: ['Give it to the local museum', 'Yerel müzeye ver'], stats: { happiness: 1 }, legacy: 1, result: ['A curator accepted it with both hands. You got a certificate, which is not a note from the past, but is not nothing.', 'Bir küratör iki eliyle aldı. Bir belge verdiler; geçmişten bir not değil ama hiç de azımsanmaz.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.family_tree_wall', ages: [20, 100], cooldown: 15,
+    title: ['A screen in the hall shows the whole family tree.', 'Koridordaki bir ekran bütün soy ağacını gösteriyor.'],
+    text: ['Branches, dates and small faces, wherever there was a picture. It does not show the quarrels. You add those from memory.', 'Dallar, tarihler ve fotoğrafı olan yerlerde küçük yüzler. Kavgaları göstermiyor. Onları sen hafızandan ekliyorsun.'],
+    options: [
+      { id: 'fill', label: ['Fill in the missing names', 'Eksik isimleri doldur'], stats: { smarts: 1, happiness: 2 }, legacy: 3, tone: 'good', result: ['Three gaps, closed with the help of an aunt on the phone and a grandfather’s postcard. The tree got a little denser.', 'Üç boşluk, telefondaki bir teyzenin ve bir dedenin kartpostalının yardımıyla kapandı. Ağaç biraz sıklaştı.'] },
+      { id: 'look', label: ['Stand and look for a while', 'Bir süre durup bak'], stats: { happiness: 2 }, result: ['You found yourself, tiny and slightly pixelated, at the bottom of a very large tree.', 'Kendini çok büyük bir ağacın en altında, küçücük ve biraz pikselli buldun.'] },
+      { id: 'turn', label: ['Turn it off; it makes you feel small', 'Kapat; seni küçük hissettiriyor'], stats: { happiness: -1 }, result: ['The hall went dark and quiet. The tree went on, off-screen, as trees do.', 'Koridor karardı ve sessizleşti. Ağaç, ekranın dışında, ağaçların yaptığı gibi sürdü.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.same_chin', ages: [18, 100],
+    title: ['You catch yourself doing exactly what a parent used to do.', 'Bir ebeveyninin eskiden yaptığı şeyi aynen yaparken yakalıyorsun kendini.'],
+    text: ['The same sigh, the same hand on the back of the chair. Time has used the same pattern again.', 'Aynı iç çekiş, sandalyenin arkasında aynı el. Zaman aynı deseni yine kullanmış.'],
+    options: [
+      { id: 'laugh', label: ['Laugh and keep doing it', 'Gül ve yapmaya devam et'], stats: { happiness: 3 }, tone: 'good', result: ['The habit belongs to the family now. You will hand it down without meaning to, which is how all the best things travel.', 'Alışkanlık artık ailenin. Farkında olmadan devredeceksin; en iyi şeyler böyle yolculuk eder.'] },
+      { id: 'change', label: ['Try to do it differently', 'Farklı yapmayı dene'], stats: { smarts: 1, happiness: 1 }, result: ['You managed it for a week. On the eighth day the sigh came back, with an air of having never left.', 'Bir hafta başardın. Sekizinci gün iç çekiş, hiç gitmemiş gibi geri geldi.'] },
+    ],
+  },
+  {
+    ...HEIR, id: 'era.old_world_stories', ages: [30, 100],
+    title: ['Young people ask what the world was like before.', 'Gençler dünyanın daha önce nasıl olduğunu soruyor.'],
+    text: ['You answer from your own memory and from what you were told, and the two have by now become indistinguishable.', 'Kendi hafızandan ve sana anlatılanlardan cevap veriyorsun; ikisi artık birbirinden ayırt edilemiyor.'],
+    options: [
+      { id: 'tell', label: ['Tell them about your grandparents’ world as if you were there', 'Büyüklerinin dünyasını oradaymışsın gibi anlat'], stats: { happiness: 3 }, legacy: 3, tone: 'good', result: ['You added a detail or two. Nobody can check, and the stories improved.', 'Bir iki ayrıntı ekledin. Kimse doğrulayamaz; hikâyeler güzelleşti.'] },
+      { id: 'plain', label: ['Tell them only what you know for certain', 'Sadece kesin bildiklerini anlat'], stats: { smarts: 1, happiness: 1 }, legacy: 1, result: ['It was a short talk. They asked a good question at the end that you could not answer, and you promised to find out.', 'Kısa bir konuşma oldu. Sonunda cevaplayamadığın güzel bir soru sordular; öğrenmeye söz verdin.'] },
+      { id: 'ask', label: ['Say you will ask an older relative together', 'Birlikte yaşlı bir akrabaya sorarız de'], stats: { happiness: 3 }, closeness: { kinds: ['grandparent', 'mother', 'father', 'sibling'], delta: 3 }, legacy: 2, tone: 'good', result: ['The call took all afternoon. The young ones came away with a story and, unexpectedly, a recipe.', 'Görüşme bütün öğleden sonrayı aldı. Gençler bir hikâye ve beklenmedik biçimde bir tarifle ayrıldı.'] },
+    ],
+  },
+];
+
+export const eraEvents: EventDef[] = [...ERA_EVENTS, ...HEIR_EVENTS].map(quickEvent);

@@ -5,6 +5,7 @@ import { cityName, isCoastal } from '../../engine/places';
 import { MAX_HIRE_AGE, abl, acc, cap, dat, gen, kin, loc, single, wage, wth } from './util';
 import { workKey, workPool } from './work-lines';
 import { inPrison, say, sayWith, type Pair } from './lines';
+import { hasPet } from './activities-home';
 import { ABROAD_CITIES, aNum, isAbroad } from './events-flavour';
 import { gkAge, grandkids } from './events-elder';
 
@@ -421,9 +422,13 @@ const PARTNER_NEW: ((x: PartnerX) => Pair)[] = [
   ({ n }) => [`You and ${n} walked around the city until your feet hurt and neither of you wanted to go home.`, `${wth(n)} ayaklarınız ağrıyana kadar şehri dolaştınız; ikiniz de eve dönmek istemedi.`],
   ({ n }) => [`You and ${n} tried a dance class together. You stepped on each other equally, which felt fair.`, `${wth(n)} birlikte dans dersine gittiniz. Eşit sayıda birbirinizin ayağına bastınız; adil geldi.`],
   ({ n }) => [`You and ${n} made a playlist together: half your songs, half ${n}'s, and one you both hate but keep.`, `${wth(n)} birlikte bir çalma listesi yaptınız. Yarısı senin, yarısı onun şarkıları; bir de ikinizin de nefret edip silmediği bir şarkı.`],
-  ({ n }) => [`${n} met your friends. Your friends approved, loudly, in front of ${n}.`, `${n} arkadaşlarınla tanıştı. Arkadaşların onayladı; hem de yüksek sesle, onun önünde.`],
   ({ n }) => [`You and ${n} spent a rainy Sunday doing a puzzle and talking about nothing. It was everything.`, `${wth(n)} yağmurlu bir pazarı yapboz yaparak ve boş şeyler konuşarak geçirdiniz. Her şeydi.`],
   ({ n }) => [`You and ${n} got lost on a day trip and found the best café of your lives by accident.`, `${wth(n)} günübirlik bir gezide kaybolup tesadüfen hayatınızın en güzel kafesini buldunuz.`],
+];
+
+/** Only fits the first year or so of a relationship. */
+const PARTNER_FIRST_YEAR: ((x: PartnerX) => Pair)[] = [
+  ({ n }) => [`${n} met your friends. Your friends approved, loudly, in front of ${n}.`, `${n} arkadaşlarınla tanıştı. Arkadaşların onayladı; hem de yüksek sesle, onun önünde.`],
 ];
 
 /** Married, under 25 years. */
@@ -493,10 +498,14 @@ const PARENTS_MINOR: ((x: ParentX) => Pair)[] = [
   ({ k, accK, n }) => [`You called your ${k} to ask where your sports kit was. ${n} knew. ${n} always knows.`, `Eşofmanın nerede diye ${accK} aradın. ${n} biliyordu. ${n} her zaman bilir.`],
   ({ k, accK, n, obj }) => [`You called your ${k} to tell ${obj} a joke you heard at school. ${n} laughed at the wrong part.`, `Okulda duyduğun bir fıkrayı anlatmak için ${accK} aradın. ${n} yanlış yerde güldü.`],
   ({ k, accK }) => [`You called your ${k} from a school trip. You mostly talked about the food on the bus.`, `Okul gezisinden ${accK} aradın. Çoğunlukla otobüste yediklerini anlattın.`],
-  ({ k, accK }) => [`You called your ${k} to ask if you could get a pet. The answer was "we'll see", which means no.`, `Evcil hayvan alıp alamayacağınızı sormak için ${accK} aradın. Cevap "Bakarız" oldu; yani hayır.`],
   ({ k, accK }) => [`You called your ${k} from a sleepover and reported everything you were allowed to eat there.`, `Pijama partisinden ${accK} aradın ve orada yemene izin verilen her şeyi tek tek rapor ettin.`],
   ({ k, accK, obj }) => [`You called your ${k} because you missed ${obj}. You said it was about homework.`, `${cap(accK)} özlediğin için aradın. Ödev için aradığını söyledin.`],
   ({ k, accK, n }) => [`You called your ${k} to ask what was for dinner. ${n} said "food". The classic answer.`, `Akşama ne yemek olduğunu sormak için ${accK} aradın. ${n} "Yemek" dedi. Klasik cevap.`],
+];
+
+/** Only for a player who has no pet yet. */
+const PARENTS_MINOR_PET: ((x: ParentX) => Pair)[] = [
+  ({ k, accK }) => [`You called your ${k} to ask if you could get a pet. The answer was "we'll see", which means no.`, `Evcil hayvan alıp alamayacağınızı sormak için ${accK} aradın. Cevap "Bakarız" oldu; yani hayır.`],
 ];
 
 /** Adult child, parent under 75. */
@@ -749,7 +758,7 @@ interface BabyX {
 const BABY_MORE_SMALL: ((x: BabyX) => Pair)[] = [
   () => ['No new baby this year. The cot stays in the loft a little longer.', 'Bu yıl yeni bebek yok. Beşik bir süre daha tavan arasında kalacak.'],
   ({ k }) => [`Not this year. ${k} had asked for a little brother or sister "or a dog". Nobody got either.`, `Bu yıl olmadı. ${k} bir kardeş "ya da bir köpek" istemişti. İkisi de gelmedi.`],
-  ({ n }) => [`No baby this year. ${n} said, "Our hands are full already." Your hands agreed.`, `Bu yıl bebek yok. ${n} "Zaten elimiz kolumuz dolu" dedi. Ellerin de katıldı.`],
+  ({ n }) => [`No baby this year. ${n} said, "Our hands are full already." Your hands agreed.`, `Bu yıl bebek yok. ${n} "Zaten elimiz kolumuz dolu" dedi. Ellerin de aynı fikirdeydi.`],
   ({ k }) => [`Not this year. You looked through ${k}'s old baby clothes and kept them anyway. Just in case.`, `Bu yıl olmadı. ${gen(k)} eski bebek kıyafetlerine baktın ve yine de sakladın. Ne olur ne olmaz.`],
   () => ['No news this year. Another one would be lovely; the ones you have already make plenty of noise.', 'Bu yıl haber yok. Bir tane daha güzel olurdu; ama evdekiler zaten yeterince gürültü yapıyor.'],
   ({ k }) => [`No baby this year. ${k} drew the family with one extra, very small person in it. Hopeful.`, `Bu yıl bebek yok. ${k} bir aile resmi çizdi; içinde fazladan, minicik biri vardı. Umutlu.`],
@@ -866,6 +875,9 @@ const KID_LINES: Record<KidBucket, ((x: KidX) => Pair)[]> = {
 
 /** Years since an event last came up (large when never). */
 const sinceEvent = (c: Ctx, id: string) => (c.p.eventLastAge[id] === undefined ? 99 : c.age - c.p.eventLastAge[id]);
+
+/** "Try for a baby" closes once the family has this many children. */
+const MAX_KIDS_TRYING = 6;
 
 export const baseActivities: ActivityDef[] = [
   // ------------------------------------------------ Mind & Body
@@ -1051,7 +1063,8 @@ export const baseActivities: ActivityDef[] = [
       c.h.stat('happiness', 3);
       const bucket = partnerBucket(c, p.rel.kind, p.rel.sinceYear, c.h.ageOf(p.person));
       const x: PartnerX = { n: p.person.firstName, his: c.h.his(p.person), city: c.p.city, cityTr: cityTr(c), coastal: coastal(c) };
-      const lines = bucket === 'new' ? PARTNER_NEW : bucket === 'married' ? PARTNER_MARRIED : PARTNER_LONG;
+      const fresh = c.s.year - p.rel.sinceYear <= 1;
+      const lines = bucket === 'new' ? (fresh ? [...PARTNER_NEW, ...PARTNER_FIRST_YEAR] : PARTNER_NEW) : bucket === 'married' ? PARTNER_MARRIED : PARTNER_LONG;
       return sayWith(c, `partner_time.${bucket}`, lines, x);
     },
   },
@@ -1074,6 +1087,7 @@ export const baseActivities: ActivityDef[] = [
     available: (c) => {
       const p = c.h.partner();
       if (!p) return false;
+      if (c.h.relatives('child').length >= MAX_KIDS_TRYING) return false; // seven is a big family; the activity closes
       const herAge = c.p.gender === 'female' ? c.age : c.h.ageOf(p.person);
       return (c.p.gender === 'female' || p.person.gender === 'female') && herAge <= 45;
     },
@@ -1112,7 +1126,7 @@ export const baseActivities: ActivityDef[] = [
         obj: him(r.person),
         age: c.age,
       };
-      if (c.age < 18) return sayWith(c, 'call_parents.minor', PARENTS_MINOR, x);
+      if (c.age < 18) return sayWith(c, 'call_parents.minor', hasPet(c) ? PARENTS_MINOR : [...PARENTS_MINOR, ...PARENTS_MINOR_PET], x);
       if (c.h.ageOf(r.person) >= 75) return sayWith(c, 'call_parents.old', PARENTS_OLD, x);
       return sayWith(c, 'call_parents', PARENTS_ADULT, x);
     },

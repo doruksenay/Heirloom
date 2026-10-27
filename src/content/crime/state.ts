@@ -6,7 +6,7 @@ import { aOrAn, cap, kin, kinWord } from '../base/util';
 // Shared state and justice helpers for the Crime World pack.
 
 /** No single sentence is longer than this. */
-export const MAX_SENTENCE = 12;
+export const MAX_SENTENCE = 8;
 /** Jail time never stacks above this, whatever happens inside. */
 export const MAX_JAIL = 15;
 
@@ -27,6 +27,8 @@ export type CrimeKey = keyof typeof CRIMES;
 export const isCrimeKey = (k: unknown): k is CrimeKey => typeof k === 'string' && k in CRIMES;
 
 export interface CrimeState {
+  /** How often a repeatable crime event has come up this life (burglary, knockoffs, car theft, cellmates). */
+  visits?: Record<string, number>;
   /** 0..100: how hard the police are looking at you. Cools down every year. */
   heat: number;
   /** Arrested and out on bail; the trial comes next year. */
@@ -103,6 +105,26 @@ export const goneStraight = (c: Ctx, years: number) => {
 
 export const crimeName = (c: Ctx, k: CrimeKey) => c.t(CRIMES[k].en, CRIMES[k].tr.toLocaleLowerCase('tr'));
 
+/** Counts a visit of a repeatable event and returns how many came before (0 the first time). No RNG. */
+export function visit(c: Ctx, id: string): number {
+  const st = crimeState(c.p);
+  st.visits ??= {};
+  const n = st.visits[id] ?? 0;
+  st.visits[id] = n + 1;
+  return n;
+}
+export const visitsOf = (p: Player, id: string) => peekCrime(p)?.visits?.[id] ?? 0;
+/** The most times a petty crime (burglary, knockoffs, car theft) is offered in one life: after that the ladder moves on. */
+export const PETTY_VISITS = 3;
+
+/** If a planned heist is scrapped (arrest, conviction), the line that says so. */
+function scrapped(c: Ctx): string {
+  const st = crimeState(c.p);
+  if (!st.heist) return '';
+  st.heist = null;
+  return c.t(' The job you were planning is off: the crew has stopped answering.', ' Planladığın iş suya düştü: ekip telefonlara bakmıyor.');
+}
+
 /** Rolls a sentence for a crime (one RNG call). */
 export const sentenceFor = (c: Ctx, k: CrimeKey) => c.rng.int(CRIMES[k].min, CRIMES[k].max);
 
@@ -163,6 +185,7 @@ export function convict(c: Ctx, years: number, crime: string, crimeTr: string): 
     folded += c.t(' They also found the old warrant with your name on it.', ' Adına çıkmış eski yakalama kararı da dosyaya eklendi.');
   }
   years = Math.max(1, Math.min(MAX_SENTENCE, years));
+  folded += scrapped(c);
   addJail(c, years);
   c.p.criminalRecord++;
   st.lastCrimeYear = c.s.year;
@@ -208,13 +231,13 @@ export function arrest(c: Ctx, k: CrimeKey, extraYears = 0): string {
   if (st.charge || st.fugitive || c.p.jailYears > 0) return convictFor(c, k, years);
   st.charge = { crime: k, years, year: c.s.year };
   st.heat = 0;
-  st.heist = null;
+  const lost = scrapped(c);
   st.lastCrimeYear = c.s.year;
   c.h.stat('happiness', -8);
   const bail = Math.round(1500 * years * getCountry(c.p.countryId).wageFactor);
   const parent = c.h.relatives(['mother', 'father']).sort((a, b) => b.rel.closeness - a.rel.closeness)[0];
   const crime = crimeName(c, k);
-  const head = c.t(`You were arrested for ${crime}.`, `${CRIMES[k].tr} şüphesiyle tutuklandın.`);
+  const head = c.t(`You were arrested for ${crime}.${lost}`, `${CRIMES[k].tr} şüphesiyle tutuklandın.${lost}`);
   if (c.p.money >= bail || !parent) {
     c.h.money(-bail);
     return `${head} ${c.t(

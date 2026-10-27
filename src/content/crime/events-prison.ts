@@ -1,6 +1,6 @@
 import type { EventDef } from '../types';
 import { cap, kin, nm } from '../base/util';
-import { addJail, crimeState, inside, release } from './state';
+import { addJail, crimeState, inside, release, visit, visitsOf } from './state';
 import { say, type Pair } from '../base/lines';
 import { inTr } from '../base/events-flavour';
 import type { RelationKind } from '../../engine/types';
@@ -148,12 +148,28 @@ export const prisonEvents: EventDef[] = [
     id: 'crime.cellmate',
     category: 'crime',
     cooldown: 6,
-    when: inside,
+    // three cellmates are a story; a fourth is a loop
+    when: (c) => inside(c) && visitsOf(c.p, 'cellmate') < 3,
     setup: (c) => {
+      c.vars.visit = visit(c, 'cellmate');
       c.vars.pid = c.h.newPerson({ gender: c.p.gender, age: Math.max(20, c.age + c.rng.int(-5, 25)) }).id;
     },
-    title: (c) => c.t(`You have a new cellmate: ${nm(c)}.`, `Yeni koğuş arkadaşın: ${nm(c)}.`),
-    text: (c) => c.t(`${nm(c)} swears to be innocent and has already rearranged your shelf.`, `${nm(c)} masum olduğuna yemin ediyor ve rafını çoktan yeniden düzenlemiş.`),
+    title: (c) => {
+      const v = Number(c.vars.visit ?? 0);
+      return v === 0
+        ? c.t(`You have a new cellmate: ${nm(c)}.`, `Yeni koğuş arkadaşın: ${nm(c)}.`)
+        : v === 1
+          ? c.t(`The cell is full again: ${nm(c)} moves in.`, `Hücre yine doldu: ${nm(c)} taşınıyor.`)
+          : c.t(`Another stretch inside, another stranger: ${nm(c)}.`, `Yine içeridesin, yine bir yabancı: ${nm(c)}.`);
+    },
+    text: (c) => {
+      const v = Number(c.vars.visit ?? 0);
+      return v === 0
+        ? c.t(`${nm(c)} swears to be innocent and has already rearranged your shelf.`, `${nm(c)} masum olduğuna yemin ediyor ve rafını çoktan yeniden düzenlemiş.`)
+        : v === 1
+          ? c.t(`${nm(c)} has heard of you. Not everything they heard was kind, and all of it was accurate.`, `${nm(c)} seni duymuş. Duyduklarının hepsi nazik değildi, hepsi doğruydu.`)
+          : c.t(`${nm(c)} asks how many times you have been in. You say you stopped counting. You did not.`, `${nm(c)} kaç kez girdiğini soruyor. Saymayı bıraktığını söylüyorsun. Bırakmadın.`);
+    },
     choices: [
       {
         id: 'listen',

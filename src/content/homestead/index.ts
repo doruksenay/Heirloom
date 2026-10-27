@@ -1,7 +1,7 @@
 import type { ActivityDef, ContentPack, Ctx } from '../types';
 import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
-import type { Player } from '../../engine/types';
+import type { GameState, Player } from '../../engine/types';
 import { say, type Pair } from '../base/lines';
 import { wage } from '../base/util';
 import { homesteadEvents } from './events';
@@ -33,16 +33,31 @@ const WORK: Pair[] = [
   ['You weeded, you watered and you talked to the beans. They were not indifferent.', 'Ot yolup suladın ve fasulyelerle konuştun. İlgisiz değillerdi.'],
   ['You mended a fence, sharpened a hoe and stood back with the quiet pride of a person who has fixed a small thing.', 'Bir çiti onardın, çapayı biledin ve küçük bir şeyi onarmış birinin sessiz gururuyla geri çekildin.'],
   ['A day of digging. The soil gave you a stone the shape of a heart. You put it on the windowsill.', 'Bir gün kazı. Toprak sana kalp biçiminde bir taş verdi. Pencere pervazına koydun.'],
+  ['You staked the tall beans and tied each one with a strip of old shirt. The rows looked like a small, leafy orchestra.', 'Uzun fasulyeleri kazığa bağladın, her birini eski bir gömlek şeridiyle. Sıralar küçük, yapraklı bir orkestraya benziyordu.'],
+  ['It rained at noon and you stayed out in it, planting, because the soil was finally the right kind of soft.', 'Öğlen yağmur yağdı ve sen toprak nihayet tam yumuşadığı için çıkmadın, ekim yaptın.'],
+  ['You turned the compost. It steamed in the cold like something alive, which it is, and you were absurdly proud of it.', 'Kompostu çevirdin. Soğukta canlı bir şey gibi buğulandı, ki öyle, ve onunla saçma derecede gurur duydun.'],
+  ['You spent an hour chasing a snail off the lettuces, and then another watching it go. You lost nothing but time.', 'Marulların üstünden bir salyangozu kovalamakla bir saat, gidişini izlemekle bir saat daha geçirdin. Zamandan başka bir şey kaybetmedin.'],
+  ['You sowed the late carrots, wrote the date on a lolly stick and pushed it into the soil like a flag on a very small country.', 'Geç havuçları ektin, tarihi bir çubuğa yazıp çok küçük bir ülkenin bayrağı gibi toprağa sapladın.'],
 ];
 const SELL: Pair[] = [
   ['You sold everything by ten, including a bunch of herbs that you had nearly kept for yourself.', 'Ona kadar her şeyi sattın; neredeyse kendine ayıracağın bir demet ot dahil.'],
   ['A regular asked for “the usual” and you were absurdly pleased to know what it was.', 'Bir müdavim “her zamankinden” istedi ve ne olduğunu bildiğin için saçma derecede memnun oldun.'],
   ['You talked to eleven people about beans. Two of them bought some.', 'On bir kişiyle fasulye hakkında konuştun. İkisi biraz aldı.'],
+  ['A child counted out the coins slowly, in ones, and then asked for a discount on the tomatoes. You gave it, and a plum.', 'Bir çocuk parayı yavaş yavaş, birer birer saydı, sonra domateste indirim istedi. Verdin; bir de erik ekledin.'],
+  ['It was too hot for customers until four. You sat in the shade of the stall and sold lemonade to your own conscience.', 'Dörde kadar müşteri için fazla sıcaktı. Tezgâhın gölgesinde oturup kendi vicdanına limonata sattın.'],
+  ['You sold out of strawberries in an hour and apologised to nine people who had come for them. They forgave you in advance.', 'Çilekler bir saatte bitti ve onlar için gelen dokuz kişiden özür diledin. Önceden affettiler.'],
+  ['A woman bought a single cucumber and stayed an hour to talk about her late husband. You gave her a second cucumber.', 'Bir kadın tek bir salatalık aldı ve rahmetli kocasından söz etmek için bir saat kaldı. Ona ikinci bir salatalık verdin.'],
+  ['You wrote the prices on a slate, misspelled “aubergine”, and decided to leave it. It sold well, as an act of charm.', 'Fiyatları bir yazı tahtasına yazdın, “patlıcan”ı yanlış yazdın ve öyle bırakmaya karar verdin. Bir çekicilik gösterisi gibi iyi sattı.'],
 ];
 const COOK: Pair[] = [
   ['You cooked a dinner out of the garden alone. The table fell quiet in the best way.', 'Yemeği tamamen bahçeden yaptın. Masa en güzel şekilde sustu.'],
   ['Everyone shelled peas on the porch while you stirred a pot. Nobody wanted to go home.', 'Sen tencereyi karıştırırken herkes sundurmada bezelye ayıkladı. Kimse eve gitmek istemedi.'],
   ['Soup from the cellar jars, bread from the oven, an apple from the tree. A whole winter on the table.', 'Mahzen kavanozlarından çorba, fırından ekmek, ağaçtan elma. Masada bütün bir kış.'],
+  ['You roasted whatever the garden had thrown at you that week: three peppers, a marrow, and a courgette the size of a baby.', 'Bahçenin o hafta üstüne attığı ne varsa kızarttın: üç biber, bir kabak ve bebek boyunda bir sakız kabağı.'],
+  ['A tart of the first plums. It collapsed slightly at the edge, which everyone agreed was how it should look.', 'İlk eriklerden bir turta. Kenarı hafifçe çöktü; herkes böyle görünmesi gerektiğinde anlaştı.'],
+  ['You made a big pan of beans with garlic and bread to wipe it. It took five hours and no skill at all.', 'Sarımsaklı büyük bir tava fasulye yaptın, silmek için ekmekle. Beş saat sürdü ve hiç beceri istemedi.'],
+  ['The table was too small for everyone, so you ate on the step with plates on your knees, and it was the better dinner.', 'Masa herkese küçük geldi; basamakta, tabaklar dizlerinizde yediniz ve daha güzel akşam yemeği buydu.'],
+  ['Pickled, salted, roasted, raw: five ways to eat a single cabbage. Nobody complained, which was almost suspicious.', 'Turşu, tuzlu, kızarmış, çiğ: tek bir lahanayı yemenin beş yolu. Kimse şikâyet etmedi; neredeyse şüphe uyandırıcıydı.'],
 ];
 
 const activities: ActivityDef[] = [
@@ -115,6 +130,14 @@ const goals: GoalDef[] = [
   { id: 'home_orchard', label: 'Plant an orchard', labelTr: 'Bir meyve bahçesi dik', check: (s) => flag(s.player, 'home_orchard') },
 ];
 
+/** The plot stays in the family: a plot that was kept (not sold) goes to the heir (the engine carries the flags, see engine/dynasty.ts). */
+function onInherit(prev: Player, _next: Player, s: GameState): string | void {
+  if (!keepsPlot(prev)) return;
+  return s.lang === 'tr'
+    ? 'Toprak ailede kaldı: bahçe artık senin. Çitlerin nerede çürüdüğünü zaten biliyorsun.'
+    : 'The plot stays in the family, and now it is yours. You already know where the fence is rotten.';
+}
+
 export const homesteadPack: ContentPack = {
   id: 'homestead',
   title: 'Homestead',
@@ -124,6 +147,7 @@ export const homesteadPack: ContentPack = {
   events: homesteadEvents,
   activities,
   onYear,
+  onInherit,
   ribbons,
   goals,
 };

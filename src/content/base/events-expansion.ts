@@ -196,6 +196,7 @@ export const expansionEvents: EventDef[] = [
     setup: (c) => {
       c.vars.pid = partnerOf(c)!.person.id;
     },
+    title: (c) => c.t('An old note turns up in a pocket.', 'Bir cebin içinden eski bir not çıkıyor.'),
     text: (c) => {
       const n = partnerOf(c)?.person.firstName ?? '';
       return c.t(`You find an old note in your pocket that ${n} wrote years ago. It is not very good. You have kept it anyway.`, `Cebinde ${n} yıllar önce yazdığı eski bir not buluyorsun. Pek iyi değil. Yine de saklamışsın.`);

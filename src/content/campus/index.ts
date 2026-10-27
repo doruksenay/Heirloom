@@ -944,7 +944,8 @@ const events: EventDef[] = [
     minAge: 18,
     once: true,
     weight: 800,
-    when: (c) => free(c) && !!peekCampus(c.p)?.gradYear && peekCampus(c.p)!.gradOffers === 0,
+    // only right after the diploma, and not for someone who already runs a company or holds a job
+    when: (c) => free(c) && !!peekCampus(c.p)?.gradYear && peekCampus(c.p)!.gradOffers === 0 && c.s.year - peekCampus(c.p)!.gradYear! <= 2 && !c.p.jobId && !c.p.achievements.includes('founder'),
     setup: (c) => {
       const st = cs(c);
       if (st.internOffer) {
@@ -1151,8 +1152,12 @@ function internship(c: Ctx, offerChance: number, pay: number): string {
   const wantsYou = c.rng.chance(offerChance + st.gpa / 10);
   if (wantsYou) st.internOffer = { company, field: c.vars.field as JobDef['field'] };
   const paid = pay ? c.t(` It paid ${c.h.fmt(pay)}.`, ` Üstüne bir de ${c.h.fmt(pay)} kazandın.`) : '';
+  // "after graduation" only makes sense for someone still studying for a first degree
+  const studying = !st.gradYear;
   return wantsYou
-    ? c.t(`You interned at ${company} and impressed everyone.${paid} They want you back after graduation.`, `${company} stajında herkesi etkiledin.${paid} Mezun olunca seni geri istiyorlar.`)
+    ? studying
+      ? c.t(`You interned at ${company} and impressed everyone.${paid} They want you back after graduation.`, `${company} stajında herkesi etkiledin.${paid} Mezun olunca seni geri istiyorlar.`)
+      : c.t(`You interned at ${company} and impressed everyone.${paid} They would like to hear from you when the next opening comes up.`, `${company} stajında herkesi etkiledin.${paid} Yeni bir kadro açılınca senden haber almak istiyorlar.`)
     : c.t(`You interned at ${company}. You learned a lot, mostly about the printer.${paid}`, `${company} stajını tamamladın. Çok şey öğrendin; çoğu yazıcı hakkındaydı.${paid}`);
 }
 

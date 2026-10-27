@@ -1097,6 +1097,20 @@ export const teenEvents: EventDef[] = [
         tone: 'good',
       },
       {
+        id: 'cheap',
+        label: (c) => c.t('Go on a shoestring (a tent and the bus)', 'Kısıtlı bütçeyle git (çadır ve otobüs)'),
+        resolve: (c) => {
+          const friend = who(c);
+          if (!c.p.relations.some((r) => r.personId === friend.id)) c.h.addRelation(friend, 'friend', 55);
+          c.h.closeness(friend.id, 5);
+          c.h.stat('happiness', 4);
+          return c.t(
+            `You and ${nm(c)} took two buses, a tent and a bag of bread. Nothing went to plan and the sea was exactly as cold as promised.`,
+            `${wth(nm(c))} iki otobüs, bir çadır ve bir torba ekmekle yola çıktınız. Hiçbir şey plana uymadı ve deniz tam söz verildiği kadar soğuktu.`,
+          );
+        },
+      },
+      {
         id: 'skip',
         label: (c) => c.t('Stay home', 'Evde kal'),
         resolve: (c) => {

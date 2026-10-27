@@ -7,6 +7,7 @@ import {
   INDUSTRIES,
   DIVIDEND_TAX,
   MIN_YEARS_TO_SELL,
+  SALE_KEEP,
   SALE_RANGE,
   STAGE_NAMES,
   addMark,
@@ -122,6 +123,18 @@ const SOLD: ((v: NameAmount) => Pair)[] = [
   ({ name, x }) => [`You signed the last page and ${name} was no longer yours. After taxes: ${x}. You took the office mug home.`, `Son sayfayı imzaladın ve ${name} artık senin değildi. Vergiden sonra kalan: ${x}. Ofisteki kupanı eve götürdün.`],
 ];
 
+/** The room the investors bring with them (picked by round, so the same pitch does not repeat every year). */
+const INVESTOR_LINES: Pair[] = [
+  ['They wear sneakers that cost more than your first car. They say "disrupt" a lot.', 'Ayaklarındaki spor ayakkabılar ilk arabandan pahalı. Ağızlarından "disruptif" lafı düşmüyor.'],
+  ['Two partners and a very quiet associate who writes down every number you say.', 'İki ortak ve söylediğin her rakamı not alan çok sessiz bir yardımcı.'],
+  ['They liked the product and asked about the "path to profitability" nine times.', 'Ürünü beğendiler ve "kârlılığa giden yolu" dokuz kez sordular.'],
+  ['The lead investor has a firm handshake and a fund that is, apparently, "deploying".', 'Baş yatırımcının sıkı bir tokalaşması ve, anlaşılan, "dağıtıma geçmiş" bir fonu var.'],
+  ['They flew in for the day. One of them already knows your competitor’s founder by first name.', 'Günübirlik uçakla geldiler. İçlerinden biri rakibinin kurucusunu adıyla tanıyor.'],
+  ['A calm, polite offer from people who have done this many times and would like to do it again.', 'Bunu defalarca yapmış ve yine yapmak isteyen insanlardan sakin, kibar bir teklif.'],
+  ['They brought a term sheet, a bottle of good water and a lot of questions about your plans for the next five years.', 'Yanlarında bir şart listesi, bir şişe iyi su ve önümüzdeki beş yıl planların hakkında bir sürü soru getirdiler.'],
+  ['The meeting was short. The offer was in your inbox before you reached the lift.', 'Toplantı kısaydı. Asansöre varmadan teklif gelen kutundaydı.'],
+];
+
 const INVESTORS_WALKED: Pair[] = [
   ['You pushed too hard. The investors walked out and took the sneakers with them.', 'Fazla zorladın. Yatırımcılar spor ayakkabılarıyla birlikte kapıyı çarpıp çıktı.'],
   ['You asked for a better valuation. They asked for the exit.', 'Daha yüksek bir değerleme istedin. Onlar da çıkış kapısını sordu.'],
@@ -160,19 +173,20 @@ const events: EventDef[] = [
     scheduled: true,
     setup: (c) => {
       const comp = co(c)!;
-      c.vars.amt = Math.round(Math.max(comp.valuation, comp.revenue * 2) * 0.25);
-      c.vars.stake = comp.stage === 'garage' ? 20 : 15;
+      // the price follows the company: stake% of what it is worth (with a small premium for a hot company),
+      // and later rounds sell a smaller slice
+      const stake = comp.stage === 'garage' ? 20 : comp.rounds && comp.rounds >= 2 ? 10 : 15;
+      const basis = Math.max(comp.valuation, comp.revenue * 2, wage(c, 20_000));
+      c.vars.stake = stake;
+      c.vars.amt = Math.round(basis * (stake / 100) * (1 + comp.hype / 400));
+      c.vars.line = ((comp.rounds ?? 0) + comp.name.length + (c.s.year % 7)) % INVESTOR_LINES.length;
     },
     title: (c) =>
       c.t(
         `Investors offer ${c.h.fmt(Number(c.vars.amt))} for ${c.vars.stake}% of ${co(c)!.name}.`,
         `Yatırımcılar ${co(c)!.name} için %${c.vars.stake} hisse karşılığında ${c.h.fmt(Number(c.vars.amt))} teklif ediyor.`,
       ),
-    text: (c) =>
-      c.t(
-        'They wear sneakers that cost more than your first car. They say "disrupt" a lot.',
-        'Ayaklarındaki spor ayakkabılar ilk arabandan pahalı. Ağızlarından "disruptif" lafı düşmüyor.',
-      ),
+    text: (c) => c.t(...INVESTOR_LINES[Number(c.vars.line) % INVESTOR_LINES.length]),
     choices: [
       {
         id: 'accept',
@@ -180,13 +194,21 @@ const events: EventDef[] = [
         resolve: (c) => {
           const comp = co(c)!;
           comp.cash += Number(c.vars.amt);
+          comp.rounds = (comp.rounds ?? 0) + 1;
           comp.ownership *= 1 - Number(c.vars.stake) / 100;
           comp.stage = NEXT_STAGE[comp.stage];
           comp.hype = Math.min(100, comp.hype + 15);
           comp.valuation = valuate(comp, c.s.year);
+          const own = Math.round(comp.ownership * 100);
+          const n = comp.rounds ?? 1;
+          if (n <= 1)
+            return c.t(
+              `${comp.name} raised ${c.h.fmt(Number(c.vars.amt))}. It is now a ${STAGE_NAMES[comp.stage].toLowerCase()} and you own ${own}%.`,
+              `${comp.name} ${c.h.fmt(Number(c.vars.amt))} yatırım aldı. Şirket artık "${stageName(comp.stage, 'tr')}" aşamasında, senin payın %${own}.`,
+            );
           return c.t(
-            `${comp.name} raised ${c.h.fmt(Number(c.vars.amt))}. It is now a ${STAGE_NAMES[comp.stage].toLowerCase()} and you own ${Math.round(comp.ownership * 100)}%.`,
-            `${comp.name} ${c.h.fmt(Number(c.vars.amt))} yatırım aldı. Şirket artık "${stageName(comp.stage, 'tr')}" aşamasında, senin payın %${Math.round(comp.ownership * 100)}.`,
+            `Round ${n}: ${c.h.fmt(Number(c.vars.amt))} in, and you are down to ${own}% of ${comp.name}. The board now has chairs for people you have met twice.`,
+            `${n}. tur: ${c.h.fmt(Number(c.vars.amt))} girdi ve ${comp.name} içindeki payın %${own} oldu. Yönetim kurulunda artık iki kez görüştüğün insanlara ayrılmış koltuklar var.`,
           );
         },
         tone: 'good',
@@ -199,6 +221,7 @@ const events: EventDef[] = [
           const comp = co(c)!;
           if (c.rng.chance(0.35 + c.p.stats.smarts / 400)) {
             comp.cash += Number(c.vars.amt) * 1.3;
+            comp.rounds = (comp.rounds ?? 0) + 1;
             comp.ownership *= 1 - (Number(c.vars.stake) - 5) / 100;
             comp.stage = NEXT_STAGE[comp.stage];
             comp.valuation = valuate(comp, c.s.year);
@@ -744,7 +767,8 @@ const activities: ActivityDef[] = [
     run: (c) => {
       const comp = co(c)!;
       const before = comp.employees;
-      const n = Math.max(1, Math.round(comp.employees * 0.3));
+      // 20% a hire: a team grows by people it can onboard, not by thirty percent a year for ever
+      const n = Math.max(1, Math.round(comp.employees * 0.2));
       comp.employees += n;
       // the line follows the company's growth: the first hire, a comeback from zero, then the team size
       const v: Staff = { name: comp.name, n, team: comp.employees + 1 };
@@ -861,11 +885,15 @@ const activities: ActivityDef[] = [
       comp.cash += Math.round(comp.valuation * 0.12);
       comp.ownership *= 0.85;
       comp.valuation = valuate(comp, c.s.year);
+      // the founder sells a slice at the bell (the rest is locked up): this is what turns a paper fortune into spending money
+      const sold = Math.round(comp.valuation * comp.ownership * 0.05 * SALE_KEEP);
+      comp.ownership *= 0.95;
+      c.h.money(sold);
       c.h.achieve('ipo');
       c.h.stat('happiness', 15);
       return c.t(
-        `${comp.name} went public! You rang the bell on the stock exchange. Your shares are worth ${c.h.fmt(comp.valuation * comp.ownership)}.`,
-        `${comp.name} halka arz edildi! Borsada gongu sen çaldın. Hisselerinin değeri ${c.h.fmt(comp.valuation * comp.ownership)}.`,
+        `${comp.name} went public! You rang the bell on the stock exchange and sold a slice of your shares for ${c.h.fmt(sold)}. The rest, worth ${c.h.fmt(comp.valuation * comp.ownership)}, is locked up.`,
+        `${comp.name} halka arz edildi! Borsada gongu sen çaldın ve hisselerinin bir dilimini ${c.h.fmt(sold)} karşılığında sattın. Geri kalanı, ${c.h.fmt(comp.valuation * comp.ownership)} değerinde, kilitli.`,
       );
     },
   },
@@ -889,8 +917,36 @@ function onYear(c: Ctx) {
   const profit = Math.round(pretax > 0 ? pretax * 0.75 : pretax); // 25% corporate tax on profit
   comp.lastProfit = profit;
   comp.cash += profit;
+  // the owner draws a salary out of a profitable year (so a rich company does not sit next to an empty wallet)
+  if (profit > 0 && comp.cash > 0) {
+    const salary = Math.min(Math.round(profit * 0.15), wage(c, 60_000), comp.cash);
+    comp.cash -= salary;
+    c.h.money(salary);
+  }
   comp.hype = Math.max(0, comp.hype - 6);
   afterYear(c, comp);
+  // a long overdraft ends in bankruptcy: nobody lends for ever
+  comp.broke = comp.cash < 0 ? (comp.broke ?? 0) + 1 : 0;
+  // the first four years are a grace period: every young company spends more than it earns
+  const grown = c.s.year - comp.founded >= 4;
+  if (grown && (comp.broke >= 8 || (comp.broke >= 4 && comp.cash < -4 * Math.max(comp.valuation, comp.revenue * 3, wage(c, 50_000))))) {
+    c.h.log(tidy(bankrupt(c, 'ran out of road: the banks stopped lending', 'yolun sonuna geldi: bankalar kredi vermeyi bıraktı')), 'bad');
+    return;
+  }
+  // a company that keeps growing outgrows the garage and the first office by itself, without waiting for investors
+  if (comp.stage === 'garage' && comp.employees >= 4 && comp.revenue >= wage(c, 400_000)) {
+    comp.stage = 'startup';
+    c.h.log(tidy(c.t(`${comp.name} has outgrown the garage. It has an office, a logo someone paid for and a team of ${comp.employees + 1}.`, `${comp.name} garaja sığmaz oldu. Bir ofisi, parayla yaptırılmış bir logosu ve ${comp.employees + 1} kişilik bir ekibi var.`)), 'good');
+  } else if (comp.stage === 'startup' && comp.employees >= 30 && comp.revenue >= wage(c, 8_000_000)) {
+    comp.stage = 'scaleup';
+    c.h.log(tidy(c.t(`${comp.name} is a scale-up now: ${comp.employees + 1} people, three floors and a meeting room named after you.`, `${comp.name} artık bir büyüme şirketi: ${comp.employees + 1} kişi, üç kat ve adını taşıyan bir toplantı odası.`)), 'good');
+  }
+  // years of nights at the desk: sustained health 0-5 is not survivable for decades
+  b.frailYears = c.p.stats.health <= 5 ? (b.frailYears ?? 0) + 1 : 0;
+  if (b.frailYears >= 3 && c.rng.chance(Math.min(0.5, 0.08 * (b.frailYears - 2)))) {
+    c.h.kill('a heart attack');
+    return;
+  }
   comp.valuation = valuate(comp, c.s.year);
   b.peakValuation = Math.max(b.peakValuation, comp.valuation);
   if (!c.p.jobId) c.p.jobTitle = ownerTitle(c, comp);

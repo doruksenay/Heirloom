@@ -1,5 +1,6 @@
 import type { EventDef } from '../types';
 import { quickEvent, since, type QuickEvent } from '../base/quick-event';
+import { wage } from '../base/util';
 
 // "Property": a flat to rent out, a few shares, a plot of land, and the decisions around money that sits still.
 // Quick events (base/quick-event.ts): no rng, so nobody's seed shifts. Every event keeps at least one free option.
@@ -7,9 +8,67 @@ import { quickEvent, since, type QuickEvent } from '../base/quick-event';
 
 const M = { category: 'money' } as const;
 const landlord = (c: Parameters<NonNullable<QuickEvent['when']>>[0]) => since(c, 'prop_flat') >= 0 && since(c, 'prop_flat_sold') < 0;
+/** Has the money to do it comfortably (same scaling as an option's cost). */
+const rich = (c: Parameters<NonNullable<QuickEvent['when']>>[0], usd: number) => c.p.money >= wage(c, usd);
+const browsedLately = (c: Parameters<NonNullable<QuickEvent['when']>>[0]) => since(c, 'prop_browsed') >= 0 && since(c, 'prop_browsed') <= 2;
 const holdsShares = (c: Parameters<NonNullable<QuickEvent['when']>>[0]) => since(c, 'prop_stocks') >= 1;
 
 const PROPERTY: QuickEvent[] = [
+
+  // ---------------------------------------------------------------- listings that lead somewhere
+  {
+    ...M, id: 'prop.listing_flat', ages: [22, 70], cooldown: 3, weight: 40,
+    when: (c) => browsedLately(c) && since(c, 'prop_flat') < 0 && rich(c, 8000),
+    title: ['The listing you kept looking at is still there.', 'Bakıp durduğun ilan hâlâ yerinde.'],
+    text: ['A small flat, a fair price, and a photograph taken with a very wide lens. You have the deposit, if you decide to be brave.', 'Küçük bir daire, adil bir fiyat ve çok geniş açılı bir lensle çekilmiş bir fotoğraf. Cesaret edersen kaparon elinde.'],
+    options: [
+      { id: 'buy', label: ['Buy it to rent out', 'Kiraya vermek için al'], usd: -8000, flags: ['prop_flat'], stats: { happiness: 4, smarts: 1 }, tone: 'big', result: ['You signed in a small office that smelled of printer toner. On the way home you looked up at the building the way a person looks at their own handwriting.', 'Toner kokan küçük bir ofiste imza attın. Eve dönerken binaya, insanın kendi el yazısına baktığı gibi baktın.'] },
+      { id: 'wait', label: ['Keep saving and keep looking', 'Biriktirmeye ve bakmaya devam et'], stats: { smarts: 1 }, result: ['You closed the page. The flat sold in a week, and the next listing was already open in another tab.', 'Sayfayı kapattın. Daire bir haftada satıldı; bir sonraki ilan çoktan başka bir sekmede açıktı.'] },
+    ],
+  },
+  {
+    ...M, id: 'prop.listing_second', ages: [30, 80], cooldown: 6, weight: 30,
+    when: (c) => browsedLately(c) && landlord(c) && since(c, 'prop_flat2') < 0 && rich(c, 25000),
+    title: ['A second flat in the same street comes up.', 'Aynı sokakta ikinci bir daire satılığa çıkıyor.'],
+    text: ['Your tenant’s neighbour is leaving, and the agent already knows what you own. “Same building manager,” he says. “Half the paperwork.”', 'Kiracının komşusu taşınıyor ve emlakçı sahip olduklarını çoktan biliyor. “Aynı bina yöneticisi,” diyor. “Evrakın yarısı.”'],
+    options: [
+      { id: 'buy', label: ['Buy it as well', 'Onu da al'], usd: -14000, flags: ['prop_flat2'], legacy: 15, stats: { happiness: 3 }, tone: 'big', result: ['Two sets of keys now, and a calendar with two rent days. The word “portfolio” sat in your mouth for a week before you dared use it.', 'Artık iki anahtar takımın ve iki kira günü olan bir takvimin var. “Portföy” kelimesi ağzında bir hafta durdu, sonra kullanmaya cesaret ettin.'] },
+      { id: 'one', label: ['One flat is plenty', 'Bir daire yeter'], stats: { happiness: 2 }, result: ['You said no and felt wise, then slightly boring, then wise again. By the evening it was a balance.', 'Hayır dedin ve bilge hissettin, sonra biraz sıkıcı, sonra yine bilge. Akşama kadar bir denge kuruldu.'] },
+    ],
+  },
+  // ---------------------------------------------------------------- money that has a point
+  {
+    ...M, id: 'prop.renovation', ages: [50, 90], cooldown: 20, weight: 12,
+    when: (c) => (landlord(c) || c.p.home.owned) && rich(c, 60000),
+    title: ['The place has been tired for years. You can afford to fix it.', 'Mekân yıllardır yorgun. Onu onarmaya gücün yetiyor.'],
+    text: ['A builder walks through with a clipboard and the cheerful face of someone who has found a great deal of work.', 'Bir müteahhit, elinde bir dosya ve çok iş bulmuş birinin neşeli yüzüyle geziyor.'],
+    options: [
+      { id: 'do', label: ['Renovate it properly', 'Düzgünce yenile'], usd: -15000, stats: { happiness: 4 }, flags: ['prop_reno'], legacy: 10, tone: 'good', result: ['Six weeks of dust and a kitchen where the drawers close by themselves. The rent went up, and the tenant said it was worth it.', 'Altı hafta toz ve çekmeceleri kendiliğinden kapanan bir mutfak. Kira arttı ve kiracı buna değdiğini söyledi.'] },
+      { id: 'paint', label: ['Just repaint and mend what leaks', 'Sadece boya ve sızanı onar'], usd: -1200, stats: { happiness: 1 }, result: ['Fresh paint hides a surprising number of sins. The leak was found, and given a talking-to.', 'Taze boya şaşırtıcı sayıda günahı örter. Sızıntı bulundu ve azarlandı.'] },
+      { id: 'leave', label: ['Leave it as it is', 'Olduğu gibi bırak'], result: ['It is still tired, and still standing. Some places prefer to be old rather than redecorated.', 'Hâlâ yorgun ve hâlâ ayakta. Bazı yerler yeniden döşenmektense yaşlı kalmayı tercih eder.'] },
+    ],
+  },
+  {
+    ...M, id: 'prop.family_trust', ages: [55, 90], once: true, weight: 14,
+    when: (c) => rich(c, 100000) && c.h.relatives(['child', 'sibling', 'grandparent']).length > 0,
+    title: ['Your lawyer suggests a family trust.', 'Avukatın bir aile vakfı kurmayı öneriyor.'],
+    text: ['“It keeps something aside,” she says, “for the ones who come after you, and out of the hands of the ones who might be silly.”', '“Senden sonra gelenler için bir şeyi kenara ayırır,” diyor, “ve saçmalayabilecek olanların elinden uzak tutar.”'],
+    options: [
+      { id: 'set', label: ['Set it up, with a modest sum', 'Mütevazı bir tutarla kur'], usd: -25000, legacy: 90, flags: ['prop_trust'], stats: { happiness: 4, smarts: 1 }, tone: 'big', result: ['Forty pages, two signatures and a very good pen. For the first time you could picture someone you will not meet using the money kindly.', 'Kırk sayfa, iki imza ve çok iyi bir kalem. İlk kez tanışmayacağın birinin parayı nazikçe kullandığını gözünde canlandırabildin.'] },
+      { id: 'later', label: ['Think about it for a year', 'Bir yıl düşün'], stats: { smarts: 1 }, result: ['You took the folder home and it lived on the hall table. Every time you passed it, it said nothing, very loudly.', 'Dosyayı eve götürdün ve koridor masasında yaşadı. Her geçişinde çok yüksek sesle hiçbir şey söylemedi.'] },
+    ],
+  },
+  {
+    ...M, id: 'prop.give_while_alive', ages: [60, 95], once: true, weight: 12,
+    when: (c) => rich(c, 150000),
+    title: ['You could give some of this away now, instead of later.', 'Bunun bir kısmını sonra değil, şimdi verebilirsin.'],
+    text: ['There is a school, a hospital ward and a niece with a business plan that is almost sensible. Money feels different in a hand that is still warm.', 'Bir okul, bir hastane servisi ve neredeyse makul bir iş planı olan bir yeğen var. Para, hâlâ sıcak bir elde farklı duruyor.'],
+    options: [
+      { id: 'give', label: ['Give a large gift, and watch it work', 'Büyük bir bağış yap ve işleyişini izle'], usd: -50000, legacy: 120, stats: { happiness: 7 }, tone: 'big', result: ['A plaque you asked them not to make, a hall full of people who stood up, and a letter from a child that you read standing in the kitchen.', 'Yapmamalarını istediğin bir levha, ayağa kalkan insanlarla dolu bir salon ve mutfakta ayakta okuduğun bir çocuktan mektup.'] },
+      { id: 'some', label: ['Give a smaller gift to someone close', 'Yakın birine daha küçük bir hediye ver'], usd: -8000, legacy: 30, stats: { happiness: 4 }, closeness: { kinds: ['child', 'sibling'], delta: 4 }, tone: 'good', result: ['They tried to refuse, then cried, then made a list. You liked the list.', 'Reddetmeye çalıştılar, sonra ağladılar, sonra bir liste yaptılar. Listeyi sevdin.'] },
+      { id: 'keep', label: ['Keep it for now', 'Şimdilik sakla'], result: ['The money sat where it always sat, being sensible. You decided that “later” was a perfectly good plan, as it has been for ten years.', 'Para her zamanki yerinde mantıklı davranarak durdu. “Sonra”nın on yıldır olduğu gibi gayet iyi bir plan olduğuna karar verdin.'] },
+    ],
+  },
   // ---------------------------------------------------------------- the flat
   {
     ...M, id: 'prop.first_flat', ages: [24, 60], once: true,
@@ -284,7 +343,7 @@ const PROPERTY: QuickEvent[] = [
     ],
   },
   {
-    ...M, id: 'prop.refinance', ages: [32, 80], once: true,
+    ...M, id: 'prop.refinance', ages: [32, 80], once: true, when: (c) => landlord(c) || c.p.home.owned,
     title: ['Your bank calls about your mortgage.', 'Bankan kredin hakkında arıyor.'],
     text: ['“We can offer you better terms,” says a voice that sounds as if it has said this before. It has.', '“Size daha iyi şartlar sunabiliriz” diyor; bunu daha önce söylemiş gibi bir ses. Söylemiş.'],
     options: [
