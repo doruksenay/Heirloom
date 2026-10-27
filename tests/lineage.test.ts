@@ -25,6 +25,22 @@ describe('Lineage pack', () => {
     expect(start('en', []).enabledPacks).not.toContain('lineage');
   });
 
+  it('ships at least 35 events', () => {
+    expect(lineagePack.events.length).toBeGreaterThanOrEqual(35);
+  });
+
+  it('stops the house events once the house is sold', () => {
+    const s = start('en');
+    s.player.flags['lin_seat'] = s.year - 6;
+    const repair = lineagePack.events.find((e) => e.id === 'lin.seat_repair')!;
+    const tend = lineagePack.activities!.find((a) => a.id === 'lin_tend')!;
+    expect(repair.when!(atAge(s, 50))).toBe(true);
+    expect(tend.available!(atAge(s, 50))).toBe(true);
+    s.player.flags['lin_seat_sold'] = s.year;
+    expect(repair.when!(atAge(s, 50))).toBe(false);
+    expect(tend.available!(atAge(s, 50))).toBe(false);
+  });
+
   it('has unique ids and every option reads in both languages and never soft-locks', () => {
     expect(new Set(lineagePack.events.map((e) => e.id)).size).toBe(lineagePack.events.length);
     for (const lang of ['en', 'tr'] as Lang[]) {

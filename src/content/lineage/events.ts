@@ -50,7 +50,7 @@ const LINEAGE: QuickEvent[] = [
     id: 'lin.seat_repair',
     ages: [32, 85],
     cooldown: 10,
-    when: (c) => since(c, 'lin_seat') >= 2,
+    when: (c) => since(c, 'lin_seat') >= 2 && since(c, 'lin_seat_sold') < 0,
     title: ['The family house needs work again.', 'Aile evi yine bakım istiyor.'],
     text: ['A damp patch has appeared on the ceiling of the room where everyone is born, or at least photographed.', 'Herkesin doğduğu, ya da en azından fotoğraf çektirdiği odanın tavanında nemli bir leke çıktı.'],
     options: [

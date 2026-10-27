@@ -5,6 +5,7 @@ import type { Player } from '../../engine/types';
 import { say, type Pair } from '../base/lines';
 import { wage } from '../base/util';
 import { lineageEvents } from './events';
+import { moreLineageEvents } from './events-more';
 
 // "Lineage" expansion: the family name as something you keep. A crest, a seat, a rule for who comes next, an old
 // feud, a letter to the ones who follow. Its events raise the dynasty's legacy score, which every later life keeps.
@@ -64,7 +65,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('+Happiness, +Legacy', '+Mutluluk, +Miras'),
     group: 'Family',
     minAge: 30,
-    available: (c) => hasFlag(c.p, 'lin_seat'),
+    available: (c) => hasFlag(c.p, 'lin_seat') && !hasFlag(c.p, 'lin_seat_sold'),
     hideWhenUnavailable: true,
     run: (c) => {
       c.h.stat('happiness', 2);
@@ -82,7 +83,7 @@ const ribbons: RibbonDef[] = [
     desc: 'Bought the family seat and kept it standing.',
     nameTr: 'Evin Bekçisi',
     descTr: 'Aile köşkünü satın aldı ve ayakta tuttu.',
-    test: (_r, p) => hasFlag(p, 'lin_seat'),
+    test: (_r, p) => hasFlag(p, 'lin_seat') && !hasFlag(p, 'lin_seat_sold'),
   },
   {
     id: 'letter_writer',
@@ -105,7 +106,7 @@ export const lineagePack: ContentPack = {
   description: 'The family name as something you keep: a crest, a family seat, a rule for who comes next, an old feud and a letter to those who follow.',
   rating: 'all',
   entitlement: LINEAGE_ENTITLEMENT,
-  events: lineageEvents,
+  events: [...lineageEvents, ...moreLineageEvents],
   activities,
   ribbons,
   goals,

@@ -39,7 +39,7 @@ Sürüm: **v0.8 (çıkış adayı, test sürümü)**. Satın almalar ve reklamla
 ### v0.5'te neler var
 - **Türkçe dil desteği:** arayüz, olaylar, aktiviteler, meslekler, rozetler, hedefler, yadigârlar ve mağaza tamamen Türkçe. Ayarlar'dan English / Türkçe seçilir; ilk açılışta telefonun dili kullanılır. İsim ekleri otomatik (`Ayşe'yle`, `Zonguldak'ta`, `Alp'le`, `Kemal'e`). Türkçede para `₺957.440` biçiminde yazılır. Aynı tohum iki dilde aynı hayatı üretir (testle doğrulanıyor).
 - **Kampüs genişlemesi** (`src/content/campus`, $2.99): bölüm seçimi, not ortalaması (GPA), kulüpler ve başkanlık seçimi, ev arkadaşı, hoca, vize-final, kopya, burs, eylem, kampüs aşkı, parti, yarı zamanlı iş, staj ve stajdan iş teklifi, Erasmus, bitirme tezi, kariyer fuarı, onur derecesiyle mezuniyet, yüksek lisans ve doktora, akademik kariyer (Araştırma Görevlisi → Dekan) ve Ar-Ge kariyeri. 19 olay, 12 aktivite, 2 meslek, 3 rozet, 2 hayat hedefi.
-- **Soy genişlemesi** (`src/content/lineage`, $3.99): arma, aile köşkü ve bakımı, miras kuralı, eski husumet, portre duvarı, burs, mezar bakımı, müze ödüncü, mektup. 20 olay, 3 aktivite, 2 rozet, 2 hayat hedefi; seçimler hanedanın miras puanını (`legacy`) ve yakınlığı doğrudan etkiler. Testi: `tests/lineage.test.ts`.
+- **Soy genişlemesi** (`src/content/lineage`, $3.99): arma, aile köşkü ve bakımı, miras kuralı, eski husumet, portre duvarı, burs, mezar bakımı, müze ödüncü, mektup. 37 olay, 3 aktivite, 2 rozet, 2 hayat hedefi; seçimler hanedanın miras puanını (`legacy`) ve yakınlığı doğrudan etkiler. Testi: `tests/lineage.test.ts`.
 - Yeni testler: `tests/i18n.test.ts` (Türkçesi eksik arayüz metni), `tests/i18n-sim.test.ts` (Türkçe hayatlarda İngilizce cümle kaçağı ve aynı tohum kontrolü), `tests/campus.test.ts`.
 
 ### v0.4'te neler var
