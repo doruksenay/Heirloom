@@ -16,6 +16,9 @@ import { heirloomEvents } from './events-heirloom';
 import { homeActivities, homeOnInherit, homeOnYear, homeTiles } from './activities-home';
 import { griefEvents } from './events-grief';
 import { adoptionActivities, adoptionEvents } from './adoption';
+import { youngMoreActivities, youngMoreEvents, youngMoreOnYear } from './events-young-more';
+import { adultMoreActivities, adultMoreEvents, adultMoreOnYear } from './events-adult-more';
+import { streetActivities, streetEvents, streetOnYear } from './street';
 
 export const basePack: ContentPack = {
   id: 'base',
@@ -37,11 +40,17 @@ export const basePack: ContentPack = {
     ...scheduledEvents,
     ...griefEvents,
     ...adoptionEvents,
+    ...youngMoreEvents,
+    ...adultMoreEvents,
+    ...streetEvents,
   ],
-  activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities, ...adoptionActivities],
+  activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities, ...adoptionActivities, ...youngMoreActivities, ...adultMoreActivities, ...streetActivities],
   onYear: (c) => {
     careerOnYear(c);
     homeOnYear(c);
+    youngMoreOnYear(c);
+    adultMoreOnYear(c);
+    streetOnYear(c);
   },
   onInherit: (prev, next, s) => homeOnInherit(prev, next, s),
   lifeTiles: (s) => homeTiles(s),

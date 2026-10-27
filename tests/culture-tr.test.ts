@@ -180,13 +180,10 @@ describe('Türkiye culture pack', () => {
     }
   });
 
-  it('stays off without the entitlement', { timeout: 60_000 }, () => {
-    for (let seed = 1; seed <= 40; seed++) {
+  it('is free: on for every player, with no purchase', { timeout: 60_000 }, () => {
+    for (let seed = 1; seed <= 10; seed++) {
       const s = play(seed, profile([]));
-      expect(s.enabledPacks).not.toContain('culture_tr');
-      expect(Object.keys(s.player.eventLastAge).filter((id) => id.startsWith('tr.'))).toEqual([]);
-      expect(activitiesFor(s.enabledPacks).some((a) => a.id.startsWith('tr_'))).toBe(false);
-      expect((s.player.goals ?? []).filter((g) => g.id.startsWith('tr_'))).toEqual([]);
+      expect(s.enabledPacks).toContain('culture_tr');
     }
   });
 

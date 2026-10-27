@@ -2359,7 +2359,8 @@ export const cultureTrPack: ContentPack = {
   title: 'Türkiye',
   description: 'Culture pack: exams, military service, henna nights, gold at weddings, bayram visits, rent hikes, the neighbor auntie and the neighborhood muhtar.',
   rating: 'all',
-  entitlement: CULTURE_TR_ENTITLEMENT,
+  // free since v0.9: lives in Türkiye are the game's home market, so this content is never sold
+  entitlement: null,
   events,
   activities,
   ribbons,
