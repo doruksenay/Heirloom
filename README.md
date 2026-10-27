@@ -2,7 +2,38 @@
 
 Nesiller boyu süren bir hayat simülasyonu. Bir hayat yaşarsın, sonra çocuğunla devam edersin; ev, aile yadigârları ve seçimlerin bir sonraki nesle geçer.
 
-Sürüm: **v0.8 (çıkış adayı, test sürümü)**. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+Sürüm: **v0.9 (çıkış adayı, test sürümü)** · Oynanabilir test: https://doruksenay.github.io/Heirloom/. Satın almalar ve reklamlar test modunda; ödeme alınmaz.
+
+### v0.9'da neler var
+- **Ücretsiz oyun çok büyüdü:**
+  - Ana oyunda 727 olay (önce 333) ve 81 aktivite (önce 42).
+  - Okul ve Sokak sekmeleri eklendi.
+- **113 meslek** (önce 30):
+  - 102 tam zamanlı meslek, her biri 4–6 basamaklı; 11 yarı zamanlı iş; serbest çalışma.
+  - Türkiye'ye özel meslekler: çaycı, simitçi, kapıcı, pazarcı, dönerci, dolmuşçu, bekçi, muhtar, imam.
+  - İş ilanı ekranında maaş, şartlar ve işe alınma şansı görünür (`job-board.ts`, `JobBoard.tsx`).
+- **Ücretsiz sistemler:**
+  - Hafif suç, mahkeme ve kısa hapis.
+  - Ünlü olmanın ilk adımları: sokak müziği, video, yerel grup.
+  - Araba.
+  - 20 çeşit aile etkileşimi.
+  - Flört tercihi.
+  - Suç Dünyası ve Şöhret paketleri bunların üstüne derinlik ekler.
+- **Yadigâr çeşidi 7'den 16'ya çıktı.** Yeni türler: fotoğraf makinesi, mektup destesi, çay takımı, dikiş makinesi, radyo, kilim, daktilo, tavla, alet çantası.
+- **Türkiye paketi ücretsiz.** "Tüm paketler" seti ($9,99) eklendi. Heirloom+ artık her yıl +3 aktivite, iki ücretli tema, ikinci geri alma ve reklamsız oyun veriyor.
+- **Denge:**
+  - Türkiye'de üniversite harcı yok; aile evinde oturana masraf kesilmez.
+  - Borç uyarısı, borç yapılandırma ve aile yardımı.
+  - Bebek olasılığı yaşa göre değişir.
+  - Seçimli bir olay bir hayatta en fazla 2 kez çıkar.
+  - Hayat dönemine göre flört, evlilik ve çocuk anları; çocuk yoksa "varisin yok" uyarısı.
+  - Hedefler oyuncunun hayatına uygun seçilir.
+- **Arayüz:**
+  - Hikâyede olay başlıkları; hikâye alanı 3 kat büyük.
+  - Varis kartlarında meslek, para, yakınlık ve yadigârlar görünür.
+  - Yaşla değişen avatarlar, çizimli paket kapakları ve mobilyalar.
+  - Para "₺341 bin" biçiminde kısaltılır.
+- Testler: 19 dosya, 235 test.
 
 ### v0.8'de neler var
 - **Günün Hayatı (Daily Challenge)** (`src/engine/daily.ts`, `src/ui/screens/Daily.tsx`):
