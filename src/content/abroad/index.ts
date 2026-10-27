@@ -22,17 +22,17 @@ function onYear(c: Ctx): void {
 
 const CALL: Pair[] = [
   ['You called home and the line was bad and you did not care.', 'Eve aradın, hat kötüydü ve umursamadın.'],
-  ['You rang at the hour when you knew your mother would be in the kitchen. She was.', 'Annenin mutfakta olacağını bildiğin saatte aradın. Oradaydı.'],
+  ['You rang at the hour when you knew someone would be in the kitchen. They were.', 'Mutfakta birinin olacağını bildiğin saatte aradın. Oradaydı.'],
   ['A long call full of small news: a neighbour’s dog, the price of tomatoes, a wedding next spring.', 'Küçük haberlerle dolu uzun bir görüşme: bir komşunun köpeği, domates fiyatı, gelecek bahar bir düğün.'],
 ];
 const COOK: Pair[] = [
   ['You cooked a dish from home. The kitchen filled with a smell that made you stand very still.', 'Memleketten bir yemek pişirdin. Mutfak seni kıpırdamadan durduran bir kokuyla doldu.'],
   ['You made bread the way your grandmother did, and it was not quite hers, and it was good.', 'Ekmeği büyükannenin yaptığı gibi yaptın, tam onunki değildi ve güzeldi.'],
-  ['You invited three neighbours and fed them all. They asked for the recipe and for your mother’s phone number.', 'Üç komşuyu davet edip hepsini doyurdun. Tarifi ve annenin telefon numarasını istediler.'],
+  ['You invited three neighbours and fed them all. They asked for the recipe and for your family’s phone number.', 'Üç komşuyu davet edip hepsini doyurdun. Tarifi ve ailenin telefon numarasını istediler.'],
 ];
 const SEND: Pair[] = [
   ['You sent money home. A message came back with eleven blessings and a photograph of a cat.', 'Eve para gönderdin. Geri on bir dua ve bir kedi fotoğrafı içeren bir mesaj geldi.'],
-  ['A parcel and a transfer. Your mother scolded you for spending and thanked you in the same breath.', 'Bir koli ve bir havale. Annen harcadığın için azarladı ve aynı nefeste teşekkür etti.'],
+  ['A parcel and a transfer. Your family scolded you for spending and thanked you in the same breath.', 'Bir koli ve bir havale. Ailen harcadığın için azarladı ve aynı nefeste teşekkür etti.'],
 ];
 
 const activities: ActivityDef[] = [
