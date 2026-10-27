@@ -19,6 +19,7 @@ import { variantEvents } from './events-variants';
 import { growingEvents } from './events-growing';
 import { lifestageEvents } from './events-lifestage';
 import { echoEvents } from './events-echoes';
+import { jobEvents } from './events-jobs';
 import { homeActivities, homeOnInherit, homeOnYear, homeTiles } from './activities-home';
 import { griefEvents } from './events-grief';
 import { adoptionActivities, adoptionEvents } from './adoption';
@@ -46,6 +47,7 @@ export const basePack: ContentPack = {
     ...growingEvents,
     ...lifestageEvents,
     ...echoEvents,
+    ...jobEvents,
     ...scheduledEvents,
     ...griefEvents,
     ...adoptionEvents,

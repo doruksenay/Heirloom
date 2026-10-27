@@ -6,6 +6,9 @@ import { findEvent } from '../src/content/registry';
 import { growingEvents } from '../src/content/base/events-growing';
 import { lifestageEvents } from '../src/content/base/events-lifestage';
 import { variantEvents } from '../src/content/base/events-variants';
+import { jobEvents } from '../src/content/base/events-jobs';
+import { careerEvents } from '../src/content/base/events-careers';
+import { everydayTrEvents } from '../src/content/culture-tr/events-everyday';
 import type { GameState, Lang, Profile } from '../src/engine/types';
 
 const profile = (language: Lang): Profile => ({ entitlements: [], settings: { themeId: 'evening', language, adultContent: false, sound: true } });
@@ -143,5 +146,46 @@ describe('quick and variant events', () => {
       seen.add(c.vars.v);
     }
     expect(seen.size).toBe(4);
+  });
+});
+
+describe('job and Türkiye everyday events', () => {
+  const jobs = ['retail', 'electrician', 'barista', 'nurse', 'teacher', 'chef', 'police', 'miner', 'lawyer', 'doctor', 'journalist', 'engineer', 'accountant', 'designer'];
+
+  it('fire only for their own job', () => {
+    for (const e of jobEvents) {
+      const job = e.id.replace('base.job_', '').split('_')[0];
+      expect(jobs, e.id).toContain(job);
+      const s = start();
+      s.player.jobId = job;
+      expect(e.when!(atAge(s, e.minAge ?? 30)), `${e.id} for ${job}`).toBe(true);
+      s.player.jobId = job === 'chef' ? 'nurse' : 'chef';
+      expect(e.when!(atAge(s, e.minAge ?? 30)), `${e.id} for another job`).toBe(false);
+    }
+  });
+
+  it('give every one of those jobs at least two stories', () => {
+    const base = ['barista', 'nurse', 'teacher', 'chef', 'police', 'miner', 'lawyer', 'doctor', 'journalist', 'engineer', 'accountant', 'designer'];
+    for (const job of jobs) {
+      const own = [...jobEvents, ...careerEvents].filter((e) => e.id.startsWith(`base.job_${job}_`)).length;
+      expect(own, job).toBeGreaterThanOrEqual(base.includes(job) ? 2 : 2);
+    }
+  });
+
+  it('keep the Türkiye events to Türkiye, and read well in both languages', () => {
+    for (const e of everydayTrEvents) {
+      const s = start();
+      s.player.countryId = 'us';
+      expect(e.when!(atAge(s, e.minAge ?? 30)), `${e.id} outside Türkiye`).toBe(false);
+      for (const lang of ['en', 'tr'] as Lang[]) {
+        const t = start(lang);
+        t.player.countryId = 'tr';
+        t.player.city = 'İzmir';
+        t.player.money = 1_000_000;
+        const c = atAge(t, e.minAge ?? 30);
+        expect(e.when!(c), e.id).toBe(true);
+        for (const ch of e.choices ?? []) expect(ch.resolve(makeCtx(t, { ...c.vars })).length, `${e.id}/${ch.id}`).toBeGreaterThan(10);
+      }
+    }
   });
 });

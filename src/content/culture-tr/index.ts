@@ -6,6 +6,7 @@ import type { GoalDef } from '../../engine/goals';
 import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, officeJob, single, wage, who, wth } from '../base/util';
 import { isCoastal } from '../../engine/places';
 import { pickIndex, say, sayWith, type Pair } from '../base/lines';
+import { everydayTrEvents } from './events-everyday';
 
 // "Türkiye" culture pack: everyday Turkish life moments for characters living in Türkiye.
 export const CULTURE_TR_ENTITLEMENT = 'pack.culture_tr';
@@ -2066,7 +2067,7 @@ const later: EventDef[] = [
   },
 ];
 
-const events: EventDef[] = [...childhood, ...youth, ...love, ...adult, ...later];
+const events: EventDef[] = [...childhood, ...youth, ...love, ...adult, ...later, ...everydayTrEvents];
 
 // ------------------------------------------------------------------ activities
 
