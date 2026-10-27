@@ -16,8 +16,14 @@ const flag = (p: Player, name: string) => p.flags[name] !== undefined;
 /** Abroad pay is better, and the winters are long: a little money in, a little happiness out. No rng. */
 function onYear(c: Ctx): void {
   if (!abroadNow(c)) return;
-  c.h.money(wage(c, 400));
+  const income = wage(c, 400);
+  c.h.money(income);
   c.h.stat('happiness', -1);
+  const last = c.p.flags.abroad_wage_shown;
+  if (last === undefined || c.s.year - last >= 3) {
+    c.h.flag('abroad_wage_shown');
+    c.h.log(c.t(`Your wages abroad came to ${c.h.fmt(income)} this year, after everything sent home.`, `Gurbetteki maaşın bu yıl ${c.h.fmt(income)} oldu; memlekete gönderilenler düşüldükten sonra.`), 'good');
+  }
 }
 
 const CALL: Pair[] = [

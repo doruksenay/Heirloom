@@ -864,6 +864,9 @@ const KID_LINES: Record<KidBucket, ((x: KidX) => Pair)[]> = {
   grand: KIDS_GRAND,
 };
 
+/** Years since an event last came up (large when never). */
+const sinceEvent = (c: Ctx, id: string) => (c.p.eventLastAge[id] === undefined ? 99 : c.age - c.p.eventLastAge[id]);
+
 export const baseActivities: ActivityDef[] = [
   // ------------------------------------------------ Mind & Body
   {
@@ -1030,7 +1033,8 @@ export const baseActivities: ActivityDef[] = [
     description: (c) => c.t('Meet someone new', 'Yeni biriyle tanış'),
     group: 'Love',
     minAge: 16,
-    available: (c) => single(c) && c.p.jailYears === 0,
+    // a date every other year at most: the log should not read like a dating diary
+    available: (c) => single(c) && c.p.jailYears === 0 && sinceEvent(c, 'base.date_match') >= 2,
     run: () => ({ event: 'base.date_match' }),
   },
   {
@@ -1184,7 +1188,8 @@ export const baseActivities: ActivityDef[] = [
     group: 'Career',
     minAge: 16,
     maxAge: MAX_HIRE_AGE,
-    available: (c) => c.p.jailYears === 0 && !c.p.retired && c.p.school !== 'primary',
+    // someone without a job may look every year; someone with one every other year
+    available: (c) => c.p.jailYears === 0 && !c.p.retired && c.p.school !== 'primary' && (!c.p.jobId || sinceEvent(c, 'base.job_search') >= 2),
     run: () => ({ event: 'base.job_search' }),
   },
   {

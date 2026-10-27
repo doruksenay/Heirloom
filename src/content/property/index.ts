@@ -21,8 +21,10 @@ function onYear(c: Ctx): void {
   const shop = letsShop(c.p) ? wage(c, 700) : 0;
   if (!flat && !shop) return;
   c.h.money(flat + shop);
-  // a line every third year is enough to remember the income exists
-  if ((c.s.year - c.p.birthYear) % 3 === 0) {
+  // a line the first year and then every fourth year is enough to remember the income exists
+  const last = c.p.flags.prop_income_shown;
+  if (last === undefined || c.s.year - last >= 4) {
+    c.h.flag('prop_income_shown');
     c.h.log(c.t(`Rent came in: ${c.h.fmt(flat + shop)} this year.`, `Bu yıl kira geliri: ${c.h.fmt(flat + shop)}.`), 'good');
   }
 }

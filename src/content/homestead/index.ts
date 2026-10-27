@@ -17,8 +17,15 @@ const keepsPlot = (p: Player) => flag(p, 'home_plot') && !flag(p, 'home_sold');
 function onYear(c: Ctx): void {
   if (!keepsPlot(c.p)) return;
   const usd = 100 + (flag(c.p, 'home_market') ? 150 : 0) + (flag(c.p, 'home_hens') ? 30 : 0) + (flag(c.p, 'home_orchard') ? 60 : 0) + (flag(c.p, 'home_bees') ? 80 : 0);
-  c.h.money(wage(c, usd));
+  const income = wage(c, usd);
+  c.h.money(income);
   c.h.stat('health', 1);
+  // the harvest shows up in the log the first year and then every fourth year
+  const last = c.p.flags.home_harvest_shown;
+  if (last === undefined || c.s.year - last >= 4) {
+    c.h.flag('home_harvest_shown');
+    c.h.log(c.t(`The plot gave ${c.h.fmt(income)} this year, in jars, eggs and baskets sold.`, `Bahçe bu yıl ${c.h.fmt(income)} getirdi; kavanozlar, yumurtalar ve satılan sepetler olarak.`), 'good');
+  }
 }
 
 const WORK: Pair[] = [

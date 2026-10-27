@@ -22,6 +22,7 @@ import { echoEvents } from './events-echoes';
 import { jobEvents } from './events-jobs';
 import { homeActivities, homeOnInherit, homeOnYear, homeTiles } from './activities-home';
 import { griefEvents } from './events-grief';
+import { lifeEvents } from './events-life';
 import { adoptionActivities, adoptionEvents } from './adoption';
 
 export const basePack: ContentPack = {
@@ -51,6 +52,7 @@ export const basePack: ContentPack = {
     ...scheduledEvents,
     ...griefEvents,
     ...adoptionEvents,
+    ...lifeEvents,
   ],
   activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities, ...adoptionActivities],
   onYear: (c) => {
