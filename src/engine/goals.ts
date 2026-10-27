@@ -13,6 +13,8 @@ export interface GoalDef {
   check: (s: GameState) => boolean;
   /** Only draw this goal for lives where it makes sense (e.g. Türkiye-only goals). Default: always. */
   available?: (s: GameState) => boolean;
+  /** How well this goal fits the life so far (default 1); goals are drawn in proportion. */
+  weight?: (s: GameState) => number;
 }
 
 export const GOAL_REWARD = 200;
@@ -26,21 +28,35 @@ const kids = (s: GameState) => s.player.relations.filter((r) => r.kind === 'chil
 /** The "wealthy" goal, in US-baseline dollars before the country's wage factor. */
 export const WEALTH_GOAL = 250_000;
 
+const st = (s: GameState) => s.player.stats;
+const employed = (s: GameState) => !!s.player.jobId && !s.player.retired;
+const closeOnes = (s: GameState) => s.player.relations.filter((r) => r.closeness >= 80 && s.people[r.personId] && s.people[r.personId].deathYear === undefined).length;
+
+/**
+ * Goals the player can reach by their own choices (review item 15). Pure-luck goals (go viral, run a marathon,
+ * a new heirloom) stay defined for old saves but are no longer drawn; stat goals are only drawn when the stat is
+ * within reach, and `weight` favours goals that fit the life so far.
+ */
 export const BASE_GOALS: GoalDef[] = [
-  { id: 'graduate', label: 'Graduate from university', labelTr: 'Üniversiteden mezun ol', available: (s) => age(s) < 30 && (age(s) < 18 || s.player.education === 'highschool'), check: (s) => s.player.education === 'university' },
-  { id: 'homeowner', label: 'Own a home', labelTr: 'Ev sahibi ol', check: (s) => s.player.home.owned },
-  { id: 'married', label: 'Get married', labelTr: 'Evlen', available: (s) => age(s) < 60, check: (s) => has(s, 'married') },
-  { id: 'parent', label: 'Become a parent', labelTr: 'Ebeveyn ol', available: (s) => age(s) < 42, check: (s) => kids(s) >= 1 },
-  { id: 'three_kids', label: 'Raise three children', labelTr: 'Üç çocuk büyüt', available: (s) => age(s) < 36 || (age(s) < 42 && kids(s) >= 2), check: (s) => kids(s) >= 3 },
-  { id: 'top_job', label: 'Reach the top of a career', labelTr: 'Bir kariyerin zirvesine çık', available: (s) => age(s) < 50, check: (s) => has(s, 'top_job') },
-  { id: 'wealthy', label: 'Be worth {amount}', labelTr: '{amount} servete ulaş', check: (s) => s.player.money + (s.player.home.owned ? s.player.home.value : 0) + packNetWorth(s) >= local(s, WEALTH_GOAL) },
-  { id: 'age90', label: 'Live to 90', labelTr: '90 yaşını gör', available: (s) => age(s) < 85, check: (s) => age(s) >= 90 },
-  { id: 'new_heirloom', label: 'Add a new heirloom to the family', labelTr: 'Aileye yeni bir yadigâr kazandır', check: (s) => s.dynasty.heirlooms.some((h) => h.sinceYear > s.player.birthYear) },
-  { id: 'marathon', label: 'Run a marathon', labelTr: 'Maraton koş', available: (s) => age(s) < 55 && s.player.stats.health >= 40, check: (s) => has(s, 'marathon') },
-  { id: 'genius', label: 'Reach 100 Smarts', labelTr: 'Zekân 100 olsun', check: (s) => s.player.stats.smarts >= 100 },
-  { id: 'fit50', label: 'Have 90+ Health at age 50', labelTr: '50 yaşında sağlığın 90+ olsun', available: (s) => age(s) < 50, check: (s) => age(s) === 50 && s.player.stats.health >= 90 },
-  { id: 'cat', label: 'Adopt a cat', labelTr: 'Bir kedi sahiplen', check: (s) => 'pet_cat' in s.player.flags },
-  { id: 'viral', label: 'Go viral', labelTr: 'Viral ol', available: (s) => age(s) < 60, check: (s) => has(s, 'viral') },
+  { id: 'graduate', label: 'Graduate from university', labelTr: 'Üniversiteden mezun ol', available: (s) => age(s) < 30 && (age(s) < 18 || s.player.education === 'highschool'), weight: (s) => (st(s).smarts >= 50 ? 3 : 1), check: (s) => s.player.education === 'university' },
+  { id: 'homeowner', label: 'Own a home', labelTr: 'Ev sahibi ol', weight: (s) => (age(s) >= 18 && (employed(s) || s.player.money > 0) ? 2 : 1), check: (s) => s.player.home.owned },
+  { id: 'married', label: 'Get married', labelTr: 'Evlen', available: (s) => age(s) < 60, weight: (s) => (s.player.relations.some((r) => r.kind === 'partner') ? 3 : 1.5), check: (s) => has(s, 'married') },
+  { id: 'parent', label: 'Become a parent', labelTr: 'Ebeveyn ol', available: (s) => age(s) < 42, weight: () => 1.5, check: (s) => kids(s) >= 1 },
+  { id: 'three_kids', label: 'Raise three children', labelTr: 'Üç çocuk büyüt', available: (s) => age(s) < 34 || (age(s) < 40 && kids(s) >= 2), weight: (s) => (kids(s) >= 1 ? 1.5 : 0.7), check: (s) => kids(s) >= 3 },
+  { id: 'top_job', label: 'Reach the top of a career', labelTr: 'Bir kariyerin zirvesine çık', available: (s) => age(s) < 45, weight: (s) => (employed(s) ? 2.5 : st(s).smarts >= 50 ? 1.5 : 1), check: (s) => has(s, 'top_job') },
+  { id: 'wealthy', label: 'Be worth {amount}', labelTr: '{amount} servete ulaş', weight: (s) => (employed(s) || st(s).smarts >= 60 ? 2 : 1), check: (s) => s.player.money + (s.player.home.owned ? s.player.home.value : 0) + packNetWorth(s) >= local(s, WEALTH_GOAL) },
+  // long life is mostly luck: only offered late, to someone in good health
+  { id: 'age90', label: 'Live to 90', labelTr: '90 yaşını gör', available: (s) => age(s) >= 70 && age(s) < 85 && st(s).health >= 60, check: (s) => age(s) >= 90 },
+  { id: 'new_heirloom', label: 'Add a new heirloom to the family', labelTr: 'Aileye yeni bir yadigâr kazandır', available: () => false, check: (s) => s.dynasty.heirlooms.some((h) => h.sinceYear > s.player.birthYear) },
+  { id: 'marathon', label: 'Run a marathon', labelTr: 'Maraton koş', available: () => false, check: (s) => has(s, 'marathon') },
+  // only with the head start that makes it reachable by study (review item 15: Smarts 34 was asked to reach 100)
+  { id: 'genius', label: 'Reach 100 Smarts', labelTr: 'Zekân 100 olsun', available: (s) => st(s).smarts >= 70 && age(s) < 60, weight: (s) => (st(s).smarts >= 80 ? 2 : 1), check: (s) => s.player.stats.smarts >= 100 },
+  { id: 'fit50', label: 'Have 90+ Health at age 50', labelTr: '50 yaşında sağlığın 90+ olsun', available: (s) => age(s) < 45 && st(s).health >= 70, check: (s) => age(s) === 50 && s.player.stats.health >= 90 },
+  { id: 'cat', label: 'Adopt a cat', labelTr: 'Bir kedi sahiplen', weight: () => 0.8, check: (s) => 'pet_cat' in s.player.flags },
+  { id: 'viral', label: 'Go viral', labelTr: 'Viral ol', available: () => false, check: (s) => has(s, 'viral') },
+  { id: 'happy90', label: 'Reach 90 Happiness', labelTr: 'Mutluluğun 90 olsun', available: (s) => st(s).happiness >= 50 && st(s).happiness < 85, check: (s) => s.player.stats.happiness >= 90 },
+  { id: 'looks90', label: 'Reach 90 Looks', labelTr: 'Görünüşün 90 olsun', available: (s) => st(s).looks >= 60 && st(s).looks < 85 && age(s) < 50, weight: () => 0.8, check: (s) => s.player.stats.looks >= 90 },
+  { id: 'loved5', label: 'Be very close to five people at once', labelTr: 'Aynı anda beş kişiyle çok yakın ol', available: (s) => age(s) < 70, check: (s) => closeOnes(s) >= 5 },
 ];
 
 /**
@@ -79,7 +95,12 @@ export function assignGoals(s: GameState, rng: Rng): void {
   const pool = [...BASE_GOALS, ...enabledPacks(s.enabledPacks).flatMap((p) => p.goals ?? [])].filter((g) => goalAvailable(g, s) && !g.check(s));
   const picked: GoalDef[] = [];
   while (picked.length < GOALS_PER_LIFE && pool.length) {
-    const g = pool.splice(Math.floor(rng.next() * pool.length), 1)[0];
+    // weighted by fit; one rng call per pick, as before
+    const w = pool.map((x) => Math.max(0, x.weight?.(s) ?? 1));
+    let r = rng.next() * w.reduce((a, b) => a + b, 0);
+    let k = 0;
+    while (k < pool.length - 1 && r >= w[k]) r -= w[k++];
+    const g = pool.splice(k, 1)[0];
     picked.push(g);
     const group = OVERLAPS.find((o) => o.includes(g.id));
     if (group) for (let i = pool.length - 1; i >= 0; i--) if (group.includes(pool[i].id)) pool.splice(i, 1);

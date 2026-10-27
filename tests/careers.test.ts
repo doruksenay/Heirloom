@@ -61,7 +61,7 @@ describe('career definitions', () => {
     }
     // the painter starts as the worst-paid job; the dentist out-earns the nurse
     const base = (id: string) => BASE_JOBS.find((j) => j.id === id)!.baseSalary;
-    expect(Math.min(...BASE_JOBS.map((j) => j.baseSalary))).toBe(base('artist'));
+    expect(Math.min(...BASE_JOBS.filter((j) => !j.partTime && !j.countries).map((j) => j.baseSalary))).toBe(base('artist'));
     expect(base('dentist')).toBeGreaterThan(base('nurse'));
   });
 
@@ -83,7 +83,7 @@ describe('career definitions', () => {
     s.player.jobId = null;
     const c = makeCtx(s);
     for (const e of careerEvents) {
-      if (e.id === 'base.job_scout' || e.id === 'base.job_recruiter' || e.id === 'base.job_coach_offer') continue;
+      if (e.scheduled || e.id === 'base.job_scout' || e.id === 'base.job_recruiter' || e.id === 'base.job_coach_offer') continue;
       expect(e.when?.(c), e.id).toBe(false);
     }
     expect(new Set(careerEvents.map((e) => e.id)).size).toBe(careerEvents.length);
@@ -284,5 +284,134 @@ describe('career upgrades and the career top (playtest 3 §2.10)', () => {
   it('calls the first army rank "Sözleşmeli Er" and the first painter rung "Meteliksiz Ressam" in Turkish', () => {
     expect(BASE_JOBS.find((j) => j.id === 'soldier')!.titlesTr![0]).toBe('Sözleşmeli Er');
     expect(BASE_JOBS.find((j) => j.id === 'artist')!.titlesTr![0]).toBe('Meteliksiz Ressam');
+  });
+});
+
+describe('round 4: many more jobs and the job board', async () => {
+  const { R4_JOB_IDS, PART_TIME_IDS, TR_ONLY_JOB_IDS, hireableIn, sameTrack } = await import('../src/engine/careers');
+  const { jobListing, jobListingFor, applyToJob, JOB_BOARD_EVENT } = await import('../src/content/base/job-board');
+  const { workKind, officeJob } = await import('../src/content/base/util');
+  const { workPool } = await import('../src/content/base/work-lines');
+  const { JOB_R4 } = await import('../src/content/base/work-lines-r4');
+
+  it('has 80+ free full-time jobs with 4-6 levels, about ten part-time jobs, and natural Turkish titles', () => {
+    const free = allJobs(['base']);
+    const full = free.filter((j) => !j.partTime);
+    expect(full.length).toBeGreaterThanOrEqual(80);
+    for (const j of full) {
+      expect(j.titles.length, j.id).toBeGreaterThanOrEqual(4);
+      expect(j.titles.length, j.id).toBeLessThanOrEqual(6);
+    }
+    expect(PART_TIME_IDS.length).toBeGreaterThanOrEqual(9);
+    for (const j of free) for (const t of j.titlesTr ?? []) for (const w of t.split(/[\s']+/)) expect(['the', 'and', 'of', 'Junior', 'Senior', 'Manager'], `${j.id}: ${t}`).not.toContain(w);
+    expect(R4_JOB_IDS.length).toBeGreaterThanOrEqual(50);
+    for (const e of ['none', 'primary', 'highschool', 'university']) expect(full.some((j) => j.education === e && !j.eventOnly), e).toBe(true);
+  });
+
+  it('keeps Türkiye-only jobs in Türkiye', () => {
+    expect(TR_ONLY_JOB_IDS).toEqual(expect.arrayContaining(['cayci', 'simitci', 'muhtar', 'imam', 'kapici', 'dolmus']));
+    const us = newGame({ firstName: 'Ada', lastName: 'Lee', gender: 'male', countryId: 'us', city: 'Boston', seed: 3 }, profile('en', false));
+    withJob(us, 30, 'barista');
+    const ids = jobListing(makeCtx(us)).map((r) => r.id);
+    for (const id of TR_ONLY_JOB_IDS) expect(ids, id).not.toContain(id);
+    expect(eligibleJobs(makeCtx(us)).some((j) => TR_ONLY_JOB_IDS.includes(j.id))).toBe(false);
+    const tr = withJob(fresh(4), 30, 'barista');
+    tr.player.gender = 'male';
+    expect(jobListing(makeCtx(tr)).map((r) => r.id)).toEqual(expect.arrayContaining(['cayci', 'muhtar', 'imam']));
+    expect(hireableIn(BASE_JOBS.find((j) => j.id === 'cayci')!, 'us')).toBe(false);
+    expect(hireableIn(BASE_JOBS.find((j) => j.id === 'babysitter')!, 'tr')).toBe(false);
+  });
+
+  it('lists every job with salary, requirements and a reason when you do not qualify (no RNG)', () => {
+    const s = withJob(fresh(5), 24, 'barista');
+    s.player.education = 'highschool';
+    s.player.stats.smarts = 50;
+    const before = s.rng;
+    const rows = jobListing(makeCtx(s));
+    expect(s.rng).toBe(before);
+    expect(rows.length).toBeGreaterThan(60);
+    const open = rows.filter((r) => r.qualifies);
+    expect(open.length).toBeGreaterThan(20);
+    expect(rows.findIndex((r) => !r.qualifies)).toBe(open.length); // qualified first
+    const doc = rows.find((r) => r.id === 'doctor')!;
+    expect(doc.qualifies).toBe(false);
+    expect(doc.gaps[0]).toBe('education');
+    expect(doc.reason).toMatch(/university degree/);
+    expect(doc.requirements).toContain('University degree');
+    expect(doc.salary).toBeGreaterThan(0);
+    expect(doc.salaryText).toMatch(/\d/);
+    expect(rows.some((r) => r.id === 'barista')).toBe(false); // the current job
+    expect(rows.some((r) => r.job.eventOnly)).toBe(false);
+    s.lang = 'tr';
+    const trDoc = jobListing(makeCtx(s)).find((r) => r.id === 'doctor')!;
+    expect(trDoc.title).toBe('Asistan Hekim');
+    expect(trDoc.reason).toBe('Üniversite diploması gerekiyor.');
+  });
+
+  it('applies from the board through the pending event, same RNG in both languages', () => {
+    for (const lang of ['en', 'tr'] as Lang[]) {
+      let hired = 0;
+      for (let seed = 1; seed <= 20; seed++) {
+        const s = withJob(fresh(seed, lang), 24, 'barista');
+        s.player.jobId = null;
+        s.player.stats.smarts = 70;
+        s.player.actionsThisYear = {};
+        doActivity(s, 'job_search');
+        expect(s.pending?.eventId).toBe(JOB_BOARD_EVENT);
+        const row = jobListingFor(s).find((r) => r.id === 'marketing')!;
+        expect(row.qualifies).toBe(true);
+        expect(applyToJob(s, 'doctor')).toBeNull(); // needs a smarts bar the player is close to? no: listed only if qualified
+        const ch = applyToJob(s, 'marketing');
+        expect(ch).toBe('job0');
+        choose(s, ch!);
+        expect(s.pending).toBeNull();
+        if (s.player.jobId === 'marketing') hired++;
+      }
+      expect(hired).toBeGreaterThan(5);
+    }
+  });
+
+  it('gives every new job its own work lines and a non-office day unless it is a desk job', () => {
+    const desk = new Set(['call_center', 'secretary', 'bank_teller', 'sales', 'civil_servant', 'it_support', 'social_worker', 'librarian', 'diplomat', 'judge', 'banker', 'marketing', 'hr', 'data_scientist', 'game_dev', 'civil_engineer', 'atc', 'curator']);
+    for (const id of [...R4_JOB_IDS, ...PART_TIME_IDS]) {
+      expect(JOB_R4[id]?.length, id).toBeGreaterThan(0);
+      const s = withJob(fresh(6), 30, id);
+      s.player.countryId = 'tr';
+      const c = makeCtx(s);
+      expect(officeJob(c), id).toBe(desk.has(id));
+      expect(workKind(c), id).not.toBe(undefined);
+      expect(workPool(c).length, id).toBeGreaterThan(3);
+    }
+  });
+
+  it('has a career event for every new job', () => {
+    const ids = careerEvents.filter((e) => !e.scheduled).map((e) => e.id);
+    const s = withJob(fresh(7), 35, 'barista');
+    s.player.gender = 'male';
+    s.player.stats.health = 90;
+    for (const id of R4_JOB_IDS) {
+      s.player.jobId = id;
+      const c = makeCtx(s);
+      const fits = careerEvents.filter((e) => !e.scheduled && e.when?.(c) && (e.minAge ?? 0) <= 35);
+      expect(fits.length, id).toBeGreaterThan(0);
+    }
+    expect(ids.length).toBeGreaterThan(110);
+  });
+
+  it('keeps headhunter tracks sensible', () => {
+    expect(sameTrack('bank_teller', 'banker')).toBe(true);
+    expect(sameTrack('bank_teller', 'judge')).toBe(false);
+    expect(sameTrack('plumber', 'electrician')).toBe(true);
+  });
+
+  it('runs elections for politicians and muhtars', () => {
+    let up = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = withJob(fresh(seed), 40, 'politician', 0, 4);
+      s.player.stats.smarts = 80;
+      careerOnYear(makeCtx(s));
+      if (s.player.jobLevel === 1) up++;
+    }
+    expect(up).toBeGreaterThan(5);
   });
 });

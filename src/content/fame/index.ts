@@ -1,13 +1,18 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../types';
 import type { GameState, Player } from '../../engine/types';
 import { aOrAn, cap, gen, wage } from '../base/util';
-import { bandNames, fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, pathOrLast, payingFans, peekFame, songTitle, type FamePath } from './state';
-import { compact, fameOf, free, hasPath, motherAlive } from './util';
+import { fameLevel, fameState, fameTitle, gainFans, isPath, loseFans, pathOrLast, payingFans, peekFame, songTitle, type FamePath } from './state';
+import { compact, fameOf, free, hasPath } from './util';
 import { moreFameEvents } from './events-more';
 import { moreFameActivities } from './activities-more';
-import { pickIndex, say, sayWith, type Pair } from '../base/lines';
+import { say, sayWith, type Pair } from '../base/lines';
+import { bandNameEvent } from '../base/street-fame';
 
 // "Fame" expansion: music, social media and acting careers, the single-player side of Popmundo.
+// Builds on the free first steps (base/street-fame.ts: busking, open mics, posting videos, a local band, a small
+// following). Both use the same state in p.ext.fame, so the pack picks up the free path, fans and band; without the
+// pack the free following levels off (FREE_FAN_CAP). This pack sells the depth: songs and albums, record deals, gigs
+// and tours, acting, awards, scandals, podcasts and the family stage name.
 export const FAME_ENTITLEMENT = 'pack.fame';
 
 /** Tour ladder: cities, fans needed to get booked. */
@@ -82,23 +87,6 @@ function choosePath(path: FamePath): ChoiceDef {
   };
 }
 
-const bandChoice = (i: number): ChoiceDef => ({
-  id: `band${i}`,
-  label: (c) => String(c.vars[`name${i}`]),
-  resolve: (c) => {
-    const f = fameState(c.p);
-    const members = [0, 1, 2].map(() => c.h.newPerson({ age: Math.max(14, c.age + c.rng.int(-3, 3)) }));
-    members.forEach((m) => c.h.addRelation(m, 'friend', c.rng.int(55, 80)));
-    f.band = { name: String(c.vars[`name${i}`]), members: members.map((m) => m.id) };
-    const names = members.map((m) => m.firstName).join(', ');
-    return c.t(
-      `You formed a band called ${f.band.name} with ${names}. First rehearsal is in a garage that smells like oil.`,
-      `${names} ile ${f.band.name} adında bir grup kurdun. İlk prova, motor yağı kokan bir garajda.`,
-    );
-  },
-  tone: 'big',
-});
-
 /** Band members who are still alive (a band can outlive a drummer). */
 const bandAlive = (c: Ctx) => (peekFame(c.p)?.band?.members ?? []).filter((id) => c.s.people[id] && c.s.people[id].deathYear === undefined);
 
@@ -129,15 +117,8 @@ const events: EventDef[] = [
       },
     ],
   },
-  {
-    id: 'fame.band_name',
-    category: 'fame',
-    scheduled: true,
-    setup: (c) => bandNames(c).forEach((n, i) => (c.vars[`name${i}`] = n)),
-    title: (c) => c.t('Your new band needs a name.', 'Yeni grubunun bir isme ihtiyacı var.'),
-    text: (c) => c.t('Everybody has an opinion. The drummer wants something with "skull" in it.', 'Herkesin bir fikri var. Davulcu içinde "kafatası" geçen bir şey istiyor.'),
-    choices: [bandChoice(0), bandChoice(1), bandChoice(2)],
-  },
+  // naming the band moved to the free game in round 4; the old id stays as a never-random alias for open saves
+  { ...bandNameEvent, id: 'fame.band_name', scheduled: true },
   {
     id: 'fame.label_offer',
     category: 'fame',
@@ -574,23 +555,6 @@ const events: EventDef[] = [
 
 // ------------------------------------------------------------------ activities
 // Repeatable acting and fan lines (one rng call per pick; no repeat until most of a list has been seen).
-/** What a post was: [English noun phrase, Turkish object of "paylaştın"]. */
-const POSTS: Pair[] = [
-  ['a "day in my life" video', '"Bir günüm" videosu'],
-  ['a dance trend', 'Dans akımı videosu'],
-  ['a rant about public transport', 'Toplu taşıma isyanı'],
-  ['a cooking fail', 'Mutfak felaketi videosu'],
-  ['a get-ready-with-me', '"Benimle hazırlan" videosu'],
-  ['a room tour of a room you tidied for the first time in months', 'Aylardır ilk kez topladığın odanın tur videosu'],
-  ['a video of your cat ignoring you in slow motion', 'Kedinin seni ağır çekimde görmezden geldiği bir video'],
-  ['a "what I eat in a day" that was mostly toast', 'Çoğu tost olan bir "Bir günde ne yiyorum" videosu'],
-  ['a life-hack that did not work', 'İşe yaramayan bir pratik bilgi videosu'],
-  ['a tearful apology for something nobody had noticed', 'Kimsenin fark etmediği bir şey için ağlamaklı bir özür videosu'],
-  ['a prank on your own mother', 'Annene şaka yaptığın bir video'],
-  ['a review of every crisp flavour in the corner shop', 'Bakkaldaki bütün cips çeşitlerini tek tek denediğin bir video'],
-];
-const PRANK = POSTS.findIndex(([en]) => en === 'a prank on your own mother');
-const PRANK_FRIEND: Pair = ['a prank on your best friend', 'En yakın arkadaşına şaka yaptığın bir video'];
 const PRACTICE: Pair[] = [
   ['You practiced scales until your fingers hurt.', 'Parmakların acıyana kadar gam çalıştın.'],
   ['You learned a song you hate. You play it perfectly now.', 'Nefret ettiğin bir şarkıyı öğrendin. Artık kusursuz çalıyorsun.'],
@@ -699,16 +663,6 @@ const activities: ActivityDef[] = [
     },
   },
   {
-    id: 'fame_band',
-    label: (c) => c.t('Form a band', 'Grup kur'),
-    description: (c) => c.t('Find three bandmates', 'Üç grup arkadaşı bul'),
-    group: 'Fame',
-    minAge: 13,
-    maxAge: 70,
-    available: (c) => isPath(c, 'music') && !fameState(c.p).band && free(c),
-    run: () => ({ event: 'fame.band_name' }),
-  },
-  {
     id: 'fame_gig',
     label: (c) => c.t('Play a gig', 'Sahneye çık'),
     description: (c) => c.t('+Fans, a little money', '+Hayran, biraz da para'),
@@ -773,29 +727,6 @@ const activities: ActivityDef[] = [
     },
   },
   // social
-  {
-    id: 'fame_post',
-    label: (c) => c.t('Post content', 'İçerik paylaş'),
-    description: (c) => c.t('+Fans, depends on Looks and luck', '+Hayran; Görünüş ve şansa bağlı'),
-    group: 'Fame',
-    minAge: 13,
-    perYear: 3,
-    available: (c) => isPath(c, 'social') && free(c),
-    run: (c) => {
-      const f = fameState(c.p);
-      const roll = c.rng.next();
-      if (roll > 0.96) {
-        const g = gainFans(c, f, f.fans * 1.5 + 50000);
-        c.h.achieve('viral');
-        return c.t(`Your video went massively viral. ${compact(c, g)} new followers overnight.`, `Videon fena patladı. Bir gecede ${compact(c, g)} yeni takipçi.`);
-      }
-      const g = gainFans(c, f, (50 + c.p.stats.looks * 6 + f.fans * 0.08) * (0.4 + roll));
-      const pi = pickIndex(c, 'fame_post', POSTS.length);
-      // the prank needs a living mother; otherwise the best friend gets it (same slot, same RNG)
-      const [what, whatTr] = pi === PRANK && !motherAlive(c) ? PRANK_FRIEND : POSTS[pi];
-      return c.t(`You posted ${what}. ${compact(c, g)} new followers.`, `${whatTr} paylaştın. ${compact(c, g)} yeni takipçi.`);
-    },
-  },
   {
     id: 'fame_collab',
     label: (c) => c.t('Collab with another creator', 'Başka bir fenomenle iş birliği yap'),
@@ -955,7 +886,7 @@ function onInherit(prev: Player, next: Player, s: GameState): string | void {
 export const famePack: ContentPack = {
   id: 'fame',
   title: 'Fame',
-  description: 'Music, social media and acting. Form a band, write songs, release albums, go viral, survive scandals.',
+  description: 'Record deals, albums, tours, acting, awards and scandals. Picks up your free following and takes it all the way.',
   rating: 'all',
   entitlement: FAME_ENTITLEMENT,
   events: [...events, ...moreFameEvents],

@@ -1,6 +1,6 @@
 // Daily Challenge: one life a day, the same start for every player, scored in three categories.
 // Everything here is deterministic from the date, so it works offline and needs no server.
-import type { DailyMeta, DailyProfile, DailyResult, GameState, Gender, Profile } from './types';
+import type { DailyMeta, DailyProfile, DailyResult, GameState, Gender, LogEntry, Profile } from './types';
 import { newGame, playerAge, salaryOf } from './game';
 import { COUNTRIES, firstNames, getCountry } from './world';
 import { createRng } from './rng';
@@ -41,8 +41,10 @@ const descendants = (s: GameState) => {
 };
 
 /**
- * Medal thresholds come from simulated lives (scripts/daily-par.ts): bronze beats about half of them,
- * silver about three in four, gold about one in ten. Re-run the script after balance changes.
+ * Medal thresholds come from simulated lives (scripts/daily-par.ts, round 4): bronze sits near the median of a
+ * passive player who only taps "Age up" (review item 14: a calm 77-year life earned nothing), silver near the
+ * median of an active player and gold near the active top tenth. Re-run the script (with and without `passive`)
+ * after balance changes.
  */
 export const DAILY_CATEGORIES: DailyCategory[] = [
   {
@@ -53,7 +55,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Net worth when you die',
     hintTr: 'Öldüğündeki net servetin',
     unit: 'money',
-    medals: [300_000, 500_000, 800_000],
+    medals: [75_000, 350_000, 900_000],
     score: worth,
   },
   {
@@ -64,7 +66,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Age you reach',
     hintTr: 'Ulaştığın yaş',
     unit: 'years',
-    medals: [80, 86, 91],
+    medals: [79, 85, 91],
     score: (s) => playerAge(s),
   },
   {
@@ -75,7 +77,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Children and grandchildren',
     hintTr: 'Çocukların ve torunların',
     unit: 'count',
-    medals: [6, 9, 14],
+    medals: [2, 6, 10],
     score: descendants,
   },
   {
@@ -86,7 +88,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Pets you owned in your life',
     hintTr: 'Hayatın boyunca sahip olduğun evcil hayvanlar',
     unit: 'count',
-    medals: [6, 9, 12],
+    medals: [1, 5, 10],
     score: (s) => petsOf(s.player).length,
   },
   {
@@ -97,7 +99,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Highest yearly salary',
     hintTr: 'En yüksek yıllık maaşın',
     unit: 'money',
-    medals: [100_000, 125_000, 160_000],
+    medals: [65_000, 110_000, 175_000],
     score: (s) => Math.max(peak(s, 'salary'), salaryOf(s) / wageFactor(s)),
   },
   {
@@ -108,7 +110,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'People very close to you at the same time',
     hintTr: 'Aynı anda çok yakın olduğun insan sayısı',
     unit: 'count',
-    medals: [6, 7, 9],
+    medals: [2, 6, 8],
     score: (s) => Math.max(peak(s, 'close'), closeCount(s)),
   },
   {
@@ -120,7 +122,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hintTr: 'Zirvedeyken hayran sayın',
     pack: 'fame',
     unit: 'count',
-    medals: [10_000, 100_000, 1_000_000],
+    medals: [2_000, 50_000, 400_000],
     score: (s) => Math.max(peak(s, 'fans'), (s.player.ext?.fame as { peakFame?: number } | undefined)?.peakFame ?? 0),
   },
   {
@@ -132,7 +134,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hintTr: 'Şirketinin ulaştığı en yüksek değer',
     pack: 'boss',
     unit: 'money',
-    medals: [700_000, 2_000_000, 5_000_000],
+    medals: [100_000, 700_000, 4_000_000],
     score: (s) => peak(s, 'company'),
   },
 ];
@@ -279,3 +281,34 @@ export const resultFor = (profile: Profile, date: string) => profile.daily?.resu
 
 /** Total medal points (0–9) for a result. */
 export const medalPoints = (r: DailyResult) => Object.values(r.medals).reduce<number>((a, b) => a + b, 0);
+
+/** Lines about goals are bookkeeping, not moments. */
+const GOAL_LINE = /^(Life goals:|Hayat hedeflerin:|Goal complete:|Hedef tamam:)/;
+const MOMENT_SCORE: Record<string, number> = { big: 3, good: 1, bad: 1 };
+
+/**
+ * The 6–8 moments of a finished life for the Daily result screen (review item 14: only birth, graduation and
+ * death were shown). Always the first and the last line; between them the biggest lines (tone 'big' first, then
+ * answered events with a title, then good and bad news), at most one per year of age, in the order they happened.
+ */
+export function dailyMoments(s: GameState, max = 8): LogEntry[] {
+  const log = s.player.log;
+  if (log.length <= 2) return [...log];
+  const first = log[0];
+  const last = log[log.length - 1];
+  const middle = log
+    .slice(1, -1)
+    .map((e, i) => ({ e, i, score: (MOMENT_SCORE[e.tone ?? ''] ?? 0) + (e.title ? 1.5 : 0) }))
+    .filter((x) => x.score > 0 && !GOAL_LINE.test(x.e.text));
+  middle.sort((a, b) => b.score - a.score || a.i - b.i);
+  const picked: typeof middle = [];
+  const ages = new Set<number>([first.age, last.age]);
+  for (const x of middle) {
+    if (picked.length >= max - 2) break;
+    if (ages.has(x.e.age)) continue;
+    ages.add(x.e.age);
+    picked.push(x);
+  }
+  picked.sort((a, b) => a.i - b.i);
+  return [first, ...picked.map((x) => x.e), last];
+}

@@ -32,8 +32,8 @@ export const THEMES: ThemeDef[] = [
     id: 'evening',
     name: 'Heirloom Dusk',
     description: 'The Heirloom look: sunset pink and teal on a deep night sky. The default.',
-    nameTr: 'Heirloom Alacakaranlık',
-    descriptionTr: 'Heirloom görünümü: gece mavisi üstüne gün batımı pembesi ve turkuaz. Varsayılan tema.',
+    nameTr: 'Gün Batımı',
+    descriptionTr: 'Heirloom\'un kendi görünümü: gece mavisi üstüne gün batımı pembesi ve turkuaz. Varsayılan tema.',
     entitlement: null,
     dark: true,
     tokens: {
@@ -218,8 +218,11 @@ export function getTheme(id: string): ThemeDef {
   return THEMES.find((t) => t.id === id) ?? THEMES[0];
 }
 
+/** Heirloom+ includes every paid theme. */
+export const THEMES_WITH = 'premium.no_ads';
+
 export function isThemeOwned(theme: ThemeDef, entitlements: string[]): boolean {
-  return theme.entitlement === null || entitlements.includes(theme.entitlement);
+  return theme.entitlement === null || entitlements.includes(theme.entitlement) || entitlements.includes(THEMES_WITH);
 }
 
 export function applyTheme(theme: ThemeDef): void {

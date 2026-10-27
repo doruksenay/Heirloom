@@ -23,6 +23,9 @@ export interface Person {
   estate?: number;
   /** For a child of the player: the other parent at birth, when known (older saves do not have it). */
   coParentId?: string;
+  /** For a possible heir (child, grandchild, niece, nephew): education and job settled when they grow up (game.ts growUpHeirs). null = no job. */
+  education?: Education;
+  jobId?: string | null;
 }
 
 export interface Relation {
@@ -39,6 +42,8 @@ export interface LogEntry {
   year: number;
   text: string;
   tone?: Tone;
+  /** The title of the event this line answers (set when a choice is resolved), so the log reads in context. */
+  title?: string;
 }
 
 export interface Home {
@@ -62,6 +67,8 @@ export interface Player extends Person {
   relations: Relation[];
   flags: Record<string, number>; // flag -> year it was set
   eventLastAge: Record<string, number>; // eventId -> age when it last fired
+  /** eventId -> times it fired this life (repeat cap, see game.ts eligible). Optional: older saves start empty. */
+  eventCount?: Record<string, number>;
   log: LogEntry[];
   home: Home;
   actionsThisYear: Record<string, number>; // activity id or "rel:<personId>" -> uses this year

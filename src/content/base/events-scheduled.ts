@@ -1,8 +1,10 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { MAX_HIRE_AGE, aOrAn, acc, dat, eligibleJobs, familyFirstNames, nm, wage, who, wth } from './util';
+import { MAX_HIRE_AGE, aOrAn, acc, dat, eligibleJobs, familyFirstNames, gen, nm, wage, who, wth } from './util';
 import { da } from '../../i18n/tr-grammar';
-import { sayWith, type Pair } from './lines';
-import type { Person } from '../../engine/types';
+import { say, sayWith, type Pair } from './lines';
+import type { Gender, Person } from '../../engine/types';
+import { furniture as furnitureItem } from '../../engine/home';
+import { atParents, inTr } from './events-flavour';
 import { firstNames } from '../../engine/world';
 import { EDUCATION_RANK, titleFor, type JobDef } from '../../engine/careers';
 import { MAJORS, peekCampus } from '../campus/state';
@@ -172,6 +174,7 @@ const nameChoice = (i: number): ChoiceDef => ({
     const other = c.h.partner();
     if (other) baby.coParentId = other.person.id;
     c.h.addRelation(baby, 'child', 90);
+    c.h.unflag('trying'); // a couple that was trying has its baby; the next one is a new decision
     c.h.stat('happiness', 12);
     c.h.achieve('parent');
     const n = baby.firstName;
@@ -196,6 +199,405 @@ const nameChoice = (i: number): ChoiceDef => ({
   },
   tone: 'big',
 });
+
+// ------------------------------------------------------------------ life nudges (round 4, review items 3 and 7)
+// The engine opens these at life-stage moments (game.ts lifeNudge) so a player who never opens the Love tab still
+// meets someone, still gets asked about children and is told plainly when there is no heir. Every answer is fine:
+// nothing here marries anyone off or forces a child.
+
+/**
+ * Gender of the people the player is set up with: `p.ext.dating` = 'same' | 'any', otherwise the opposite gender.
+ * The systems agent owns the setting itself; dates and set-ups read it here.
+ */
+export function dateGender(c: Ctx): Gender {
+  const pref = c.p.ext?.dating;
+  const other: Gender = c.p.gender === 'female' ? 'male' : 'female';
+  if (pref === 'same') return c.p.gender;
+  if (pref === 'any') return c.rng.chance(0.5) ? other : c.p.gender;
+  return other;
+}
+
+/** Age of whoever would carry the baby (the player or the partner), or null when neither can. */
+export function motherAge(c: Ctx): number | null {
+  const p = c.h.partner();
+  if (!p) return null;
+  if (c.p.gender === 'female') return c.age;
+  if (p.person.gender === 'female') return c.h.ageOf(p.person);
+  return null;
+}
+
+/** Years between births: a couple with a child younger than this does not try again yet (review item 7). */
+export const BABY_GAP = 2;
+
+/** Age of the youngest child, or Infinity without children. */
+export function youngestChildAge(c: Ctx): number {
+  const kids = c.h.relatives('child');
+  return kids.length ? Math.min(...kids.map((k) => c.h.ageOf(k.person))) : Infinity;
+}
+
+/** A couple who could have a baby now: a partner, a mother-to-be of 18–45, out of prison. */
+export function canHaveBaby(c: Ctx): boolean {
+  const a = motherAge(c);
+  return a !== null && a >= 18 && a <= 45 && c.p.jailYears === 0;
+}
+
+/**
+ * Chance of a baby in a year of trying (review item 7: "try for a baby" worked almost every year, even in debt;
+ * one life had 13 children). Falls with the mother's age, with every child already born and a little with debt,
+ * and is zero for BABY_GAP years after a birth. No RNG.
+ */
+export function babyOdds(c: Ctx): number {
+  const a = motherAge(c);
+  if (a === null || a > 45 || c.p.jailYears > 0) return 0;
+  if (youngestChildAge(c) < BABY_GAP) return 0;
+  let odds = a < 30 ? 0.5 : a < 35 ? 0.4 : a < 38 ? 0.28 : a < 41 ? 0.15 : 0.05;
+  const kids = c.h.relatives('child').length;
+  odds *= Math.max(0.25, 1 - 0.18 * kids);
+  if (c.p.money < 0) odds *= 0.8;
+  return odds;
+}
+
+/** How a set-up date comes about; index stored in c.vars.how. The Turkish aunt's candidate is a Türkiye classic. */
+const SETUP_HOW: { title: (n: string) => Pair; text: Pair }[] = [
+  {
+    title: (n) => [`A friend wants you to meet ${n}`, `Bir arkadaşın seni ${wth(n)} tanıştırmak istiyor`],
+    text: ['"Just one coffee," your friend says. "Trust me." You have heard that before.', '"Sadece bir kahve," diyor arkadaşın. "Bana güven." Bunu daha önce de duymuştun.'],
+  },
+  {
+    title: (n) => [`You were seated next to ${n} at a wedding`, `Bir düğünde ${gen(n)} yanına oturtuldun`],
+    text: ['The seating plan was clearly someone\'s plan. The two of you have been talking since the soup.', 'Oturma planını belli ki biri bilerek yapmış. Çorbadan beri konuşuyorsunuz.'],
+  },
+  {
+    title: (n) => [`A dating app matched you with ${n}`, `Bir tanışma uygulaması seni ${wth(n)} eşleştirdi`],
+    text: ['Ninety-four percent compatible, the app says. The app also thinks you like jazz.', 'Uygulamaya göre yüzde doksan dört uyumlusunuz. Uygulama ayrıca caz sevdiğini sanıyor.'],
+  },
+  {
+    title: (n) => [`${n} from the gym asked you out`, `Spor salonundan ${n} sana çıkma teklif etti`],
+    text: ['Six months of nodding at each other by the water fountain. Today it turned into words.', 'Altı aydır su sebilinin başında birbirinize başınızla selam veriyordunuz. Bugün söze döküldü.'],
+  },
+];
+/** Türkiye only: the aunt who knows "a very decent young person". */
+const SETUP_AUNT = {
+  title: (n: string): Pair => [`Your aunt knows someone: ${n}`, `Teyzenin bir adayı var: ${n}`],
+  text: ['"Very decent family, a good job, and such manners," says your aunt, and shows you a photo from a cousin\'s engagement.', '"Çok terbiyeli, ailesi düzgün, işi gücü yerinde," diyor teyzen ve bir kuzenin nişanından çekilmiş bir fotoğraf gösteriyor.'] as Pair,
+};
+const setupHow = (c: Ctx) => (c.vars.how === 'aunt' ? SETUP_AUNT : SETUP_HOW[Number(c.vars.how) || 0]);
+
+const SETUP_LATER: DateLine[] = [
+  (p) => [`You told ${p.firstName} "maybe another time". ${p.firstName} said the same, more politely.`, `${dat(p.firstName)} "Belki başka zaman" dedin. ${p.firstName} de aynısını, daha kibarca söyledi.`],
+  (p) => [`You were not ready. ${p.firstName} took it well and kept the number, just in case.`, `Hazır değildin. ${p.firstName} bunu olgunlukla karşıladı ve ne olur ne olmaz diye numaranı sakladı.`],
+  (p) => [`You let it go. Some evenings you still wonder about ${p.firstName}.`, `Üstüne gitmedin. Bazı akşamlar hâlâ ${p.firstName} aklına geliyor.`],
+];
+
+const SINGLE_LINES: Pair[] = [
+  ['You told everyone you are happy single, and meant it. Your weekends remain entirely your own.', 'Herkese bekârlıktan memnun olduğunu söyledin ve bunu gerçekten kastettin. Hafta sonların tamamen sana ait.'],
+  ['"Single life is the good life," you announced at dinner. Nobody tried to set you up again.', 'Akşam yemeğinde "Bekârlık sultanlıktır" diye ilan ettin. Kimse seni bir daha kimseyle tanıştırmaya kalkmadı.'],
+];
+
+const TOGETHER_WAIT: DateLine[] = [
+  (p) => [`You said you like things as they are. ${p.firstName} said "fine" in the way that means "we will talk again".`, `İşlerin böyle iyi olduğunu söyledin. ${p.firstName} "Peki" dedi; "yine konuşacağız" anlamında bir peki.`],
+  (p) => [`You changed the subject to dinner. ${p.firstName} let you, this time.`, `Lafı akşam yemeğine getirdin. ${p.firstName} bu sefer üstelemedi.`],
+];
+
+const TRY_LINES: ((n: string) => Pair)[] = [
+  (n) => [`You and ${n} decided to try for a baby. The spare room is already being measured.`, `${wth(n)} bebek için denemeye karar verdiniz. Boş oda şimdiden ölçülüyor.`],
+  (n) => [`You and ${n} agreed: it is time. ${n} bought a baby-names book the same afternoon.`, `${wth(n)} karar verdiniz: zamanı geldi. ${n} aynı öğleden sonra bir bebek isimleri kitabı aldı.`],
+  (n) => [`You told ${n} yes. Your mother found out within a day, somehow.`, `${dat(n)} evet dedin. Annen bir gün içinde öğrendi; nasıl, kimse bilmiyor.`],
+];
+
+const KIDS_LATER: ((n: string) => Pair)[] = [
+  (n) => [`You and ${n} decided "not yet". The question will keep.`, `${wth(n)} "Henüz değil" dediniz. Soru bir yere kaçmıyor.`],
+  (n) => [`Not now, you both said. ${n} looked relieved, then a little sad, then relieved again.`, `"Şimdi değil" dediniz. ${n} önce rahatladı, sonra biraz hüzünlendi, sonra yine rahatladı.`],
+];
+
+const KIDS_ENOUGH: ((n: string) => Pair)[] = [
+  (n) => [`You and ${n} agreed the family is complete as it is. You gave the cot to the neighbours.`, `${wth(n)} ailenin bu hâliyle tamam olduğuna karar verdiniz. Beşiği komşulara verdiniz.`],
+  (n) => [`"We are enough," ${n} said, and you both meant it.`, `${n} "Biz bize yeteriz" dedi; ikiniz de bunu içtenlikle söylüyordunuz.`],
+];
+
+/** Children of the player's brothers and sisters who are still alive (the heirs of a childless life). */
+const livingNiblings = (c: Ctx): Person[] =>
+  c.h
+    .relatives('sibling')
+    .flatMap((r) => (r.person.childIds ?? []).map((id) => c.s.people[id]))
+    .filter((q): q is Person => !!q && q.deathYear === undefined);
+
+const NUDGE_EVENTS: EventDef[] = [
+  {
+    // help from family (review item 6: no way out of debt): an adult child helps a parent, or parents help a child.
+    // Opened by the engine (game.ts lifeNudge); no choice, the family just does it.
+    id: 'base.family_bailout',
+    category: 'money',
+    scheduled: true,
+    when: (c) => c.p.money < 0 && bailoutHelpers(c).length > 0,
+    text: '',
+    apply: (c) => {
+      const helpers = bailoutHelpers(c);
+      if (!helpers.length) return c.t('Nobody could help this year.', 'Bu yıl kimse yardım edemedi.');
+      const r = helpers[c.rng.int(0, helpers.length - 1)];
+      const debt = Math.max(0, -c.p.money);
+      const gift = Math.min(debt, Math.round(wage(c, 17000) * (0.5 + c.rng.next())));
+      c.h.money(gift);
+      c.h.closeness(r.person.id, 4);
+      const n = r.person.firstName;
+      const i = c.rng.int(0, 2);
+      if (r.rel.kind === 'child') {
+        const lines: Pair[] = [
+          [`${n} found out about the debt and paid ${c.h.fmt(gift)} of it without asking. "You raised me. Let me."`, `${n} borcunu öğrendi ve sana sormadan ${c.h.fmt(gift)} ödedi. "Sen beni büyüttün, bırak ben de bir şey yapayım."`],
+          [`${n} sat you down with a spreadsheet and a transfer of ${c.h.fmt(gift)}. The roles have reversed.`, `${n} karşına bir tabloyla oturdu ve hesabına ${c.h.fmt(gift)} yatırdı. Roller değişti.`],
+          [`An envelope from ${n}: ${c.h.fmt(gift)} and a note that says "No arguments."`, `${n} bir zarf bıraktı: içinde ${c.h.fmt(gift)} ve "İtiraz istemiyorum" yazan bir not.`],
+        ];
+        return c.t(lines[i][0], lines[i][1]);
+      }
+      const lines: Pair[] = [
+        [`${n} quietly paid ${c.h.fmt(gift)} of your debt. At Sunday lunch nobody mentioned it, which was the kindest part.`, `${n} borcunun ${c.h.fmt(gift)} kadarını sessizce ödedi. Pazar kahvaltısında kimse lafını etmedi; asıl incelik buydu.`],
+        [`${n} sent ${c.h.fmt(gift)} "for the bank", with strict orders to cook properly from now on.`, `${n} "bankaya" diye ${c.h.fmt(gift)} gönderdi; artık düzgün yemek yapman şartıyla.`],
+        [`${n} sold the old car and gave you ${c.h.fmt(gift)}. "I never drove it anyway."`, `${n} eski arabayı satıp sana ${c.h.fmt(gift)} verdi. "Zaten hiç binmiyordum."`],
+      ];
+      return c.t(lines[i][0], lines[i][1]);
+    },
+    tone: 'good',
+  },
+  {
+    // a set-up date for a single player of 20–34 (review item 3: a passive first life never met anyone)
+    id: 'base.nudge_date',
+    category: 'love',
+    scheduled: true,
+    when: (c) => !c.h.partner(),
+    setup: (c) => {
+      const tr = inTr(c);
+      const i = c.rng.int(0, SETUP_HOW.length - (tr ? 0 : 1));
+      c.vars.how = i >= SETUP_HOW.length ? 'aunt' : i;
+      c.vars.pid = c.h.newPerson({ gender: dateGender(c), age: Math.max(18, c.age + c.rng.int(-4, 4)) }).id;
+    },
+    title: (c) => {
+      const [en, tr] = setupHow(c).title(nm(c));
+      return c.t(en, tr);
+    },
+    text: (c) => c.t(setupHow(c).text[0], setupHow(c).text[1]),
+    choices: [
+      {
+        id: 'yes',
+        label: (c) => c.t('Give it a chance', 'Bir şans ver'),
+        resolve: (c) => {
+          const them = who(c);
+          if (c.rng.chance(0.45 + c.p.stats.looks / 250 + c.p.stats.happiness / 500)) {
+            c.h.addRelation(them, 'partner', c.rng.int(55, 80));
+            c.h.stat('happiness', 8);
+            return sayWith(c, 'date.yes', DATE_YES, them);
+          }
+          c.h.stat('happiness', -3);
+          return sayWith(c, 'date.no', DATE_NO, them);
+        },
+        tone: (c) => (c.p.relations.some((r) => r.personId === String(c.vars.pid) && r.kind === 'partner') ? 'good' : 'bad'),
+      },
+      {
+        id: 'later',
+        label: (c) => c.t('Not now', 'Şimdi olmaz'),
+        resolve: (c) => sayWith(c, 'nudge.later', SETUP_LATER, who(c)),
+      },
+      {
+        id: 'single',
+        label: (c) => c.t("I'm happy single", 'Bekârlık sultanlıktır'),
+        resolve: (c) => {
+          c.h.flag('single_by_choice');
+          c.h.stat('happiness', 3);
+          return say(c, 'nudge.single', SINGLE_LINES);
+        },
+      },
+    ],
+  },
+  {
+    // two years together: propose, move in, or leave it be
+    id: 'base.nudge_together',
+    category: 'love',
+    scheduled: true,
+    when: (c) => c.h.relatives('partner').length > 0,
+    setup: (c) => {
+      c.vars.pid = c.h.relatives('partner')[0].person.id;
+    },
+    title: (c) => c.t(`${nm(c)} asks where this is going`, `${nm(c)} "Biz neyiz?" diye sordu`),
+    text: (c) =>
+      c.t(
+        `${c.s.year - (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.sinceYear ?? c.s.year)} years together. The toothbrush at your place has turned into a question.`,
+        `${c.s.year - (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.sinceYear ?? c.s.year)} yıldır birliktesiniz. Evindeki diş fırçası artık bir soru işareti.`,
+      ),
+    choices: [
+      {
+        id: 'propose',
+        label: (c) => c.t('Propose', 'Evlenme teklif et'),
+        badge: 'Big change',
+        resolve: (c) => propose(c, 0.1, wage(c, 400)),
+        tone: (c) => (c.p.relations.some((r) => r.personId === String(c.vars.pid) && r.kind === 'spouse') ? 'big' : 'bad'),
+      },
+      {
+        id: 'move_in',
+        label: (c) => c.t('Move in together', 'Aynı eve çıkın'),
+        requires: (c) => !c.h.has('moved_in'),
+        resolve: (c) => {
+          c.h.flag('moved_in');
+          c.h.closeness(String(c.vars.pid), 8);
+          c.h.stat('happiness', 4);
+          const n = nm(c);
+          const moved = atParents(c) ? `${moveTo(c, 'flat', 'rent')} ` : '';
+          return (
+            moved +
+            c.t(`You and ${n} share one key ring now, and a long argument about where the sofa goes.`, `${wth(n)} artık tek bir anahtarlığı paylaşıyorsunuz; bir de kanepenin yeri hakkında uzun bir tartışmayı.`)
+          );
+        },
+        tone: 'good',
+      },
+      {
+        id: 'wait',
+        label: (c) => c.t('Keep things as they are', 'Her şey böyle kalsın'),
+        resolve: (c) => {
+          c.h.closeness(String(c.vars.pid), -4);
+          return sayWith(c, 'nudge.wait', TOGETHER_WAIT, who(c));
+        },
+      },
+    ],
+  },
+  {
+    // "thinking about kids?": the couple decides; trying means a baby within a few years, by age (lifeNudge)
+    id: 'base.nudge_kids',
+    category: 'family',
+    scheduled: true,
+    when: (c) => !!c.h.partner(),
+    setup: (c) => {
+      c.vars.pid = c.h.partner()!.person.id;
+      c.vars.kids = c.h.relatives('child').length;
+    },
+    title: (c) =>
+      Number(c.vars.kids) > 0
+        ? c.t('A little brother or sister?', 'Bir kardeş mi geliyor?')
+        : c.t('Thinking about kids?', 'Çocuk düşünüyor musunuz?'),
+    text: (c) =>
+      Number(c.vars.kids) > 0
+        ? c.t(`${nm(c)} has been looking at the old baby clothes again.`, `${nm(c)} yine eski bebek kıyafetlerine bakıyor.`)
+        : c.t(`${nm(c)} held a friend's baby all evening and would not give it back.`, `${nm(c)} bütün akşam bir arkadaşınızın bebeğini kucağından indirmedi.`),
+    choices: [
+      {
+        id: 'try',
+        label: (c) => c.t('Start trying', 'Denemeye başlayın'),
+        requires: (c) => canHaveBaby(c),
+        resolve: (c) => {
+          c.h.flag('trying');
+          c.h.closeness(String(c.vars.pid), 5);
+          c.h.stat('happiness', 3);
+          return sayWith(c, 'nudge.try', TRY_LINES, nm(c));
+        },
+        tone: 'good',
+      },
+      {
+        id: 'adopt',
+        label: (c) => c.t('Adopt a child', 'Evlat edinin'),
+        badge: 'Big change',
+        requires: (c) => canAdopt(c) && c.p.money >= wage(c, 2500),
+        requiresLabel: 'Not enough money',
+        resolve: (c) => adoptChild(c, c.p.money < wage(c, 6000)),
+        tone: adoptTone,
+      },
+      {
+        id: 'later',
+        label: (c) => c.t('Not yet', 'Henüz değil'),
+        resolve: (c) => sayWith(c, 'nudge.kids_later', KIDS_LATER, nm(c)),
+      },
+      {
+        id: 'enough',
+        label: (c) => (Number(c.vars.kids) > 0 ? c.t('Our family is complete', 'Ailemiz tamam') : c.t('We are happy as we are', 'Böyle mutluyuz')),
+        resolve: (c) => {
+          c.h.flag('no_more_kids');
+          return sayWith(c, 'nudge.kids_enough', KIDS_ENOUGH, nm(c));
+        },
+      },
+    ],
+  },
+  {
+    // from 45, a player with no child hears it plainly: the family ends with them unless something changes
+    id: 'base.no_heir',
+    category: 'family',
+    scheduled: true,
+    when: (c) => c.h.relatives('child').length === 0,
+    setup: (c) => {
+      const nib = livingNiblings(c);
+      if (nib.length) c.vars.nib = nib[0].id;
+    },
+    title: (c) => c.t('You have no heir yet', 'Henüz bir varisin yok'),
+    text: (c) => {
+      const fam = c.s.dynasty.familyName;
+      const nib = c.vars.nib ? c.h.person(String(c.vars.nib)) : undefined;
+      if (nib)
+        return c.t(
+          `You have no children. If your story ended today, the ${fam} family would pass to your ${nib.gender === 'female' ? 'niece' : 'nephew'} ${nib.firstName}.`,
+          `Hiç çocuğun yok. Hikâyen bugün bitse ${fam} ailesi yeğenin ${dat(nib.firstName)} geçerdi.`,
+        );
+      return c.t(
+        `You have no children, no nieces and no nephews. If your story ended today, the ${fam} family would end with it.`,
+        `Ne çocuğun var ne de yeğenin. Hikâyen bugün bitse ${fam} ailesi de seninle biterdi.`,
+      );
+    },
+    choices: [
+      {
+        id: 'adopt',
+        label: (c) => c.t('Start the adoption papers', 'Evlat edinme başvurusu yap'),
+        badge: 'Big change',
+        requires: (c) => canAdopt(c) && c.p.money >= wage(c, 2500),
+        requiresLabel: 'Not enough money',
+        resolve: (c) => adoptChild(c, c.p.money < wage(c, 6000)),
+        tone: adoptTone,
+      },
+      {
+        id: 'try',
+        label: (c) => c.t('Try for a baby', 'Bebek için deneyin'),
+        requires: (c) => canHaveBaby(c),
+        resolve: (c) => {
+          c.h.flag('trying');
+          return sayWith(c, 'nudge.try', TRY_LINES, c.h.partner()!.person.firstName);
+        },
+        tone: 'good',
+      },
+      {
+        id: 'nibling',
+        label: (c) => c.t('Spend time with your niece or nephew', 'Yeğeninle vakit geçir'),
+        requires: (c) => !!c.vars.nib,
+        resolve: (c) => {
+          const n = c.h.person(String(c.vars.nib)).firstName;
+          c.h.stat('happiness', 4);
+          return c.t(
+            `You took ${n} out for ice cream and told the family stories, the true ones first. ${n} asked for more.`,
+            `${acc(n)} dondurma yemeye götürdün ve aile hikâyelerini anlattın, önce gerçek olanları. ${n} devamını istedi.`,
+          );
+        },
+        tone: 'good',
+      },
+      {
+        id: 'peace',
+        label: (c) => c.t('Make peace with it', 'Kabullen'),
+        resolve: (c) => {
+          c.h.stat('happiness', 2);
+          return c.t(
+            'You decided a life does not need an heir to have been worth it. You still wrote down the family stories, just in case.',
+            'Bir hayatın değerli olması için varis gerekmediğine karar verdin. Yine de aile hikâyelerini ne olur ne olmaz diye yazıya döktün.',
+          );
+        },
+      },
+    ],
+  },
+];
+
+/** Close family who would help with a debt: grown children (28+) for a player of 50+, parents for one under 40. */
+export function bailoutHelpers(c: Ctx) {
+  if (c.age >= 50) return c.h.relatives('child').filter((r) => c.h.ageOf(r.person) >= 28 && r.rel.closeness >= 55);
+  if (c.age < 40) return c.h.relatives(['mother', 'father']).filter((r) => r.rel.closeness >= 60 && c.h.ageOf(r.person) < 80);
+  return [];
+}
+
+/** Too soon after a birth (the "try for a baby" activity, review item 7). */
+export const BABY_TOO_SOON: Pair[] = [
+  ['Your youngest is still a baby. Everyone agreed to sleep first and think about it later.', 'En küçüğünüz daha bebek. Herkes önce uyumaya, sonra düşünmeye karar verdi.'],
+  ['Not yet. Nobody in the house has slept a full night since the last one arrived.', 'Henüz değil. Sonuncusu geldiğinden beri evde kimse tek bir gece deliksiz uyumadı.'],
+  ['The doctor said to wait a little. The baby you already have agreed, loudly, at 3 a.m.', 'Doktor biraz beklemenizi söyledi. Evdeki bebek de gece üçte, avaz avaz katıldı.'],
+];
 
 export const scheduledEvents: EventDef[] = [
   {
@@ -306,7 +708,13 @@ export const scheduledEvents: EventDef[] = [
       jobChoice(0),
       jobChoice(1),
       jobChoice(2),
-      { id: 'none', label: (c) => c.t('Keep looking later', 'Sonra yine bakarsın'), resolve: () => '' },
+      {
+        id: 'none',
+        label: (c) => c.t('Keep looking later', 'Sonra yine bakarsın'),
+        // a line, so a year whose only event was the listings still has something in the story
+        resolve: (c) =>
+          c.vars.job0 ? c.t('You closed the listings. Maybe next week.', 'İlanları kapattın. Belki haftaya.') : c.t('Nothing for you this week. You will look again.', 'Bu hafta sana uygun bir ilan yok. Yine bakacaksın.'),
+      },
     ],
   },
   {
@@ -314,8 +722,7 @@ export const scheduledEvents: EventDef[] = [
     category: 'love',
     scheduled: true,
     setup: (c) => {
-      const g = c.p.gender === 'female' ? 'male' : 'female';
-      c.vars.pid = c.h.newPerson({ gender: g, age: Math.max(18, c.age + c.rng.int(-5, 5)) }).id;
+      c.vars.pid = c.h.newPerson({ gender: dateGender(c), age: Math.max(18, c.age + c.rng.int(-5, 5)) }).id;
       c.vars.vibe = c.rng.pick(VIBES_EN);
     },
     title: (c) => c.t(`You went on a date with ${nm(c)}.`, `${wth(nm(c))} randevuya çıktın.`),
@@ -389,6 +796,7 @@ export const scheduledEvents: EventDef[] = [
     text: (c) => c.t('The nurse is waiting with a pen.', 'Hemşire elinde kalemle bekliyor.'),
     choices: [nameChoice(0), nameChoice(1), nameChoice(2)],
   },
+  ...NUDGE_EVENTS,
   {
     // opened by the engine once, between 35 and 45, for a player without children (playtest 2: 12% of lives end
     // the dynasty without a word). A nudge, never a push: every answer is a fine answer.
@@ -473,22 +881,39 @@ export const scheduledEvents: EventDef[] = [
       ),
     choices: [
       {
+        // ways out of debt (review item 6): the house if there is one, otherwise the furniture
         id: 'sell',
-        label: (c) => c.t('Sell the house and rent', 'Evi sat, kiraya geç'),
+        label: (c) => (c.p.home.owned ? c.t('Sell the house and rent', 'Evi sat, kiraya geç') : c.t('Sell your furniture', 'Eşyalarını sat')),
         badge: 'Big change',
-        requires: (c) => c.p.home.owned && c.p.home.value > 0,
+        requires: (c) => (c.p.home.owned && c.p.home.value > 0) || c.p.home.furniture.length > 0,
         resolve: (c) => {
           c.h.stat('happiness', -6);
-          return `${moveTo(c, 'flat', 'rent')} ${c.t('The bank sent a thank-you letter. In black ink.', 'Banka bir teşekkür mektubu gönderdi. Bu sefer siyah mürekkeple.')}`;
+          if (c.p.home.owned) return `${moveTo(c, 'flat', 'rent')} ${c.t('The bank sent a thank-you letter. In black ink.', 'Banka bir teşekkür mektubu gönderdi. Bu sefer siyah mürekkeple.')}`;
+          const sale = sellFurniture(c);
+          return c.t(
+            `You sold the furniture for ${c.h.fmt(sale)}. The flat echoes now, and so does the bank's silence.`,
+            `Eşyaları ${c.h.fmt(sale)} karşılığında sattın. Ev artık yankı yapıyor; bankanın sessizliği de öyle.`,
+          );
         },
         tone: 'big',
       },
       {
+        // the first time: the bank restructures and writes off part of it; later, a plain repayment plan
         id: 'plan',
-        label: (c) => c.t('Agree a repayment plan', 'Ödeme planı yap'),
+        label: (c) => (c.h.has('restructured') ? c.t('Agree a repayment plan', 'Ödeme planı yap') : c.t('Restructure the debt', 'Borcu yapılandır')),
         resolve: (c) => {
           c.h.flag('debt_plan');
           c.h.stat('happiness', -4);
+          if (!c.h.has('restructured')) {
+            c.h.flag('restructured');
+            const unsecured = Math.max(0, -c.p.money - (c.p.home.owned ? c.p.home.value : 0));
+            const cut = Math.round(unsecured * 0.3);
+            c.h.money(cut);
+            return c.t(
+              `The bank agreed to new terms: ${c.h.fmt(cut)} written off and the rest spread over ten years. You signed eleven pages and felt lighter.`,
+              `Banka borcunu yapılandırdı: ${c.h.fmt(cut)} silindi, kalanı on yıla yayıldı. On bir sayfa imzaladın ve hafifledin.`,
+            );
+          }
           return c.t(
             'Fewer takeaways, no holidays and a spreadsheet stuck to the fridge. Slowly, the number shrinks.',
             'Daha az paket servis, sıfır tatil ve buzdolabına yapışık bir tablo. Rakam yavaş yavaş küçülüyor.',
@@ -525,6 +950,15 @@ export const scheduledEvents: EventDef[] = [
     ],
   },
 ];
+
+/** Sells every piece of furniture at 40% of its price (a way out of debt). Returns the money raised. */
+function sellFurniture(c: Ctx): number {
+  const wf = wage(c, 1000) / 1000;
+  const sale = Math.round(c.p.home.furniture.reduce((sum, id) => sum + (furnitureItem(id)?.price ?? 0) * wf * 0.4, 0));
+  c.p.home.furniture = [];
+  c.h.money(sale);
+  return sale;
+}
 
 function propose(c: Ctx, bonus: number, cost: number): string {
   const pid = String(c.vars.pid);

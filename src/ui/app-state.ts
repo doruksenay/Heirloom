@@ -5,6 +5,7 @@ import { loadDaily, loadGame, loadMode, loadProfile, saveDaily, saveGame, saveMo
 import { newDailyGame, todayKey, trackDaily } from '../engine/daily';
 import { applyTheme, getTheme, isThemeOwned, type ThemeDef } from '../themes/registry';
 import { AdMobProvider, type AdPlacement } from '../platform/ads';
+import { expandEntitlements } from '../platform/purchases';
 import { isNative, syncStatusBar } from '../platform/native';
 import { setUiLang } from '../i18n/ui';
 import { configureAnalytics, track } from '../platform/analytics';
@@ -42,16 +43,31 @@ export interface AppApi {
   ad: { placement: AdPlacement; finish: (ok: boolean) => void } | null;
 }
 
+/** Turkish phones start in Turkish; everyone else in English, until the player picks. */
+export function deviceLang(): Lang {
+  try {
+    return (navigator.languages?.[0] ?? navigator.language ?? '').toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+/** The saved profile, with bundle purchases expanded into the packs they unlock. */
+function loadOwned(): Profile {
+  const p = loadProfile();
+  return { ...p, entitlements: expandEntitlements(p.entitlements) };
+}
+
 export function useApp(): AppApi {
-  const [profile, setProfile] = useState<Profile>(loadProfile);
+  const [profile, setProfile] = useState<Profile>(loadOwned);
   const [family, setFamily] = useState<GameState | null>(() => {
     const g = loadGame();
-    if (g) refreshPacks(g, loadProfile());
+    if (g) refreshPacks(g, loadOwned());
     return g;
   });
   const [daily, setDaily] = useState<GameState | null>(() => {
     const g = loadDaily();
-    if (g) refreshPacks(g, loadProfile());
+    if (g) refreshPacks(g, loadOwned());
     return g;
   });
   const [mode, setModeState] = useState<'family' | 'daily'>(() => (loadMode() === 'daily' && loadDaily() ? 'daily' : 'family'));
@@ -67,7 +83,7 @@ export function useApp(): AppApi {
   const toastTimer = useRef<number | undefined>(undefined);
   const [ad, setAd] = useState<AppApi['ad']>(null);
 
-  const lang: Lang = profile.settings.language ?? 'en';
+  const lang: Lang = profile.settings.language ?? deviceLang();
   setUiLang(lang); // before any screen renders this frame
   useEffect(() => configureAnalytics({ consent: profile.settings.analytics, lang }), [profile.settings.analytics, lang]);
 
@@ -146,7 +162,8 @@ export function useApp(): AppApi {
       setTab('life');
     },
     updateProfile(fn) {
-      const next = fn(profile);
+      const changed = fn(profile);
+      const next = { ...changed, entitlements: expandEntitlements(changed.entitlements) };
       saveProfile(next);
       setProfile(next);
       for (const g of [family, daily]) if (g) refreshPacks(g, next);

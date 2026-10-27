@@ -6,10 +6,14 @@ import { newGame } from '../../engine/game';
 import { Logo, Scene, Wordmark } from '../brand/Brand';
 import { T } from '../../i18n/ui';
 import { DailyCard } from './Daily';
+import { deviceLang } from '../app-state';
+import { LangSwitch } from './Intro';
+import { Icon } from '../icons';
 
 export function NewLife({ app }: { app: AppApi }) {
   const [gender, setGender] = useState<Gender>('female');
-  const [countryId, setCountry] = useState('tr');
+  // a new life starts where the player is likely to be: Türkiye on a Turkish phone, the US otherwise
+  const [countryId, setCountry] = useState(() => (deviceLang() === 'tr' || app.lang === 'tr' ? 'tr' : 'us'));
   const country = getCountry(countryId);
   const [city, setCity] = useState(country.cities[0]);
   const [first, setFirst] = useState('');
@@ -53,7 +57,13 @@ export function NewLife({ app }: { app: AppApi }) {
 
   return (
     <div class="screen">
-      <Scene height={290} id="nl">
+      <div class="row between first-bar">
+        <LangSwitch app={app} />
+        <button type="button" class="btn small ghost icon-btn" aria-label={T('Settings')} onClick={() => app.go('settings')}>
+          <Icon name="gear" size={22} />
+        </button>
+      </div>
+      <Scene height={250} id="nl">
         <Logo size={92} />
         <Wordmark size={44} />
         <div class="tagline">{T('Live a life. Leave a legacy.')}</div>

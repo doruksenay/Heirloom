@@ -18,7 +18,7 @@ import { griefEvents } from './events-grief';
 import { adoptionActivities, adoptionEvents } from './adoption';
 import { youngMoreActivities, youngMoreEvents, youngMoreOnYear } from './events-young-more';
 import { adultMoreActivities, adultMoreEvents, adultMoreOnYear } from './events-adult-more';
-import { streetActivities, streetEvents, streetOnYear } from './street';
+import { streetActivities, streetEvents, streetNetWorth, streetOnYear, streetTiles } from './street';
 
 export const basePack: ContentPack = {
   id: 'base',
@@ -53,5 +53,6 @@ export const basePack: ContentPack = {
     streetOnYear(c);
   },
   onInherit: (prev, next, s) => homeOnInherit(prev, next, s),
-  lifeTiles: (s) => homeTiles(s),
+  lifeTiles: (s) => [...homeTiles(s), ...streetTiles(s)],
+  netWorth: (s) => streetNetWorth(s),
 };

@@ -28,6 +28,22 @@ import {
   type HeirloomType,
   type HlEntry,
 } from './heirloom-words';
+import {
+  MORE_BORROW,
+  MORE_COPY,
+  MORE_KID_MISHAP,
+  MORE_LESSON,
+  MORE_NOTE_PLACE,
+  MORE_PARTNER_IDEA,
+  MORE_QUIET,
+  MORE_REPAIRS,
+  MORE_RITUAL,
+  MORE_RITUAL_NEW,
+  MORE_SCARES,
+  MORE_SIT_TR,
+  MORE_SNEAK,
+  MORE_TALL_TALE,
+} from './heirloom-more';
 
 // The heirloom beats: about one a decade, each about an heirloom the family actually owns and the real
 // people who kept it (c.s.dynasty.heirlooms and c.s.dynasty.lives). Every event picks its heirloom in setup
@@ -108,6 +124,7 @@ const TALL_TALE: PerType<Pair> = {
   recipes: ['the soup recipe was smuggled out of a palace kitchen', 'çorba tarifinin bir saray mutfağından kaçırıldığını'],
   trophy: ['it was won against a team of giants', 'bir dev takımına karşı kazanıldığını'],
   painting: ['a museum once offered a fortune for it and was refused', 'bir müzenin bir zamanlar ona servet teklif ettiğini ve geri çevrildiğini'],
+  ...MORE_TALL_TALE,
 };
 /** A small mishap when a child holds it. */
 const KID_MISHAP: PerType<Pair> = {
@@ -118,6 +135,7 @@ const KID_MISHAP: PerType<Pair> = {
   recipes: ['tore the corner of the soup page. You taped it with great ceremony.', 'çorba sayfasının köşesini yırttı. Büyük bir törenle bantladınız.'],
   trophy: ['wore it as a hat. Briefly. There was a dent, and then a lecture.', 'onu şapka gibi taktı. Kısa bir süre. Önce bir göçük oldu, sonra da bir nutuk.'],
   painting: ['left a small fingerprint in the corner. You decided to call it a signature.', 'köşesine küçük bir parmak izi bıraktı. Ona imza demeye karar verdin.'],
+  ...MORE_KID_MISHAP,
 };
 
 /** Someone wants to borrow it: [what they ask, how it came back], and who could be asking (by age). */
@@ -157,6 +175,7 @@ const BORROW: PerType<{ ask: (n: string) => Pair; back: (n: string) => Pair; age
     ask: (n) => [`${n} asks to hang the painting in a small local exhibition.`, `${n}, tabloyu küçük bir mahalle sergisinde asmak istiyor.`],
     back: (n) => [`The painting came back with a little card: "Lent by the family." ${n} says people stood in front of it for a long time.`, `Tablo küçük bir kartla geri geldi: "Ailenin izniyle sergilenmiştir." ${n}, insanların önünde uzun uzun durduğunu söylüyor.`],
   },
+  ...MORE_BORROW,
 };
 
 /** The family ritual around it. */
@@ -168,6 +187,7 @@ const RITUAL: PerType<Pair> = {
   recipes: ['one dish from the recipe book is cooked exactly as written, stains and all', 'tarif defterinden bir yemek, lekesiyle birlikte tam yazıldığı gibi pişiriliyor'],
   trophy: ['the trophy is polished and the story of the win is told, a little longer every year', 'kupa parlatılıyor ve zaferin hikâyesi anlatılıyor; her yıl biraz daha uzun'],
   painting: ['the family photo is taken in front of the painting', 'aile fotoğrafı tablonun önünde çekiliyor'],
+  ...MORE_RITUAL,
 };
 /** Where a previous keeper hid a note. */
 const NOTE_PLACE: PerType<Pair> = {
@@ -178,6 +198,7 @@ const NOTE_PLACE: PerType<Pair> = {
   recipes: ['Between two pages of the recipe book', 'Tarif defterinin iki sayfasının arasında'],
   trophy: ["Rolled up inside the trophy's cup", 'Kupanın içine rulo yapılmış'],
   painting: ["Taped to the back of the painting's frame", 'Tablonun çerçevesinin arkasına bantlanmış'],
+  ...MORE_NOTE_PLACE,
 };
 
 /** How to look after it: [title clause, how the lesson went]. */
@@ -210,6 +231,7 @@ const LESSON: PerType<{ how: Pair; done: (n: string) => Pair }> = {
     how: ['A feather duster, out of the sun, and never touch the paint.', 'Tüy toz alıcı, güneşten uzak ve boyaya asla dokunmadan.'],
     done: (n) => [`You showed ${n} how to dust the painting and pointed out the details only the family knows.`, `${dat(n)} tablonun tozunu almayı gösterdin ve sadece ailenin bildiği ayrıntıları tek tek işaret ettin.`],
   },
+  ...MORE_LESSON,
 };
 
 /** A copy for a sibling who wants the heirloom: [what the copy is]. */
@@ -221,6 +243,7 @@ const COPY: PerType<Pair> = {
   recipes: ['a hand-copied book, every stain drawn in', 'her lekesi tek tek çizilmiş, elle yazılmış bir kopya'],
   trophy: ['a little replica with the same engraving', 'üstünde aynı yazı olan küçük bir kopya'],
   painting: ['a good print in the same frame', 'aynı çerçevede güzel bir baskı'],
+  ...MORE_COPY,
 };
 
 /** How you sit with it at night, in Turkish (you do not pick up a piano): "piyanonun başına", "yorgana sarınıp". */
@@ -232,6 +255,7 @@ const SIT_TR: PerType<string> = {
   recipes: 'tarif defterini kucağına alıp',
   trophy: 'kupayı karşına koyup',
   painting: 'tablonun karşısına',
+  ...MORE_SIT_TR,
 };
 
 
@@ -408,6 +432,7 @@ const REPAIRS: PerType<Repair[]> = {
       bad: ['You clamped it too tight. The frame is square now; the painting is very slightly not.', 'Mengeneyi fazla sıktın. Çerçeve artık gönyesinde; tablo ise azıcık değil.'],
     },
   ],
+  ...MORE_REPAIRS,
 };
 
 /** A scare: [what happened, how you got it back by searching, how the reward brought it back]. Four per type. */
@@ -571,6 +596,7 @@ const SCARES: PerType<Scare[]> = {
       reward: ['A restorer saved it and pointed out a faint signature nobody in the family had ever noticed.', 'Bir restoratör kurtardı ve ailede kimsenin fark etmediği silik bir imzayı gösterdi.'],
     },
   ],
+  ...MORE_SCARES,
 };
 
 /** Something new added to the ritual (two per type, used in turn). */
@@ -603,6 +629,7 @@ const RITUAL_NEW: PerType<Pair[]> = {
     ['This year the photo was taken in the same poses as one from decades ago. Side by side, they made everyone quiet.', 'Bu yıl fotoğraf, onlarca yıl önceki bir fotoğrafla aynı pozlarda çekildi. Yan yana koyunca herkes sustu.'],
     ['This year everyone pointed out one detail in the painting nobody else had noticed. The painting held up.', 'Bu yıl herkes tabloda kimsenin fark etmediği bir ayrıntıyı gösterdi. Tablo bu sınavı da geçti.'],
   ],
+  ...MORE_RITUAL_NEW,
 };
 
 /** What a partner wants to change: [what they say, how giving in turned out]. Two per type, used in turn. */
@@ -677,6 +704,7 @@ const PARTNER_IDEA: PerType<{ idea: (n: string) => Pair; yes: Pair }[]> = {
       yes: ['In its new frame the painting looks lighter and somehow younger. The old frame is in the attic, waiting to be argued about.', 'Yeni çerçevesinde tablo daha hafif ve nedense daha genç görünüyor. Eski çerçeve tavan arasında, tartışılmayı bekliyor.'],
     },
   ],
+  ...MORE_PARTNER_IDEA,
 };
 
 /** A teenager borrowing it in secret: [the plan, how it went well, how it went wrong]. Two per type, used in turn. */
@@ -765,6 +793,7 @@ const SNEAK: PerType<{ plan: Pair; ok: Pair; bad: Pair }[]> = {
       bad: ['You took it down for better light and knocked a corner. The frame has a new dent. You moved a plant in front of it.', 'Işık daha iyi olsun diye duvardan indirdin ve köşesini vurdun. Çerçevede yeni bir göçük var. Önüne bir saksı koydun.'],
     },
   ],
+  ...MORE_SNEAK,
 };
 
 /** Sitting with it at night: what you notice (three per type, used in turn). */
@@ -804,6 +833,7 @@ const QUIET: PerType<Pair[]> = {
     ['You found a detail in the corner you had never noticed: a small window with a light on.', 'Köşede hiç fark etmediğin bir ayrıntı buldun: ışığı yanan küçük bir pencere.'],
     ['You looked at it until the room disappeared and only the painting was left.', 'Oda kaybolana ve geriye sadece tablo kalana kadar ona baktın.'],
   ],
+  ...MORE_QUIET,
 };
 
 // ------------------------------------------------ events
@@ -824,7 +854,7 @@ const borrowers = (c: Ctx, it: HeirloomInstance) => {
   return c.h.relatives(['sibling', 'friend']).filter((r) => c.h.ageOf(r.person) >= lo && c.h.ageOf(r.person) <= hi && !lent.has(r.person.firstName));
 };
 /** Heirlooms you can carry out of the house. */
-const PORTABLE: HeirloomType[] = ['clock', 'ring', 'quilt', 'recipes', 'trophy', 'painting'];
+const PORTABLE: HeirloomType[] = ['clock', 'ring', 'quilt', 'recipes', 'trophy', 'painting', 'camera', 'letters', 'teaset', 'sewing', 'radio', 'kilim', 'typewriter', 'tavla', 'toolbox'];
 
 // dynasty-wide spacing: the same heirloom is not nearly lost again within 25 years, and the family as a whole
 // has at most one scare every 12 years (a new heir no longer replays the parent's scare the next decade)

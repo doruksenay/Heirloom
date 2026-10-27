@@ -1,5 +1,6 @@
 import type { Player } from './types';
 import { getCountry } from './world';
+import { currentTier } from './home';
 
 /**
  * The yearly household budget. All amounts are game (US-baseline) dollars per year.
@@ -20,6 +21,11 @@ export const NET_PAY = 0.75;
 export const HOME_UPKEEP = 0.012;
 /** Share of take-home pay above the basic cost of living that the household spends anyway. */
 export const LIFESTYLE_SHARE = 0.85;
+/**
+ * The same share for a household in debt: it cuts back and pays down what it owes (review item 6: with 85% of every
+ * spare coin spent, 5% interest outgrew the repayments and a working life could sink for decades).
+ */
+export const LIFESTYLE_SHARE_IN_DEBT = 0.45;
 /**
  * Lifestyle creep on savings: each year a household spends this share of its savings above a cushion of
  * WEALTH_CUSHION years of living costs (a bigger car, nicer holidays, helping the kids). Keeps family
@@ -48,13 +54,32 @@ export const ESTATE_FLOOR = 0.3;
 export function inheritanceTax(cash: number, wageFactor: number): number {
   return Math.round(Math.max(0, cash - TAX_FREE_ALLOWANCE * wageFactor) * INHERITANCE_TAX);
 }
+/**
+ * Yearly university tuition in US-baseline dollars before the country's wage factor (review item 6: a Turkish
+ * state university charged about ₺54K a year). Türkiye: state universities, no tuition. Germany: a small semester
+ * fee. Brazil: the public universities are free, but most students pay a private one. UK and US: real fees.
+ */
+export const TUITION_USD: Record<string, number> = { tr: 0, de: 300, br: 1500, uk: 3500, us: 4500 };
+
+/** Yearly tuition in game dollars for a student in this country (0 means free). */
+export function tuitionFor(countryId: string): number {
+  return Math.round((TUITION_USD[countryId] ?? 3000) * getCountry(countryId).wageFactor);
+}
+
+/** Up to this age a young adult without a job can live in the parents' home without paying their way. */
+export const PARENTS_HOME_AGE = 26;
+
+/** Still living in the parents' home, without a job: the parents keep the fridge full (review item 6). */
+export const livesWithParents = (p: Player, age: number, salary: number) =>
+  !salary && age < PARENTS_HOME_AGE && !p.retired && !p.home.owned && currentTier(p) === 'parents';
+
 /** Real yearly growth of an owned home's value. */
 export const HOME_GROWTH = 0.01;
 /** Owning your home cuts living costs (no rent). */
 export const OWNER_DISCOUNT = 0.7;
 export const PENSION_RATE = 0.5;
-export const PENSION_MIN = 0.6;
-export const PENSION_MAX = 0.9;
+export const PENSION_MIN = 0.7;
+export const PENSION_MAX = 0.95;
 /** Age from which an adult without a job lives on a pension. */
 export const PENSION_AGE = 65;
 
@@ -81,9 +106,11 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
   const pay = salary * NET_PAY;
   if (age < 18) return { pay, cost: 0, support: 0 };
   let cost = country.costOfLiving * (partner ? 0.7 : 1) * (1 + kidsAtHome * 0.22);
-  if (p.school === 'university') cost *= 0.2; // student life
-  else if (!salary && age < 23 && !p.retired) cost = 0; // still living with the parents
-  cost += LIFESTYLE_SHARE * Math.max(0, pay - cost);
+  const atHome = livesWithParents(p, age, salary);
+  if (atHome) cost = 0; // still living with the parents: no rent, no bills
+  else if (p.school === 'university') cost *= 0.2; // student life
+  else if (!salary && age < 23 && !p.retired) cost = 0; // between homes, still looked after
+  cost += (p.money < 0 ? LIFESTYLE_SHARE_IN_DEBT : LIFESTYLE_SHARE) * Math.max(0, pay - cost);
   if (p.home.owned) cost *= OWNER_DISCOUNT;
   if (age >= 70) cost += country.costOfLiving * Math.min(0.5, 0.03 * (age - 69)); // care and medicine
   if ('debt_plan' in p.flags && p.money < 0) cost *= 0.9; // a repayment plan: fewer takeaways, no holidays
@@ -91,7 +118,7 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
   let support = 0;
   if (!salary) {
     if (p.retired || age >= PENSION_AGE) support = pensionFor(p.lastSalary, cost);
-    else if (age >= 23) support = country.costOfLiving * 0.7; // odd jobs and benefits
+    else if (age >= 23 && !atHome) support = country.costOfLiving * 0.7; // odd jobs and benefits
   }
   // on top of the living costs the pension is measured against: spending that grows with savings, and interest
   if (age >= 23) {

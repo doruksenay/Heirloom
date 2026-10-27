@@ -43,9 +43,36 @@ const STAT_META: { key: keyof Stats; label: string; color: string }[] = [
   { key: 'looks', label: 'Looks', color: 'var(--stat-looks)' },
 ];
 
-function StatBars({ stats }: { stats: Stats }) {
+/** The four stats as one slim row: glyph, number and a hairline meter. Tap to open the full view. */
+function StatMini({ stats, onToggle, ring }: { stats: Stats; onToggle?: () => void; ring?: boolean }) {
   return (
-    <div class="stats-bars">
+    <button type="button" class={`stats-mini${ring ? ' ring-mini' : ''}`} onClick={onToggle} aria-expanded={false} aria-label={T('Show stats')}>
+      {STAT_META.map((m) => (
+        <span class="mini" key={m.key} role="meter" aria-label={T(m.label)} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>
+          <span class="mini-head">
+            <StatIcon k={m.key} color={m.color} />
+            <span class="num">{stats[m.key]}</span>
+          </span>
+          <span class="mini-bar">
+            <span style={{ width: `${stats[m.key]}%`, background: m.color }} />
+          </span>
+        </span>
+      ))}
+      <span class="mini-chev" aria-hidden="true">
+        <svg viewBox="0 0 12 12" width="12" height="12">
+          <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </span>
+    </button>
+  );
+}
+
+type StatsProps = { stats: Stats; compact?: boolean; onToggle?: () => void };
+
+function StatBars({ stats, compact, onToggle }: StatsProps) {
+  if (compact) return <StatMini stats={stats} onToggle={onToggle} />;
+  return (
+    <div class="stats-bars" onClick={onToggle} role={onToggle ? 'button' : undefined} aria-expanded={onToggle ? true : undefined}>
       {STAT_META.map((m) => (
         <div class="stat" key={m.key}>
           <div class="stat-head">
@@ -64,11 +91,12 @@ function StatBars({ stats }: { stats: Stats }) {
   );
 }
 
-function StatRings({ stats }: { stats: Stats }) {
+function StatRings({ stats, compact, onToggle }: StatsProps) {
+  if (compact) return <StatMini stats={stats} onToggle={onToggle} ring />;
   const r = 24;
   const len = 2 * Math.PI * r;
   return (
-    <div class="stats-rings">
+    <div class="stats-rings" onClick={onToggle} role={onToggle ? 'button' : undefined} aria-expanded={onToggle ? true : undefined}>
       {STAT_META.map((m) => (
         <div class="ring" key={m.key}>
           <svg width="60" height="60" viewBox="0 0 60 60" role="meter" aria-label={T(m.label)} aria-valuenow={stats[m.key]} aria-valuemin={0} aria-valuemax={100}>
@@ -108,6 +136,25 @@ function groupByAge(log: LogEntry[]) {
 
 const toneClass = (t?: string) => (t ? `tone-${t}` : '');
 
+/** An answered event logs its title too (LogEntry.title), so the story reads in context when you scroll back. */
+type Entry = LogEntry & { title?: string };
+
+function Entries({ entries }: { entries: Entry[] }) {
+  return (
+    <>
+      {entries.map((e, i) => {
+        const title = e.title && e.title !== entries[i - 1]?.title ? e.title : null;
+        return (
+          <div class={`log-entry ${toneClass(e.tone)}`} key={i}>
+            {title && <div class="log-title">{title}</div>}
+            <div>{e.text}</div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function useStickToBottom(dep: unknown) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -120,17 +167,12 @@ function useStickToBottom(dep: unknown) {
 function LogTimeline({ log, currentAge }: { log: LogEntry[]; currentAge: number }) {
   const ref = useStickToBottom(log.length);
   return (
-    <div class="card log" ref={ref} aria-live="polite">
-      <div class="eyebrow">{T('Life story')}</div>
+    <div class="card log" ref={ref} aria-live="polite" aria-label={T('Life story')}>
       {groupByAge(log).map((g) => (
         <div class={`log-row ${g.age === currentAge ? 'current' : ''}`} key={`${g.age}-${g.entries[0].text}`}>
           <div class="log-age">{g.age}</div>
           <div class="log-text">
-            {g.entries.map((e, i) => (
-              <div class={toneClass(e.tone)} key={i}>
-                {e.text}
-              </div>
-            ))}
+            <Entries entries={g.entries} />
           </div>
         </div>
       ))}
@@ -147,11 +189,7 @@ function LogCards({ log, currentAge }: { log: LogEntry[]; currentAge: number }) 
           <div class="eyebrow" style={g.age === currentAge ? { color: 'var(--accent)' } : undefined}>
             {T('Age {n}', { n: g.age })}
           </div>
-          {g.entries.map((e, i) => (
-            <div class={toneClass(e.tone)} key={i}>
-              {e.text}
-            </div>
-          ))}
+          <Entries entries={g.entries} />
         </div>
       ))}
     </div>

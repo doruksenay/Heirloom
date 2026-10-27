@@ -172,6 +172,15 @@ describe('base content guards (playtest 2)', () => {
       recipes: /recipe/i,
       trophy: /trophy/i,
       painting: /painting/i,
+      camera: /camera/i,
+      letters: /bundle of letters/i,
+      teaset: /tea set/i,
+      sewing: /sewing machine/i,
+      radio: /\bradio\b/i,
+      kilim: /kilim/i,
+      typewriter: /typewriter/i,
+      tavla: /backgammon/i,
+      toolbox: /toolbox/i,
     };
     let opened = 0;
     for (const t of HEIRLOOM_TYPES) {

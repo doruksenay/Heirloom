@@ -6,8 +6,11 @@ import { gen } from '../../i18n/tr-grammar';
 // case forms, "your own ..." when the heirloom carries the player's name, and the real people who kept it.
 // Everything here is pure (no rng).
 
-export type HeirloomType = 'clock' | 'ring' | 'piano' | 'quilt' | 'recipes' | 'trophy' | 'painting';
-export const HEIRLOOM_TYPES: HeirloomType[] = ['clock', 'ring', 'piano', 'quilt', 'recipes', 'trophy', 'painting'];
+export type HeirloomType = 'clock' | 'ring' | 'piano' | 'quilt' | 'recipes' | 'trophy' | 'painting' | MoreHeirloomType;
+/** The heirloom types added in round 4 (their scenario tables live in heirloom-more.ts). */
+export type MoreHeirloomType = 'camera' | 'letters' | 'teaset' | 'sewing' | 'radio' | 'kilim' | 'typewriter' | 'tavla' | 'toolbox';
+export const MORE_HEIRLOOM_TYPES: MoreHeirloomType[] = ['camera', 'letters', 'teaset', 'sewing', 'radio', 'kilim', 'typewriter', 'tavla', 'toolbox'];
+export const HEIRLOOM_TYPES: HeirloomType[] = ['clock', 'ring', 'piano', 'quilt', 'recipes', 'trophy', 'painting', ...MORE_HEIRLOOM_TYPES];
 
 export interface HeirloomWords {
   /** English noun: "pocket watch". */
@@ -30,6 +33,15 @@ export const HEIRLOOM_WORDS: Record<HeirloomType, HeirloomWords> = {
   recipes: { en: 'recipe book', nom: 'tarif defteri', acc: 'tarif defterini', dat: 'tarif defterine', gen: 'tarif defterinin', poss: 'tarif defterin', possAcc: 'tarif defterini' },
   trophy: { en: 'trophy', nom: 'kupa', acc: 'kupayı', dat: 'kupaya', gen: 'kupanın', poss: 'kupan', possAcc: 'kupanı' },
   painting: { en: 'painting', nom: 'tablo', acc: 'tabloyu', dat: 'tabloya', gen: 'tablonun', poss: 'tablon', possAcc: 'tablonu' },
+  camera: { en: 'camera', nom: 'fotoğraf makinesi', acc: 'fotoğraf makinesini', dat: 'fotoğraf makinesine', gen: 'fotoğraf makinesinin', poss: 'fotoğraf makinen', possAcc: 'fotoğraf makineni' },
+  letters: { en: 'bundle of letters', nom: 'mektup destesi', acc: 'mektup destesini', dat: 'mektup destesine', gen: 'mektup destesinin', poss: 'mektup desten', possAcc: 'mektup desteni' },
+  teaset: { en: 'tea set', nom: 'çay takımı', acc: 'çay takımını', dat: 'çay takımına', gen: 'çay takımının', poss: 'çay takımın', possAcc: 'çay takımını' },
+  sewing: { en: 'sewing machine', nom: 'dikiş makinesi', acc: 'dikiş makinesini', dat: 'dikiş makinesine', gen: 'dikiş makinesinin', poss: 'dikiş makinen', possAcc: 'dikiş makineni' },
+  radio: { en: 'radio', nom: 'radyo', acc: 'radyoyu', dat: 'radyoya', gen: 'radyonun', poss: 'radyon', possAcc: 'radyonu' },
+  kilim: { en: 'kilim', nom: 'kilim', acc: 'kilimi', dat: 'kilime', gen: 'kilimin', poss: 'kilimin', possAcc: 'kilimini' },
+  typewriter: { en: 'typewriter', nom: 'daktilo', acc: 'daktiloyu', dat: 'daktiloya', gen: 'daktilonun', poss: 'daktilon', possAcc: 'daktilonu' },
+  tavla: { en: 'backgammon board', nom: 'tavla', acc: 'tavlayı', dat: 'tavlaya', gen: 'tavlanın', poss: 'tavlan', possAcc: 'tavlanı' },
+  toolbox: { en: 'toolbox', nom: 'alet çantası', acc: 'alet çantasını', dat: 'alet çantasına', gen: 'alet çantasının', poss: 'alet çantan', possAcc: 'alet çantanı' },
 };
 
 export const isType = (id: string): id is HeirloomType => (HEIRLOOM_TYPES as string[]).includes(id);

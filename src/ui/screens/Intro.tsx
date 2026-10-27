@@ -5,6 +5,7 @@ import { Icon } from '../icons';
 import { Scene, Wordmark } from '../brand/Brand';
 import { T } from '../../i18n/ui';
 import { configureAnalytics, track } from '../../platform/analytics';
+import type { Lang } from '../../engine/types';
 
 /** First-launch pages: what makes Heirloom different, in three swipes, then the data question. */
 export function Intro({ app }: { app: AppApi }) {
@@ -63,11 +64,14 @@ export function Intro({ app }: { app: AppApi }) {
     <div class="screen fill intro">
       <div class="row between">
         <Wordmark size={24} />
-        {!last && (
-          <button type="button" class="btn small ghost" onClick={() => setPage(pages.length)}>
-            {T('Skip')}
-          </button>
-        )}
+        <div class="row" style={{ gap: '4px' }}>
+          <LangSwitch app={app} />
+          {!last && (
+            <button type="button" class="btn small ghost" style={{ border: 'none' }} onClick={() => setPage(pages.length)}>
+              {T('Skip')}
+            </button>
+          )}
+        </div>
       </div>
 
       {!last ? (
@@ -113,6 +117,24 @@ export function Intro({ app }: { app: AppApi }) {
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+/** EN | TR on the very first screens, so nobody has to find Settings to read the game in their language. */
+export function LangSwitch({ app }: { app: AppApi }) {
+  const pick = (l: Lang) => {
+    if (l === app.lang) return;
+    app.updateProfile((p) => ({ ...p, settings: { ...p.settings, language: l } }));
+    track('language', { lang: l });
+  };
+  return (
+    <div class="lang-switch" role="group" aria-label={T('Language')}>
+      {(['en', 'tr'] as const).map((l) => (
+        <button type="button" key={l} lang={l} aria-pressed={app.lang === l} onClick={() => pick(l)}>
+          {l === 'en' ? 'EN' : 'TR'}
+        </button>
+      ))}
     </div>
   );
 }

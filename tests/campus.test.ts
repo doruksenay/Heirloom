@@ -1,3 +1,4 @@
+import { MAJOR_JOBS } from '../src/content/campus/state';
 import { describe, expect, it } from 'vitest';
 import { ageUp, choose, doActivity, newGame } from '../src/engine/game';
 import { activitiesFor, allJobs, eventsFor } from '../src/content/registry';
@@ -179,7 +180,7 @@ describe('Campus round-3 playtest fixes', () => {
       const s = grad('en', 'education', seed);
       fair(s);
       const first = offered(s);
-      for (const id of first) expect(['teacher', 'academic', 'journalist']).toContain(id);
+      for (const id of first) expect(MAJOR_JOBS.education).toContain(id);
       choose(s, 'none');
       s.year++;
       s.player.actionsThisYear = {};

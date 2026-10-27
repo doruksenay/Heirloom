@@ -12,6 +12,7 @@ import { track } from '../../platform/analytics';
 import type { RelationKind } from '../../engine/types';
 import { Avatar } from '../Avatar';
 import { cityName } from '../../engine/places';
+import { HeirCardView, torchView } from '../HeirCard';
 
 const KIN: Record<RelationKind, [string, string]> = {
   mother: ['Mother', 'Mother'],
@@ -254,8 +255,6 @@ function TorchSheet({ app, onClose }: { app: AppApi; onClose: () => void }) {
   const options = torchHeirs(s);
   const me = s.player;
   const chosen = options.find((o) => o.person.id === picked);
-  const relLabel = (kind: 'child' | 'grandchild', female: boolean) =>
-    kind === 'child' ? T(female ? 'Daughter' : 'Son') : T(female ? 'Granddaughter' : 'Grandson');
   const confirm = () => {
     if (!chosen) return;
     track('pass_torch', { age: playerAge(s), gen: s.dynasty.generation, grandchild: chosen.kind === 'grandchild' });
@@ -273,27 +272,9 @@ function TorchSheet({ app, onClose }: { app: AppApi; onClose: () => void }) {
             ✕
           </button>
         </div>
-        <div class="list" style={{ gap: '8px' }}>
+        <div class="heir-list">
           {options.map(({ person, kind }) => (
-            <button
-              type="button"
-              class="item"
-              key={person.id}
-              aria-pressed={picked === person.id}
-              style={picked === person.id ? { border: '1px solid var(--accent)' } : undefined}
-              onClick={() => setPicked(person.id)}
-            >
-              <Avatar id={person.id + person.firstName} gender={person.gender} age={ageOf(s, person)} size={44} label={person.firstName} />
-              <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                <div class="item-title">
-                  {person.firstName} {person.lastName}
-                </div>
-                <div class="item-sub">
-                  {relLabel(kind, person.gender === 'female')} · {ageOf(s, person)}
-                  {person.jobTitle ? ` · ${person.jobTitle}` : ''}
-                </div>
-              </div>
-            </button>
+            <HeirCardView key={person.id} v={torchView(s, person, kind)} s={s} lang={app.lang} selected={picked === person.id} onPick={() => setPicked(person.id)} />
           ))}
         </div>
         {chosen && (

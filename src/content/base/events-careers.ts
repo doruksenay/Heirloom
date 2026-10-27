@@ -3,6 +3,8 @@ import { loc, wage } from './util';
 import { promoteAnyway } from '../../engine/context';
 import { byCountry, cityOf, coastal, inTr, type ByCountry } from './events-flavour';
 import { canEnlist, canTryOut, isJob } from './activities-careers';
+import { jobBoardEvents } from './job-board';
+import { careerEventsR4 } from './events-careers-r4';
 
 // v0.7 careers: job-specific events. Every event is guarded by the player's current job.
 
@@ -2797,4 +2799,7 @@ export const careerEvents: EventDef[] = [
       },
     ],
   },
+  // round 4: the job board and events for the new jobs
+  ...jobBoardEvents,
+  ...careerEventsR4,
 ];

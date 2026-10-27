@@ -1,3 +1,4 @@
+import { hasCar, removeCar } from './street-cars';
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import { acc, cap, da, dat, gen, kin, loc, nm, single, wage, who, wth, employee, workKind, type WorkKind, quietInMourning } from './util';
 import { catName, syncFlagCat } from '../../engine/pets';
@@ -387,7 +388,8 @@ export const moreEvents: EventDef[] = [
     category: 'money',
     minAge: 18,
     cooldown: 6,
-    when: (c) => c.h.has('license'),
+    // only a player who owns a car (street-cars.ts); base.car_wont_start covers most breakdowns now
+    when: (c) => hasCar(c),
     setup: (c) => {
       c.vars.amt = wage(c, c.rng.int(400, 2500));
     },
@@ -410,8 +412,7 @@ export const moreEvents: EventDef[] = [
         id: 'bus',
         label: (c) => c.t('Take the bus from now on', 'Artık otobüse bin'),
         resolve: (c) => {
-          c.h.unflag('license');
-          c.h.flag('license_nocar');
+          removeCar(c.p);
           c.h.stat('health', 2);
           return c.t(
             'You sold the car for scrap and started taking the bus. You know all the drivers now.',

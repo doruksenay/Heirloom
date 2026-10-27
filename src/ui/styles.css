@@ -182,7 +182,8 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 .swatches span { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(127, 127, 127, 0.3); }
 .room { border-radius: var(--radius-l); overflow: hidden; background: var(--surface); line-height: 0; }
 .room svg { width: 100%; height: auto; display: block; }
-.toast { position: absolute; left: 50%; bottom: calc(var(--safe-bottom) + 84px); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; z-index: 30; max-width: 90%; text-align: center; }
+.toast { position: absolute; left: 50%; top: calc(var(--safe-top) + 14px); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; z-index: 30; max-width: 90%; text-align: center; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); animation: drop 0.25s ease; }
+@keyframes drop { from { transform: translate(-50%, -12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 
 /* onboarding */
 .tip { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border-radius: var(--radius-m); background: var(--surface); border: 1px solid var(--accent); flex-shrink: 0; }
@@ -228,3 +229,129 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 .daily-pill { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; }
 .daily-btn { position: relative; }
 .daily-btn.new::after { content: ''; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+/* ---------------------------------------------------------------- Life screen, round 4: the story gets the room */
+.life { gap: 10px; padding-top: calc(var(--safe-top) + 12px); padding-bottom: 12px; }
+.life-top { min-height: 36px; }
+.btn.icon-btn { min-height: 40px; min-width: 40px; padding: 0 8px; border: none; }
+.btn svg { flex-shrink: 0; }
+.life-id { gap: 12px; }
+.life-name { font-size: 23px; font-weight: 800; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.life-meta { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.life-meta b { color: var(--text-soft); font-weight: 700; }
+
+/* money and pack values: one slim row, scrolls sideways when a pack adds more */
+.ledger { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
+.ledger::-webkit-scrollbar { display: none; }
+.ledger-item { flex: 1 0 auto; min-width: 92px; display: flex; flex-direction: column; gap: 1px; padding: 7px 12px 8px; border-radius: var(--radius-m); background: var(--surface); }
+.ledger-item .k { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.ledger-item .v { font-family: var(--font-display); font-size: 17px; font-weight: 700; white-space: nowrap; }
+.ledger-item .v.bad { color: var(--bad); }
+.ledger-item .v.accent { color: var(--accent); }
+
+/* the story: titles in the display face, the outcome underneath */
+.life .log { min-height: 0; }
+.log-entry { display: flex; flex-direction: column; gap: 2px; }
+.log-title { font-family: var(--font-display); font-weight: 600; font-size: 14.5px; color: var(--accent-2, var(--accent)); letter-spacing: 0.01em; }
+.life .card.log { padding: 14px 14px 14px 12px; }
+
+/* stats folded into one row; tap to open the full bars or rings */
+.stats-mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 14px; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-m); background: transparent; text-align: left; }
+.stats-mini .mini { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.stats-mini .mini-head { display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 700; }
+.stats-mini .stat-ico { width: 15px; height: 15px; }
+.stats-mini .mini-bar { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; display: block; }
+.stats-mini .mini-bar > span { display: block; height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+.stats-mini .mini-chev { color: var(--muted); display: flex; justify-content: center; }
+.life .stats-bars, .life .stats-rings { cursor: pointer; }
+.life .age-pill { min-height: 54px; font-size: 19px; }
+.life .age-disc { width: 68px; height: 68px; font-size: 12px; }
+
+/* the pocket watch: a quiet link, only on choices that matter */
+.rewind { align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; }
+.rewind .rewind-n { min-width: 18px; height: 18px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 11px; display: inline-flex; align-items: center; justify-content: center; }
+.life .tip { padding: 10px 12px; }
+.life .tip .btn.small { min-height: 34px; }
+
+/* ---------------------------------------------------------------- Store, round 4: covers and what you get */
+.store-lede { margin: -4px 0 0; line-height: 1.5; font-size: 14px; }
+.pack { background: var(--surface); border-radius: var(--radius-l); overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--line); }
+.pack-hero { border-color: var(--accent); box-shadow: var(--glow, none); }
+.pack-art { position: relative; line-height: 0; }
+.cover { display: block; width: 100%; }
+.pack-badges { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; }
+.badge { font-family: var(--font-display); font-weight: 700; font-size: 13px; line-height: 1; padding: 6px 10px; border-radius: 999px; background: rgba(12, 11, 38, 0.72); color: #FFF4EC; letter-spacing: 0.02em; }
+.badge.free { background: #00E5D1; color: #0C0B26; }
+.badge.save { background: #FFB347; color: #2A1B57; }
+.badge.mature { background: var(--bad); color: #0C0B26; }
+.pack-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.pack-title { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.pack-hero .pack-title { font-size: 26px; }
+.pack-desc { margin: 0; color: var(--text-soft); line-height: 1.45; font-size: 15px; }
+.pack-gets { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.pack-gets li { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.35; color: var(--text); }
+.pack-gets li svg { color: var(--good); margin-top: 2px; }
+.pack-foot { margin-top: 4px; }
+
+/* ---------------------------------------------------------------- heir cards (death screen, pass the torch) */
+.heir { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--surface); text-align: left; }
+.heir.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.heir.cta { border-color: transparent; background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--btn-primary, var(--accent)) border-box; border: 1.5px solid transparent; }
+.heir-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.heir-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.heir-name { font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+.heir-rel { font-size: 13px; color: var(--muted); font-weight: 600; }
+.heir-will { font-size: 11px; font-weight: 800; color: var(--accent-2, var(--accent)); }
+.heir-job { font-size: 14px; color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.heir-facts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; font-size: 13px; font-weight: 700; }
+.heir-facts .fact { display: inline-flex; align-items: center; gap: 4px; color: var(--text-soft); }
+.heir-facts .fact.accent { color: var(--accent); }
+.heir-close { display: inline-flex; align-items: center; gap: 5px; }
+.heir-close .meter { width: 46px; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; display: inline-block; }
+.heir-close .meter > span { display: block; height: 100%; background: var(--stat-health); border-radius: 3px; }
+.heir-go { color: var(--accent); flex: none; }
+.heir-list { display: flex; flex-direction: column; gap: 8px; }
+
+/* Daily result: the moments of the life, as a short timeline */
+.moments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.moments li { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); line-height: 1.4; }
+.moments li:first-child { border-top: none; padding-top: 2px; }
+.moments .m-age { font-family: var(--font-display); font-weight: 700; color: var(--accent); width: 26px; flex: none; }
+.moments .m-text { display: flex; flex-direction: column; gap: 1px; color: var(--text-soft); font-size: 14px; }
+.moments .m-text b { font-family: var(--font-display); color: var(--text); font-weight: 700; font-size: 15px; }
+.moments li.tone-big .m-text > span { color: var(--text); font-weight: 600; }
+
+/* first screens: language and settings without hunting */
+.first-bar { margin: -6px 0 -6px; }
+.lang-switch { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.lang-switch button { min-height: 32px; min-width: 40px; padding: 0 10px; border: none; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 800; font-size: 13px; letter-spacing: 0.04em; }
+.lang-switch button[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); }
+
+/* job board */
+.sheet.jobs { max-height: 94%; gap: 12px; padding-bottom: calc(var(--safe-bottom) + 16px); }
+.sheet.jobs .chip-row { margin: 0 calc(-1 * var(--gutter)); padding-left: var(--gutter); padding-right: var(--gutter); }
+.job-list { display: flex; flex-direction: column; gap: 8px; }
+.job { width: 100%; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; text-align: left; padding: 12px 14px; border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--surface-2); }
+.job.locked { opacity: 0.72; background: transparent; }
+.job-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.job-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; line-height: 1.2; }
+.job-sub { font-size: 12.5px; color: var(--muted); }
+.job-reqs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.job-reqs .req { font-size: 11.5px; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--surface); color: var(--text-soft); }
+.job-why { display: flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 12.5px; font-weight: 700; color: var(--bad); }
+.job-pay { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.job-pay > .num { font-family: var(--font-display); font-weight: 700; font-size: 16px; white-space: nowrap; }
+.odds { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.odds.good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.odds.fair { background: color-mix(in srgb, var(--accent-2, var(--accent)) 18%, transparent); color: var(--accent-2, var(--accent)); }
+.odds.low { background: var(--surface); color: var(--muted); }
+
+/* decorate: furniture as drawn tiles, two to a row */
+.furn-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.furn { background: var(--surface); border-radius: var(--radius-m); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; border: 1px solid transparent; }
+.furn.owned { border-color: var(--accent); }
+.furn-pic { position: relative; height: 64px; display: flex; align-items: center; justify-content: center; border-radius: calc(var(--radius-m) - 4px); background: var(--room-wall, var(--surface-2)); margin-bottom: 4px; }
+.furn-placed { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; }
+.furn-name { font-weight: 700; font-size: 14px; line-height: 1.25; min-height: 2.5em; }
+.furn-sub { font-size: 12px; color: var(--muted); }
+.furn-buy { margin-top: 6px; min-height: 36px; width: 100%; font-size: 13px; }

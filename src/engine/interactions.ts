@@ -4,6 +4,7 @@ import { ageOf, makeCtx } from './context';
 import { getCountry } from './world';
 import { isCoastal, seaName } from './places';
 import { acc, dat, gen, loc, wth } from '../i18n/tr-grammar';
+import { inTr } from '../content/base/events-flavour';
 import { ABROAD_CITIES } from '../content/base/events-flavour';
 import { pickIndex } from '../content/base/lines';
 import { cap, kin, kinWord } from '../content/base/util';
@@ -21,6 +22,42 @@ import {
   type Rel,
   type W,
 } from '../content/base/people-lines';
+import {
+  AGAIN_MORE,
+  CALL,
+  CALL_YOUNG,
+  COOK,
+  COOK_FAIL,
+  COOK_YOUNG,
+  GAME_GROWN,
+  GAME_GROWN_TR,
+  GAME_KID,
+  GAME_REL,
+  GAME_TEEN,
+  GOSSIP,
+  GOSSIP_BACKFIRE,
+  GOSSIP_YOUNG,
+  HELP,
+  HELP_NO,
+  HELP_YOUNG,
+  HOLIDAY,
+  HOLIDAY_YOUNG,
+  HUG,
+  HUG_SMALL,
+  HUG_YOUNG,
+  INSULT,
+  INSULT_SHRUG,
+  INSULT_YOUNG,
+  INTRO_AWKWARD,
+  INTRO_GOOD,
+  JOKE,
+  JOKE_FLOP,
+  JOKE_FLOP_BABY,
+  JOKE_YOUNG,
+  SORRY,
+  SORRY_YOUNG,
+  type Young,
+} from '../content/base/people-lines-more';
 
 /** How many times per year the player can interact with the same person. */
 export const INTERACTIONS_PER_PERSON = 2;
@@ -419,8 +456,9 @@ function argueKey(c: Ctx, p: Person, kind: RelationKind): string {
 }
 
 /** A second use of the same interaction with the same person this year (interact() counts it before run). */
-const again = (c: Ctx, p: Person, id: string) => (c.p.actionsThisYear[`rel:${p.id}:${id}`] ?? 0) >= 2 && !!AGAIN[id];
-const againLine = (c: Ctx, p: Person, id: string) => pickLine(c, `again:${id}`, build(AGAIN[id], who(p, c)));
+const againPool = (id: string): L[] | undefined => AGAIN[id] ?? AGAIN_MORE[id];
+const again = (c: Ctx, p: Person, id: string) => (c.p.actionsThisYear[`rel:${p.id}:${id}`] ?? 0) >= 2 && !!againPool(id);
+const againLine = (c: Ctx, p: Person, id: string) => pickLine(c, `again:${id}`, build(againPool(id)!, who(p, c)));
 
 // ---------------------------------------------------------------- a child who emigrated (base.child_abroad)
 
@@ -464,7 +502,7 @@ const livesAbroad = (c: Ctx, p: Person) => c.h.has(`abroad:${p.id}`);
 
 // ---------------------------------------------------------------- the interactions
 
-export const INTERACTIONS: InteractionDef[] = [
+const BASE_INTERACTIONS: InteractionDef[] = [
   {
     id: 'time',
     label: 'Spend time together',
@@ -634,6 +672,236 @@ export const INTERACTIONS: InteractionDef[] = [
     },
   },
 ];
+
+// ---------------------------------------------------------------- round 4: eleven more ways to treat people
+
+/** The other person's stage when it is not grown up (the young pools), else null. */
+const youngOf = (c: Ctx, p: Person): Young | null => {
+  const st = stageOf(ageOf(c.s, p));
+  return st === 'baby' || st === 'kid' || st === 'teen' ? st : null;
+};
+const themAge = (c: Ctx, p: Person) => ageOf(c.s, p);
+const near = (c: Ctx, p: Person) => !livesAbroad(c, p);
+
+/** Picks a line: the young pool for a child or teen, else the pool written for this relationship. */
+function relLine(c: Ctx, p: Person, kind: RelationKind, id: string, grown: Record<Rel, L[]>, young?: Partial<Record<Young, L[]>> | L[]): string {
+  const y = youngOf(c, p);
+  const w = who(p, c);
+  if (y && young) {
+    const pool = Array.isArray(young) ? young : young[y];
+    if (pool?.length) return pickLine(c, `${id}:${Array.isArray(young) ? 'young' : y}`, build(pool, w));
+  }
+  const rel = relOf(kind);
+  return pickLine(c, `${id}:${rel}`, build(grown[rel], w));
+}
+
+/** The player's living partner or spouse, other than `p`. */
+function loveOf(c: Ctx, p: Person): Person | undefined {
+  const r = c.p.relations.find((x) => (x.kind === 'partner' || x.kind === 'spouse') && x.personId !== p.id && c.s.people[x.personId]?.deathYear === undefined);
+  return r ? c.s.people[r.personId] : undefined;
+}
+
+const MORE_INTERACTIONS: InteractionDef[] = [
+  {
+    id: 'hug',
+    label: 'Hug',
+    labelTr: 'Sarıl',
+    kinds: ALL,
+    minAge: 1,
+    available: (c, p) => near(c, p),
+    run: (c, p, r) => {
+      c.h.closeness(p.id, c.rng.int(3, 6));
+      c.h.stat('happiness', 1);
+      if (again(c, p, 'hug')) return againLine(c, p, 'hug');
+      // a small child hugging someone bigger hugs like a small child
+      if (c.age <= 12 && !youngOf(c, p)?.match(/baby|kid/)) return pickLine(c, 'hug:small', build(HUG_SMALL, who(p, c)));
+      return relLine(c, p, r.kind, 'hug', HUG, HUG_YOUNG);
+    },
+  },
+  {
+    id: 'joke',
+    label: 'Tell a joke',
+    labelTr: 'Fıkra anlat',
+    kinds: ALL,
+    minAge: 4,
+    run: (c, p, r) => {
+      const ok = c.rng.chance(0.75);
+      if (!ok) {
+        c.h.closeness(p.id, -1);
+        return pickLine(c, youngOf(c, p) === 'baby' ? 'joke:flop:baby' : 'joke:flop', build(youngOf(c, p) === 'baby' ? JOKE_FLOP_BABY : JOKE_FLOP, who(p, c)));
+      }
+      c.h.closeness(p.id, c.rng.int(3, 6));
+      c.h.stat('happiness', 2);
+      if (again(c, p, 'joke')) return againLine(c, p, 'joke');
+      return relLine(c, p, r.kind, 'joke', JOKE, JOKE_YOUNG);
+    },
+  },
+  {
+    id: 'call',
+    label: 'Call',
+    labelTr: 'Telefonla ara',
+    kinds: ALL,
+    minAge: 8,
+    available: (c, p) => themAge(c, p) >= 6,
+    run: (c, p, r) => {
+      c.h.closeness(p.id, c.rng.int(3, 6));
+      c.h.stat('happiness', 1);
+      if (again(c, p, 'call')) return againLine(c, p, 'call');
+      return relLine(c, p, r.kind, 'call', CALL, youngOf(c, p) ? CALL_YOUNG : undefined);
+    },
+  },
+  {
+    id: 'game',
+    label: 'Play a game',
+    labelTr: 'Oyun oyna',
+    kinds: ALL,
+    minAge: 3,
+    available: (c, p) => themAge(c, p) >= 3 && near(c, p),
+    run: (c, p, r) => {
+      c.h.closeness(p.id, c.rng.int(3, 6));
+      c.h.stat('happiness', 3);
+      if (again(c, p, 'game')) return againLine(c, p, 'game');
+      const w = who(p, c);
+      const them = stageOf(themAge(c, p));
+      const me = stageOf(c.age);
+      if (me === 'kid' || me === 'baby' || them === 'kid') return pickLine(c, 'game:kid', build(GAME_KID, w));
+      if (me === 'teen' || them === 'teen') return pickLine(c, 'game:teen', build(GAME_TEEN, w));
+      const rel = relOf(r.kind);
+      const tr = inTr(c);
+      return pickLine(c, `game:grown:${rel}${tr ? ':tr' : ''}`, build([...GAME_GROWN, ...(tr ? GAME_GROWN_TR : []), ...(GAME_REL[rel] ?? [])], w));
+    },
+  },
+  {
+    id: 'cook',
+    label: 'Cook a meal',
+    labelTr: 'Yemek yap',
+    kinds: ALL,
+    minAge: 12,
+    available: (c, p) => themAge(c, p) >= 3 && near(c, p),
+    run: (c, p, r) => {
+      if (c.rng.chance(0.15)) {
+        c.h.closeness(p.id, 1);
+        return pickLine(c, 'cook:fail', build(COOK_FAIL, who(p, c)));
+      }
+      c.h.closeness(p.id, c.rng.int(4, 8));
+      c.h.stat('happiness', 2);
+      if (again(c, p, 'cook')) return againLine(c, p, 'cook');
+      return relLine(c, p, r.kind, 'cook', COOK, COOK_YOUNG);
+    },
+  },
+  {
+    id: 'help',
+    label: 'Ask for help',
+    labelTr: 'Yardım iste',
+    kinds: ALL,
+    minAge: 8,
+    available: (c, p) => themAge(c, p) >= 12 && near(c, p),
+    run: (c, p, r) => {
+      if (c.rng.chance(0.25)) {
+        c.h.closeness(p.id, -1);
+        return pickLine(c, 'help:no', build(HELP_NO, who(p, c)));
+      }
+      c.h.closeness(p.id, 2);
+      c.h.stat(c.rng.chance(0.5) ? 'smarts' : 'happiness', 2);
+      if (again(c, p, 'help')) return againLine(c, p, 'help');
+      return relLine(c, p, r.kind, 'help', HELP, youngOf(c, p) === 'teen' ? HELP_YOUNG : undefined);
+    },
+  },
+  {
+    id: 'gossip',
+    label: 'Gossip',
+    labelTr: 'Dedikodu yap',
+    kinds: ['mother', 'father', 'grandparent', 'sibling', 'partner', 'spouse', 'child', 'friend'],
+    minAge: 10,
+    available: (c, p) => themAge(c, p) >= 10,
+    run: (c, p, r) => {
+      if (c.rng.chance(0.15)) {
+        c.h.closeness(p.id, -3);
+        c.h.stat('happiness', -2);
+        return pickLine(c, 'gossip:backfire', build(GOSSIP_BACKFIRE, who(p, c)));
+      }
+      c.h.closeness(p.id, 3);
+      c.h.stat('happiness', 2);
+      if (again(c, p, 'gossip')) return againLine(c, p, 'gossip');
+      return relLine(c, p, r.kind, 'gossip', GOSSIP, GOSSIP_YOUNG);
+    },
+  },
+  {
+    id: 'sorry',
+    label: 'Apologise',
+    labelTr: 'Özür dile',
+    kinds: ALL,
+    minAge: 4,
+    run: (c, p, r) => {
+      c.h.closeness(p.id, r.closeness < 50 ? c.rng.int(6, 12) : c.rng.int(2, 4));
+      c.h.stat('happiness', 2);
+      if (again(c, p, 'sorry')) return againLine(c, p, 'sorry');
+      return relLine(c, p, r.kind, 'sorry', SORRY, SORRY_YOUNG);
+    },
+  },
+  {
+    id: 'holiday',
+    label: 'Go on holiday together',
+    labelTr: 'Birlikte tatile çık',
+    kinds: ALL,
+    minAge: 18,
+    available: (c, p) => themAge(c, p) >= 4 && near(c, p) && c.p.money >= wage(c, 600),
+    run: (c, p, r) => {
+      c.h.money(-wage(c, c.rng.int(400, 1500)));
+      c.h.closeness(p.id, c.rng.int(12, 18));
+      c.h.stat('happiness', 6);
+      c.h.stat('health', 1);
+      if (again(c, p, 'holiday')) return againLine(c, p, 'holiday');
+      return relLine(c, p, r.kind, 'holiday', HOLIDAY, youngOf(c, p) ? HOLIDAY_YOUNG : undefined);
+    },
+  },
+  {
+    id: 'introduce',
+    label: 'Introduce your partner',
+    labelTr: 'Sevdiğini tanıştır',
+    kinds: ['mother', 'father', 'grandparent', 'sibling', 'friend'],
+    minAge: 14,
+    available: (c, p) => {
+      const love = loveOf(c, p);
+      return !!love && themAge(c, p) >= 8 && near(c, p) && !c.h.has(`met:${love.id}:${p.id}`);
+    },
+    run: (c, p, r) => {
+      const love = loveOf(c, p)!;
+      c.h.flag(`met:${love.id}:${p.id}`);
+      const ok = c.rng.chance(0.7);
+      const rel = relOf(r.kind);
+      const pool = (ok ? INTRO_GOOD : INTRO_AWKWARD)[rel] ?? (ok ? INTRO_GOOD.friend! : INTRO_AWKWARD.friend!);
+      c.h.closeness(p.id, ok ? 4 : -2);
+      c.h.closeness(love.id, ok ? 4 : -2);
+      c.h.stat('happiness', ok ? 3 : -2);
+      const w = who(p, c);
+      return pickLine(c, `introduce:${ok ? 'good' : 'awkward'}:${rel}`, pool.map((f) => f(w, love.firstName)));
+    },
+  },
+  {
+    id: 'insult',
+    label: 'Insult',
+    labelTr: 'Laf sok',
+    kinds: ALL,
+    minAge: 6,
+    available: (c, p) => themAge(c, p) >= 4,
+    run: (c, p, r) => {
+      if (c.rng.chance(0.15)) {
+        c.h.closeness(p.id, 1);
+        return pickLine(c, 'insult:shrug', build(INSULT_SHRUG, who(p, c)));
+      }
+      c.h.closeness(p.id, -c.rng.int(5, 11));
+      c.h.stat('happiness', -1);
+      if (again(c, p, 'insult')) return againLine(c, p, 'insult');
+      return relLine(c, p, r.kind, 'insult', INSULT, INSULT_YOUNG);
+    },
+  },
+];
+
+/** Shown in this order: warm things first, money and quarrels later, endings last. */
+const ORDER = ['time', 'hug', 'compliment', 'joke', 'gift', 'call', 'game', 'cook', 'story', 'advice', 'help', 'gossip', 'sorry', 'holiday', 'introduce', 'money', 'argue', 'insult', 'breakup', 'divorce'];
+const BY_ID = new Map([...BASE_INTERACTIONS, ...MORE_INTERACTIONS].map((d) => [d.id, d]));
+export const INTERACTIONS: InteractionDef[] = ORDER.map((id) => BY_ID.get(id)!);
 
 export interface InteractionOption {
   id: string;

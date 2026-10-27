@@ -485,6 +485,74 @@ const REALTOR_BAD: Lines = [
   ['A big sale fell through at the title office.', 'Büyük bir satış tapuda son anda bozuldu.'],
 ];
 
+// ------------------------------------------------------------------ round 4: elections and freelance seasons
+
+/** Years between elections, by job. */
+const TERM: Record<string, number> = { politician: 4, muhtar: 5 };
+
+/**
+ * Elected jobs (politician, muhtar) climb by winning elections, not by the engine's yearly roll (they are `ranked`).
+ * The first election comes after a few years of groundwork; losing a seat drops one rung (never below the first).
+ */
+function electionYear(c: Ctx): void {
+  const p = c.p;
+  const term = TERM[p.jobId ?? ''] ?? 4;
+  if (p.jobYears < 2 || p.jobYears % term !== 0) return;
+  const job = c.h.job();
+  if (!job) return;
+  const odds = 0.3 + p.stats.smarts / 400 + p.stats.looks / 500 + p.stats.happiness / 600 - p.jobLevel * 0.04 - (p.criminalRecord > 0 ? 0.25 : 0);
+  const won = c.rng.chance(Math.max(0.1, Math.min(0.85, odds)));
+  const mt = p.jobId === 'muhtar';
+  if (won) {
+    if (p.jobLevel >= job.titles.length - 1 || !promoteAnyway(c)) {
+      c.h.stat('happiness', 4);
+      c.h.log(c.t('Election night: you held your seat with a comfortable lead.', 'Seçim gecesi: koltuğunu rahat bir farkla korudun.'), 'good');
+      return;
+    }
+    c.h.stat('happiness', 8);
+    c.h.log(
+      mt
+        ? c.t(`The ballot boxes were opened in the coffeehouse. You won: ${c.h.jobTitle()}.`, `Sandıklar kahvehanede açıldı. Kazandın: artık ${c.h.jobTitle()} sensin.`)
+        : c.t(`Election night! You won and became ${c.h.jobTitle()}.`, `Seçim gecesi! Kazandın; artık ${c.h.jobTitle()} oldun.`),
+      'big',
+    );
+    return;
+  }
+  c.h.stat('happiness', -6);
+  const down = p.jobLevel >= 2 && demote(c);
+  c.h.log(
+    down
+      ? c.t(`You lost the election and went back to being ${c.h.jobTitle()}.`, `Seçimi kaybettin; yeniden ${c.h.jobTitle()} oldun.`)
+      : mt
+        ? c.t('You lost the election by eleven votes. You know exactly which eleven.', 'Seçimi on bir oyla kaybettin. O on bir kişinin kim olduğunu çok iyi biliyorsun.')
+        : c.t('You lost the election. You shook the winner\'s hand and started planning the next one.', 'Seçimi kaybettin. Kazananın elini sıktın ve bir sonrakini planlamaya başladın.'),
+    'bad',
+  );
+}
+
+const FREELANCE_GOOD: Record<string, Lines> = {
+  writer: [
+    ['A book club picked your book and it sold out twice.', 'Bir okuma grubu kitabını seçti; iki baskı tükendi.'],
+    ['A film company bought the rights to one of your stories.', 'Bir film şirketi öykülerinden birinin haklarını satın aldı.'],
+  ],
+  photographer: [
+    ['Wedding season was packed: every Saturday booked.', 'Düğün sezonu dopdoluydu: her cumartesi doluydu.'],
+    ['A magazine bought one of your photos for its cover.', 'Bir dergi fotoğraflarından birini kapak için satın aldı.'],
+  ],
+  translator: [
+    ['A big publisher sent you three novels in a row.', 'Büyük bir yayınevi art arda üç roman gönderdi.'],
+    ['A conference hired you for a week of interpreting.', 'Bir konferans seni bir haftalık sözlü çeviri için tuttu.'],
+  ],
+  musician: [
+    ['Your band played every wedding hall in the district this summer.', 'Grubun bu yaz ilçedeki bütün düğün salonlarında çaldı.'],
+    ['A recording studio booked you for a whole album.', 'Bir kayıt stüdyosu seni koca bir albüm için tuttu.'],
+  ],
+};
+const FREELANCE_BAD: Lines = [
+  ['A quiet year: two clients went silent and one never paid.', 'Sakin bir yıl: iki müşteri ortadan kayboldu, biri de hiç ödemedi.'],
+  ['Your laptop died with a month of work on it. The repair was not cheap.', 'Dizüstü bilgisayarın bir aylık işle birlikte gitti. Tamiri hiç ucuz değildi.'],
+];
+
 /** Yearly career logic for base-game jobs (e.g. athletes retiring, military ranks). Called from the base pack's onYear. */
 export function careerOnYear(c: Ctx): void {
   const { p } = c;
@@ -505,6 +573,14 @@ export function careerOnYear(c: Ctx): void {
       return seasonYear(c, fishGood(c), FISH_BAD, [30, 90], [20, 50], 0.12, 0.1);
     case 'realtor':
       return seasonYear(c, realtorGood(c), REALTOR_BAD, [40, 150], [10, 30], 0.2, 0.08);
+    case 'politician':
+    case 'muhtar':
+      return electionYear(c);
+    case 'writer':
+    case 'photographer':
+    case 'translator':
+    case 'musician':
+      return seasonYear(c, FREELANCE_GOOD[p.jobId], FREELANCE_BAD, [20, 80], [10, 30], 0.15, 0.1);
     case 'pilot':
       if (p.stats.health < 40) {
         const title = c.h.jobTitle();

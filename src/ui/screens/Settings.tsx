@@ -6,6 +6,7 @@ import { isNative } from '../../platform/native';
 import { T } from '../../i18n/ui';
 import { track } from '../../platform/analytics';
 import type { Lang } from '../../engine/types';
+import { DATING_PREFS, datingPref, datingPrefLabel, setDatingPref } from '../../content/base/dating';
 
 const LANGS: { id: Lang; label: string }[] = [
   { id: 'en', label: 'English' },
@@ -91,6 +92,23 @@ export function Settings({ app }: { app: AppApi }) {
           })}
         </div>
       </section>
+
+      {app.game && !app.game.dead && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2 class="title-l">{T('Dating preference')}</h2>
+          <div class="seg" role="group" aria-label={T('Dating preference')}>
+            {DATING_PREFS.map((v) => {
+              const label = datingPrefLabel(app.game!.player, v);
+              return (
+                <button type="button" key={v} aria-pressed={datingPref(app.game!.player) === v} onClick={() => app.act((g) => setDatingPref(g, v))}>
+                  {app.lang === 'tr' ? label[1] : label[0]}
+                </button>
+              );
+            })}
+          </div>
+          <div class="item-sub">{T('For {name} in this life. Each heir finds their own way.', { name: app.game.player.firstName })}</div>
+        </section>
+      )}
 
       <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="toggle-row">

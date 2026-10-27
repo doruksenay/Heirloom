@@ -1,6 +1,9 @@
 import type { AppApi } from '../app-state';
 import { TORCH_AGE, ageUp, canPassTorch, canRewind, choose, lifeStage, playerAge, rewind, rewindsLeft, salaryOf } from '../../engine/game';
-import { fmtMoneyShort } from '../../engine/context';
+import { useState } from 'preact/hooks';
+import { JOB_BOARD_EVENT } from '../../content/base/job-board';
+import { JobBoard } from './JobBoard';
+import { fmtShort } from '../money';
 import { getCountry } from '../../engine/world';
 import { cityName } from '../../engine/places';
 import { packTiles } from '../../content/registry';
@@ -14,6 +17,18 @@ import { DailyStrip, dateLabel } from './Daily';
 import { resultFor, todayKey } from '../../engine/daily';
 
 const MILESTONES = [1, 3, 6, 12, 18, 25, 40, 60, 80, 100];
+/** Categories whose label means nothing to a player ("random" is how the engine files odd moments). */
+const HIDDEN_CATEGORIES = ['random', 'life'];
+/** Small moments where the rewind button would only be noise. */
+const QUIET_CATEGORIES = ['childhood', 'school', 'random', 'pets', 'culture', 'life', 'heirloom'];
+const STATS_KEY = 'heirloom.ui.statsOpen';
+const readStatsOpen = () => {
+  try {
+    return localStorage.getItem(STATS_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 
 
 export function Life({ app }: { app: AppApi }) {
@@ -21,6 +36,15 @@ export function Life({ app }: { app: AppApi }) {
   const p = s.player;
   const age = playerAge(s);
   const { Stats, Log, AgeButton } = skinParts(app.theme.skin);
+  const [statsOpen, setOpen] = useState(readStatsOpen);
+  const setStatsOpen = (v: boolean) => {
+    setOpen(v);
+    try {
+      localStorage.setItem(STATS_KEY, v ? '1' : '0');
+    } catch {
+      /* private mode: the choice lasts until the app closes */
+    }
+  };
   const salary = salaryOf(s);
   const status =
     p.jailYears > 0
@@ -40,9 +64,23 @@ export function Life({ app }: { app: AppApi }) {
                   : T(lifeStage(age));
   const country = getCountry(p.countryId);
 
+  const tiles: { k: string; v: string; tone?: 'bad' | 'accent' }[] = [
+    { k: T('Bank'), v: fmtShort(p.money, p.countryId, app.lang), tone: p.money < 0 ? 'bad' : undefined },
+    { k: T('Salary / yr'), v: salary ? fmtShort(salary, p.countryId, app.lang) : '—' },
+    { k: T('Heirlooms'), v: String(s.dynasty.heirlooms.length), tone: 'accent' },
+    ...packTiles(s).map((t) => ({ k: T(t.label), v: t.value })),
+  ];
+  const pending = s.pending;
+  // the pocket watch is for choices that change a life, not for which crayon to eat
+  const matters =
+    !!pending &&
+    (pending.choices.some((c) => !!c.badge) || (age >= 16 && !QUIET_CATEGORIES.includes(pending.category)));
+  const showRewind = !!pending && matters && canRewind(s);
+  const watch = s.dynasty.heirlooms.find((h) => h.defId === 'clock');
+
   return (
-    <div class="screen fill">
-      <div class="row between">
+    <div class="screen fill life">
+      <div class="row between life-top">
         {s.daily ? (
           <div class="row eyebrow" style={{ gap: '8px' }}>
             <Icon name="calendar" size={16} />
@@ -54,41 +92,40 @@ export function Life({ app }: { app: AppApi }) {
             {T('{name} family · Gen {n}', { name: s.dynasty.familyName, n: s.dynasty.generation })}
           </div>
         )}
-        <div class="row" style={{ gap: '4px' }}>
-          <span class="muted num" style={{ fontSize: '13px', fontWeight: 600 }}>
+        <div class="row" style={{ gap: '2px' }}>
+          <span class="muted num" style={{ fontSize: '13px', fontWeight: 600, marginRight: '4px' }}>
             {s.year}
           </span>
           {s.daily ? (
-            <button type="button" class="btn small ghost" style={{ border: 'none', padding: '0 8px' }} onClick={() => app.backToFamily()}>
+            <button type="button" class="btn small ghost icon-btn" onClick={() => app.backToFamily()}>
               {app.family ? T('My family') : T('Exit')}
             </button>
           ) : (
             <button
               type="button"
-              class={`btn small ghost daily-btn${resultFor(app.profile, todayKey()) ? '' : ' new'}`}
-              style={{ border: 'none', padding: '0 8px' }}
+              class={`btn small ghost icon-btn daily-btn${resultFor(app.profile, todayKey()) ? '' : ' new'}`}
               aria-label={T('Daily Challenge')}
               onClick={() => app.go('daily')}
             >
               <Icon name="calendar" size={20} />
             </button>
           )}
-          <button type="button" class="btn small ghost" style={{ border: 'none', padding: '0 8px' }} aria-label={T('Settings')} onClick={() => app.go('settings')}>
+          <button type="button" class="btn small ghost icon-btn" aria-label={T('Settings')} onClick={() => app.go('settings')}>
             <Icon name="gear" size={20} />
           </button>
         </div>
       </div>
 
-      <div class="row" style={{ gap: '16px' }}>
-        <Avatar id={p.id + p.firstName} gender={p.gender} age={age} label={T('{name}, age {n}', { name: p.firstName, n: age })} />
-        <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <h1 class="title-xl">
+      <div class="row life-id">
+        <Avatar id={p.id + p.firstName} gender={p.gender} age={age} size={58} label={T('{name}, age {n}', { name: p.firstName, n: age })} />
+        <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <h1 class="life-name">
             {p.firstName} {p.lastName}
           </h1>
-          <div class="muted">
-            {age} · {status}
+          <div class="muted life-meta">
+            <b>{age}</b> · {status}
           </div>
-          <div class="muted">
+          <div class="muted life-meta">
             {cityName(p.city, app.lang)}, {app.lang === 'tr' ? country.nameTr : country.name}
           </div>
         </div>
@@ -96,40 +133,18 @@ export function Life({ app }: { app: AppApi }) {
 
       {s.daily && <DailyStrip app={app} />}
 
-      <div class="tiles">
-        <div class="tile">
-          <span class="k">{T('Bank')}</span>
-          <span class="v num" style={p.money < 0 ? { color: 'var(--bad)' } : undefined}>
-            {fmtMoneyShort(p.money, p.countryId, app.lang)}
-          </span>
-        </div>
-        <div class="tile">
-          <span class="k">{T('Salary / yr')}</span>
-          <span class="v num">{salary ? fmtMoneyShort(salary, p.countryId, app.lang) : '—'}</span>
-        </div>
-        <div class="tile">
-          <span class="k">{T('Heirlooms')}</span>
-          <span class="v" style={{ color: 'var(--accent)' }}>
-            {s.dynasty.heirlooms.length}
-          </span>
-        </div>
+      <div class="ledger" role="list">
+        {tiles.map((t) => (
+          <div class="ledger-item" role="listitem" key={t.k}>
+            <span class="k">{t.k}</span>
+            <span class={`v num${t.tone ? ` ${t.tone}` : ''}`}>{t.v}</span>
+          </div>
+        ))}
       </div>
-
-      {packTiles(s).length > 0 && (
-        <div class="tiles">
-          {packTiles(s).map((t, i, all) => (
-            // in a row of 1 or 2 tiles, the last one stretches so longer values (e.g. a degree) fit
-            <div class="tile" key={t.label} style={i === all.length - 1 && all.length % 3 ? { gridColumn: `span ${4 - (all.length % 3)}` } : undefined}>
-              <span class="k">{T(t.label)}</span>
-              <span class="v num">{t.value}</span>
-            </div>
-          ))}
-        </div>
-      )}
 
       <LifeTip app={app} age={age} />
       <Log log={p.log} currentAge={age} />
-      <Stats stats={p.stats} />
+      <Stats stats={p.stats} compact={!statsOpen} onToggle={() => setStatsOpen(!statsOpen)} />
       <AgeButton
         onClick={() => {
           app.act(ageUp);
@@ -139,32 +154,41 @@ export function Life({ app }: { app: AppApi }) {
         disabled={!!s.pending}
       />
 
-      {s.pending && (
+      {pending && pending.eventId === JOB_BOARD_EVENT && <JobBoard app={app} />}
+      {pending && pending.eventId !== JOB_BOARD_EVENT && (
         <div class="sheet-backdrop">
           <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ev-title">
             <div class="row" style={{ gap: '10px' }}>
               <div class="icon-box" style={{ width: '40px', height: '40px' }}>
-                <Icon name={s.pending.category === 'work' ? 'briefcase' : s.pending.category === 'love' ? 'life' : s.pending.category === 'crime' ? 'moon' : s.pending.category === 'family' ? 'family' : 'bolt'} />
+                <Icon name={pending.category === 'work' ? 'briefcase' : pending.category === 'love' ? 'life' : pending.category === 'crime' ? 'moon' : pending.category === 'family' ? 'family' : 'bolt'} />
               </div>
               <div class="eyebrow">
-                {T('Age {n}', { n: age })} · {T(s.pending.category)}
+                {T('Age {n}', { n: age })}
+                {HIDDEN_CATEGORIES.includes(pending.category) ? '' : ` · ${T(pending.category)}`}
               </div>
             </div>
             <h2 id="ev-title" style={{ fontSize: '25px', fontWeight: 800, lineHeight: 1.15 }}>
-              {s.pending.title}
+              {pending.title}
             </h2>
-            {s.pending.body && <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--text-soft)', fontSize: '16px' }}>{s.pending.body}</p>}
+            {pending.body && <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--text-soft)', fontSize: '16px' }}>{pending.body}</p>}
             <div class="list" style={{ gap: '10px' }}>
-              {s.pending.choices.map((ch) => (
+              {pending.choices.map((ch) => (
                 <button type="button" class="choice" key={ch.id} disabled={ch.disabled} onClick={() => app.act((g) => choose(g, ch.id))}>
                   <span>{ch.label}</span>
                   {ch.badge && <span class={`chip ${ch.disabled ? '' : ch.badge === 'Risky' || ch.badge === 'Riskli' ? 'bad' : 'accent'}`}>{badgeText(ch.badge)}</span>}
                 </button>
               ))}
             </div>
-            {canRewind(s) && (
-              <button type="button" class="btn small ghost" style={{ alignSelf: 'flex-start', color: 'var(--accent)' }} onClick={() => app.act(rewind)}>
-                <Icon name="clock" size={18} /> {T('Rewind with {item} ({n} left this life)', { item: s.dynasty.heirlooms.find((h) => h.defId === 'clock')!.name, n: rewindsLeft(s) })}
+            {showRewind && watch && (
+              <button
+                type="button"
+                class="rewind"
+                aria-label={T('Rewind with {item} ({n} left this life)', { item: watch.name, n: rewindsLeft(s) })}
+                onClick={() => app.act(rewind)}
+              >
+                <Icon name="clock" size={15} />
+                <span>{T('Rewind')}</span>
+                <span class="num rewind-n">{rewindsLeft(s)}</span>
               </button>
             )}
           </div>

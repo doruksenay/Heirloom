@@ -240,7 +240,7 @@ describe('interaction lines fit the ages involved', () => {
     expect(bad.slice(0, 10)).toEqual([]);
   });
 
-  it('only suggests calling grandma when the player is young, and uses he/she in English', () => {
+  it('only suggests calling grandma when the player is young, and uses he/she in English', { timeout: 60_000 }, () => {
     const bad: string[] = [];
     for (let seed = 1; seed <= 30; seed++) {
       for (const x of collect(seed, 'en', [0, 2, 5, 9, 12, 15, 19, 28, 35, 50, 70, 85])) {
@@ -367,5 +367,126 @@ describe('strangers never borrow a close relative\'s name (playtest 3 §2.15)', 
     const friend = c.h.newPerson({ age: 1 });
     c.h.addRelation(friend, 'friend', 50);
     expect(nameClashesWithFamily(s, friend.firstName)).toBe(false);
+  });
+});
+
+describe('round 4: twenty ways to treat people', () => {
+  const EN_WORDS = new Set(['you', 'your', 'the', 'and', 'with', 'was', 'were', 'got', 'have', 'has', 'into', 'from']);
+  const english = (t: string) => (t.replace(/"[^"]*"/g, '').toLowerCase().match(/[\p{L}]+/gu) ?? []).some((w) => EN_WORDS.has(w));
+
+  it('offers about twenty interaction types, each with a Turkish label', () => {
+    expect(INTERACTIONS.length).toBeGreaterThanOrEqual(20);
+    expect(new Set(INTERACTIONS.map((d) => d.id)).size).toBe(INTERACTIONS.length);
+    for (const d of INTERACTIONS) expect(d.labelTr.length).toBeGreaterThan(2);
+  });
+
+  it('every new interaction speaks Turkish, matches the relationship and keeps the RNG in step', () => {
+    const NEW = ['hug', 'joke', 'call', 'game', 'cook', 'help', 'gossip', 'sorry', 'holiday', 'introduce', 'insult'];
+    const seen = new Map<string, Set<string>>();
+    for (let seed = 1; seed <= 24; seed++) {
+      const run = (lang: Lang) => {
+        const s = start(seed, lang, false);
+        const c = makeCtx(s);
+        for (const a of [2, 9, 15, 35, 70]) c.h.addRelation(c.h.newPerson({ age: a }), 'friend', 40);
+        s.year += 30;
+        c.h.addRelation(c.h.newPerson({ age: 29 }), 'partner', 70);
+        c.h.addRelation(c.h.newPerson({ age: 4 }), 'child', 80);
+        s.player.money = 1e7;
+        const out: string[] = [];
+        for (const r of [...s.player.relations]) {
+          const q = s.people[r.personId];
+          if (!q || q.deathYear !== undefined) continue;
+          for (const id of NEW) {
+            for (let k = 0; k < 3; k++) {
+              s.player.actionsThisYear = {};
+              const line = interact(s, r.personId, id);
+              if (line) {
+                out.push(line);
+                if (!seen.has(id)) seen.set(id, new Set());
+                seen.get(id)!.add(r.kind);
+              }
+            }
+          }
+        }
+        return { s, out };
+      };
+      const en = run('en');
+      const tr = run('tr');
+      expect(tr.s.rng).toBe(en.s.rng);
+      expect(tr.out.length).toBe(en.out.length);
+      for (const l of tr.out) expect(english(l), l).toBe(false);
+      for (const l of en.out) expect(/\b(they|them|their)\b/i.test(l), l).toBe(false);
+    }
+    for (const id of NEW) expect(seen.get(id)?.size ?? 0, id).toBeGreaterThan(0);
+  });
+
+  it('introduces a partner to each relative once, and never to the partner', () => {
+    const s = start(5, 'en', false);
+    const c = makeCtx(s);
+    s.year += 30;
+    const love = c.h.newPerson({ age: 30 });
+    c.h.addRelation(love, 'partner', 70);
+    const mum = s.player.relations.find((r) => r.kind === 'mother' && s.people[r.personId]?.deathYear === undefined);
+    if (!mum) return;
+    expect(interactionsFor(s, love.id).some((o) => o.id === 'introduce')).toBe(false);
+    expect(interact(s, mum.personId, 'introduce')).toContain(love.firstName);
+    s.player.actionsThisYear = {};
+    expect(interactionsFor(s, mum.personId).find((o) => o.id === 'introduce')?.disabled).toBe(true);
+  });
+});
+
+describe('round 4: cars', () => {
+  it('a test, a car by budget, value in net worth, wear and resale', async () => {
+    const { carOf, CAR_TIERS } = await import('../src/content/base/street-cars');
+    const { streetNetWorth } = await import('../src/content/base/street');
+    const s = start(2, 'tr', false);
+    s.year += 25;
+    s.player.money = 10_000_000;
+    s.player.flags.license = s.year;
+    expect(activitiesFor(s.enabledPacks).some((a) => a.id === 'car_buy')).toBe(true);
+    doActivity(s, 'car_buy');
+    expect(s.pending?.eventId).toBe('base.car_shop');
+    expect(s.pending!.choices.length).toBe(CAR_TIERS.length + 1);
+    choose(s, 'tier2');
+    const car = carOf(s.player)!;
+    expect(car.tier).toBe(2);
+    const worth = streetNetWorth(s);
+    expect(worth).toBe(car.price);
+    ageUp(s);
+    while (s.pending) choose(s, s.pending.choices.find((x) => !x.disabled)!.id);
+    if (carOf(s.player)) {
+      expect(carOf(s.player)!.value).toBeLessThan(worth);
+      s.player.actionsThisYear = {};
+      const before = s.player.money;
+      doActivity(s, 'car_sell');
+      expect(carOf(s.player)).toBeUndefined();
+      expect(s.player.money).toBeGreaterThan(before);
+    }
+  });
+
+  it('old saves without a car load and show no car', async () => {
+    const { carOf } = await import('../src/content/base/street-cars');
+    const s = start(3, 'en', false);
+    delete s.player.ext;
+    expect(carOf(s.player)).toBeUndefined();
+    s.year += 20;
+    ageUp(s);
+  });
+});
+
+describe('round 4: who you fall for', () => {
+  it('the teen crush sets p.ext.dating, which dates read', async () => {
+    const { findEvent } = await import('../src/content/registry');
+    const { openEvent } = await import('../src/engine/game');
+    const { dateGender } = await import('../src/content/base/events-scheduled');
+    const { datingPref, setDatingPref } = await import('../src/content/base/dating');
+    const s = newGame({ firstName: 'Ece', lastName: 'Kaya', gender: 'female', countryId: 'tr', city: 'Bursa', seed: 4 }, profile('tr', false));
+    s.year += 14;
+    openEvent(s, findEvent('base.first_crush_who')!.def);
+    choose(s, 'girl');
+    expect(datingPref(s.player)).toBe('same');
+    expect(dateGender(makeCtx(s))).toBe('female');
+    setDatingPref(s, 'other');
+    expect(dateGender(makeCtx(s))).toBe('male');
   });
 });

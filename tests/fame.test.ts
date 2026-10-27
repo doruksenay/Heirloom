@@ -9,6 +9,7 @@ import { famePack } from '../src/content/fame';
 import { MORE_FAME_EVENT_IDS } from '../src/content/fame/events-more';
 import { moreFameActivities } from '../src/content/fame/activities-more';
 import { FAN_CAP, fameState, gainFans, peekFame, type FameState } from '../src/content/fame/state';
+import { FREE_FAN_CAP, freeFans } from '../src/content/base/street-fame';
 import type { GameState, Lang, Profile } from '../src/engine/types';
 
 const profile = (language: Lang): Profile => ({
@@ -296,6 +297,90 @@ describe('fame round-3 playtest fixes (playtest 3 §2.6)', () => {
     const { readFileSync } = await import('fs');
     for (const f of ['src/content/fame/index.ts', 'src/content/fame/events-more.ts', 'src/content/fame/activities-more.ts', 'src/content/campus/index.ts']) {
       expect(readFileSync(f, 'utf8'), f).not.toMatch(/[Bb]abaanne|Anneannen/);
+    }
+  });
+});
+
+describe('free first steps to fame (round 4)', () => {
+  const freeGame = (seed: number, lang: Lang = 'en') => {
+    const s = newGame({ firstName: 'Ece', lastName: 'Demir', gender: 'female', countryId: 'tr', city: 'İzmir', seed }, { entitlements: [], settings: { themeId: 'evening', adultContent: false, sound: true, language: lang } });
+    s.year += 16;
+    return s;
+  };
+
+  it('busking, open mics and videos are free and start a path the Fame pack continues', () => {
+    const s = freeGame(1);
+    expect(s.enabledPacks).not.toContain('fame');
+    expect(canDo(s, 'street_busk')).toBe(true);
+    expect(canDo(s, 'fame_post')).toBe(true);
+    expect(canDo(s, 'fame_gig')).toBe(false); // gigs, records and tours are the pack's
+    doActivity(s, 'street_busk');
+    const f = peekFame(s.player)!;
+    expect(f.path).toBe('music');
+    expect(f.fans).toBeGreaterThan(0);
+    // a musician does not post as a creator, and a band can be started for free
+    expect(canDo(s, 'fame_post')).toBe(false);
+    expect(canDo(s, 'fame_band')).toBe(true);
+    doActivity(s, 'fame_band');
+    expect(s.pending?.eventId).toBe('base.fame_band_name');
+    choose(s, 'band0');
+    expect(f.band?.members.length).toBe(3);
+    // buying the pack later: same state, the pack's music activities open, "Chase fame" stays closed
+    s.enabledPacks.push('fame');
+    s.player.actionsThisYear = {};
+    expect(peekFame(s.player)).toBe(f);
+    expect(canDo(s, 'fame_gig')).toBe(true);
+    expect(canDo(s, 'fame_start')).toBe(false);
+  });
+
+  it('without the pack the following levels off as a local name', () => {
+    const s = freeGame(2);
+    const c = makeCtx(s);
+    const f = fameState(s.player);
+    f.path = 'social';
+    f.fans = FREE_FAN_CAP - 1000;
+    const g = freeFans(c, f, 5000);
+    expect(g).toBeLessThan(50);
+    s.enabledPacks.push('fame');
+    const g2 = freeFans(makeCtx(s), f, 5000);
+    expect(g2).toBeGreaterThan(4000);
+    // a long free fame life never passes the cap
+    const t = freeGame(3);
+    for (let y = 0; y < 50; y++) {
+      t.player.actionsThisYear = {};
+      for (let i = 0; i < 3; i++) doActivity(t, 'fame_post');
+      while (t.pending) choose(t, t.pending.choices.find((x) => !x.disabled)!.id);
+      t.year++;
+    }
+    expect(peekFame(t.player)!.fans).toBeLessThan(FREE_FAN_CAP);
+  });
+
+  it('old saves with the pack band-name event open still resolve', () => {
+    const found = findEvent('fame.band_name');
+    expect(found?.def.choices?.length).toBe(3);
+    expect(famePack.activities!.some((a) => a.id === 'fame_post' || a.id === 'fame_band')).toBe(false);
+  });
+
+  it('free fame plays the same in both languages', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const run = (lang: Lang) => {
+        const s = freeGame(seed, lang);
+        for (let y = 0; y < 30 && !s.dead; y++) {
+          s.player.actionsThisYear = {};
+          for (const a of ['street_busk', 'street_open_mic', 'fame_band', 'street_rehearse']) {
+            doActivity(s, a);
+            while (s.pending) choose(s, s.pending.choices.find((x) => !x.disabled)!.id);
+          }
+          ageUp(s);
+          while (s.pending) choose(s, s.pending.choices.find((x) => !x.disabled)!.id);
+        }
+        return s;
+      };
+      const en = run('en');
+      const tr = run('tr');
+      expect(tr.rng).toBe(en.rng);
+      expect(peekFame(tr.player)?.fans).toBe(peekFame(en.player)?.fans);
+      for (const l of tr.player.log) expect(english(l.text), l.text).toBe(false);
     }
   });
 });

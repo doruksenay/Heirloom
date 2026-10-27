@@ -3,15 +3,19 @@ import type { GameState, LifeRecord, Person, Player, Profile, Gender, Education 
 import { makeCtx, ageOf, clamp, freshFirstNames } from './context';
 import { createRng, randomSeed, type Rng } from './rng';
 import { getCountry } from './world';
-import { BASE_JOBS, EDUCATION_RANK, salaryFor, titleFor } from './careers';
+import { BASE_JOBS, EDUCATION_RANK, hireableIn, salaryFor, titleFor } from './careers';
 import { abl, acc, dat, gen, gen as gen_, loc } from '../i18n/tr-grammar';
 import { furniture, hasGarden } from './home';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
-import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, inheritanceTax, safetyNet, yearBudget } from './economy';
+import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, inheritanceTax, safetyNet, tuitionFor, yearBudget } from './economy';
+import { babyOdds, bailoutHelpers, canHaveBaby } from '../content/base/events-scheduled';
+import { canAdopt } from '../content/base/adoption';
 import { cityName } from './places';
 import { ensureGrandkids, type Grandkid } from '../content/base/events-elder';
 import { say, type Pair } from '../content/base/lines';
+import { courtPending, isPetty, peekCrime } from '../content/base/street-law';
+import { MORE_LAST_WORDS } from '../content/base/heirloom-more';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
 
 export const START_YEAR = 2026;
@@ -205,9 +209,9 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
 
   const mother = h.newPerson({ gender: 'female', age: rng.int(22, 38) });
   const father = h.newPerson({ gender: 'male', age: rng.int(24, 42), lastName: opts.lastName });
-  const parentJobs = BASE_JOBS.filter((j) => !j.eventOnly);
-  mother.jobTitle = titleFor(rng.pick(parentJobs), 0, s.lang);
-  father.jobTitle = titleFor(rng.pick(parentJobs), 0, s.lang);
+  // one pick per parent from the jobs that exist in this country for them (no çaycı in Boston, no part-time parents)
+  mother.jobTitle = titleFor(rng.pick(BASE_JOBS.filter((j) => hireableIn(j, opts.countryId, 'female'))), 0, s.lang);
+  father.jobTitle = titleFor(rng.pick(BASE_JOBS.filter((j) => hireableIn(j, opts.countryId, 'male'))), 0, s.lang);
   h.addRelation(mother, 'mother', rng.int(60, 95));
   h.addRelation(father, 'father', rng.int(55, 95));
   const siblings = rng.weighted([0, 1, 2], (n) => [5, 4, 2][n]) ?? 0;
@@ -285,7 +289,7 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
 }
 
 export const PLUS_ENTITLEMENT = 'premium.no_ads';
-export const PLUS_EXTRA_ACTIVITIES = 2;
+export const PLUS_EXTRA_ACTIVITIES = 3;
 
 function perksFor(profile: Profile): string[] {
   return profile.entitlements.includes(PLUS_ENTITLEMENT) ? ['plus'] : [];
@@ -402,7 +406,8 @@ function yearlyTick(c: Ctx): string | null {
     }
   } else if (p.school === 'university') {
     p.schoolYears++;
-    if (!h.has('scholarship')) h.money(-Math.round(3000 * country.wageFactor)); // tuition
+    const fee = tuitionFor(p.countryId);
+    if (!h.has('scholarship') && fee > 0) h.money(-fee); // tuition: none at a Turkish state university
     if (p.schoolYears >= 4) {
       p.school = null;
       p.education = 'university';
@@ -448,16 +453,19 @@ function yearlyTick(c: Ctx): string | null {
     if (d !== 'base.retirement' || (job && !p.retired)) scheduled = d;
   }
 
+  // --- a charge waiting for court takes the scheduled slot, so nudges and life events can't starve it year after year
+  if (courtPending(c)) {
+    const ch = peekCrime(p)!.charge!;
+    const court = isPetty(ch.crime) || !s.enabledPacks.includes('crime_world') ? 'base.court_date' : 'crime.trial';
+    if (!scheduled) scheduled = court;
+    else if (!eng.deferred && scheduled !== court) {
+      eng.deferred = scheduled;
+      scheduled = court;
+    }
+  }
+
   // --- nudges the engine opens as scheduled events (at most one scheduled event a year)
-  if (!scheduled && age >= 23 && p.jailYears === 0 && p.money < 0) {
-    // debt the home's value does not cover, past about a year and a half of living costs: the bank writes
-    const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
-    const last = p.eventLastAge['base.debt_letter'];
-    if (unsecured > 1.5 * country.costOfLiving && (last === undefined || age - last >= 5)) scheduled = 'base.debt_letter';
-  }
-  if (!scheduled && age >= 35 && age <= 45 && p.jailYears === 0 && !p.relations.some((r) => r.kind === 'child') && p.eventLastAge['base.family_name'] === undefined && rng.chance(0.2)) {
-    scheduled = 'base.family_name'; // once per life, for a player without children
-  }
+  if (!scheduled && p.jailYears === 0) scheduled = lifeNudge(c, country.costOfLiving);
 
   // --- expansion yearly hooks
   for (const pack of enabledPacks(s.enabledPacks)) pack.onYear?.(c);
@@ -525,6 +533,7 @@ function yearlyTick(c: Ctx): string | null {
     }
   }
   syncGrandkids(c);
+  growUpHeirs(c);
   if (loss) {
     // the grief event takes this year's scheduled slot; whatever it pushed aside opens next year
     h.flag('mourning');
@@ -543,8 +552,154 @@ interface EngineExt {
   deferred?: string;
   /** The child or partner most recently lost (for the grief events and the quiet year after). */
   loss?: string;
+  /** The first-debt warning was shown this life. */
+  debtWarned?: boolean;
 }
 const engineExt = (p: Player): EngineExt => ((p.ext ??= {}).engine ??= {}) as EngineExt;
+
+/** Times an event opened this life (scheduled ones too) and years since it last did. */
+const opened = (p: Player, id: string) => p.eventCount?.[id] ?? (p.eventLastAge[id] !== undefined ? 1 : 0);
+const yearsSince = (p: Player, age: number, id: string) => (p.eventLastAge[id] === undefined ? Infinity : age - p.eventLastAge[id]);
+
+/** Most bank letters per life (review item 6: the same red letter four times in one life). */
+export const DEBT_LETTERS_PER_LIFE = 2;
+
+/**
+ * The yearly life-stage nudge, if any (round 4, review items 3 and 6). Each one is a scheduled event with choices,
+ * and every choice is a fine answer: the engine never marries anyone off or forces a child.
+ * - money: the bank letter (at most twice a life) when debt outgrows the home's value;
+ * - love: a set-up date for a single player of 20–34, a "where is this going?" moment for a couple, then
+ *   "thinking about kids?"; a couple that chose to try has a baby within a few years, by age;
+ * - family: "who will carry on the name?" once in the late thirties, and a clear "you have no heir" warning from 45;
+ * - work: the job listings for an adult who has been without work for a while.
+ * RNG calls depend only on the state, never on the language.
+ */
+function lifeNudge(c: Ctx, costOfLiving: number): string | null {
+  const { p, h, rng, age } = c;
+  const partner = h.partner();
+  const kids = h.relatives('child');
+  // money first: a letter from the bank when debt outgrows the home
+  if (age >= 23 && p.money < 0) {
+    const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
+    if (unsecured > 1.5 * costOfLiving && opened(p, 'base.debt_letter') < DEBT_LETTERS_PER_LIFE && yearsSince(p, age, 'base.debt_letter') >= 6) return 'base.debt_letter';
+  }
+  // family steps in with a debt that keeps hanging on (at most twice a life)
+  if (age >= 23 && p.money < -0.3 * costOfLiving && opened(p, 'base.family_bailout') < 2 && yearsSince(p, age, 'base.family_bailout') >= 5 && bailoutHelpers(c).length) {
+    if (rng.chance(0.25)) return 'base.family_bailout';
+  }
+  // a couple trying for a baby: the odds follow age, children so far and money
+  if (h.has('trying') && partner) {
+    if (rng.chance(babyOdds(c))) return 'base.baby_name';
+  } else if (h.has('trying') && !partner) h.unflag('trying');
+  // love, in the order life usually brings it
+  if (!partner && age >= 20 && age <= 34 && !h.has('single_by_choice') && opened(p, 'base.nudge_date') < 4 && yearsSince(p, age, 'base.nudge_date') >= 2) {
+    if (rng.chance(age < 23 ? 0.3 : 0.45)) return 'base.nudge_date';
+  }
+  if (partner?.rel.kind === 'partner' && age >= 21 && age <= 50 && c.s.year - partner.rel.sinceYear >= 2 && opened(p, 'base.nudge_together') < 2 && yearsSince(p, age, 'base.nudge_together') >= 3) {
+    if (rng.chance(0.5)) return 'base.nudge_together';
+  }
+  if (partner && !h.has('trying') && !h.has('no_more_kids') && (canHaveBaby(c) || canAdopt(c)) && opened(p, 'base.nudge_kids') < 3 && yearsSince(p, age, 'base.nudge_kids') >= 3) {
+    const youngest = kids.length ? Math.min(...kids.map((k) => h.ageOf(k.person))) : Infinity;
+    const want = kids.length === 0 ? age >= 24 && c.s.year - partner.rel.sinceYear >= 1 : kids.length < 3 && youngest >= 3;
+    if (want && rng.chance(kids.length ? 0.3 : 0.5)) return 'base.nudge_kids';
+  }
+  // family: who carries on
+  if (!kids.length) {
+    if (age >= 35 && age <= 44 && opened(p, 'base.family_name') === 0 && rng.chance(0.2)) return 'base.family_name';
+    if (age >= 45 && age <= 75 && opened(p, 'base.no_heir') < 2 && yearsSince(p, age, 'base.no_heir') >= 10) return 'base.no_heir';
+  }
+  // work: an adult who has gone without a job for a while sees this week's listings
+  if (!p.jobId && !p.school && !p.retired && age >= 19 && age <= 55 && yearsSince(p, age, 'base.job_search') >= 2 && opened(p, 'base.job_search') < 8) {
+    if (rng.chance(0.5)) return 'base.job_search';
+  }
+  return null;
+}
+
+/**
+ * The first time the money goes below zero (age 16+), one plain warning with the ways out (review item 6).
+ * Called after every year, choice and activity. Once per life; no RNG.
+ */
+export function watchDebt(c: Ctx): void {
+  const { p } = c;
+  if (p.money >= 0 || c.age < 16) return;
+  const eng = engineExt(p);
+  if (eng.debtWarned) return;
+  eng.debtWarned = true;
+  c.h.log(
+    c.t(
+      `Your account is in the red for the first time: you owe ${c.h.fmt(-p.money)}. Debt grows with interest. A job, selling something or help from family will get you out.`,
+      `Hesabın ilk kez eksiye düştü, ${c.h.fmt(-p.money)} borçlusun. Borç faiziyle büyür. Bir iş bulmak, bir şeyler satmak ya da aileden yardım istemek seni kurtarır.`,
+    ),
+    'bad',
+  );
+}
+
+/** Everything the heir picker shows for one option (review item 5). See heirCards. */
+export interface HeirCard extends HeirOption {
+  age: number;
+  /** Job title (localized as stored), or undefined for a child, a student or someone without work. */
+  job?: string;
+  /** 'school' under 18, otherwise undefined. */
+  student?: boolean;
+  /** The heir's closeness to the player, 0–100 (undefined for a grandchild or niece without a direct relation). */
+  closeness?: number;
+  /** Cash this heir would start with (estimated share of the estate after tax; same formula as continueAsChild). */
+  money: number;
+  /** Whether the family home goes to this heir. */
+  home: boolean;
+  /** Names of the heirlooms they would carry on (every heirloom goes to whoever continues). */
+  heirlooms: string[];
+  /** Their own children and partner, as far as the family records know. */
+  kids: number;
+  stats: Person['stats'];
+  /** Named as heir in the will (flag heir:<id>). */
+  named: boolean;
+}
+
+/** The share of the cash an heir starts with, as continueAsChild computes it (no RNG). */
+function heirShare(s: GameState, kind: HeirOption['kind']): { money: number; homeTookShare: boolean } {
+  const prev = s.player;
+  const handed = !!s.dead?.handedOver;
+  const savings = Math.max(0, prev.money);
+  const wageFactor = getCountry(prev.countryId).wageFactor;
+  const splitWays = Math.max(1, livingChildren(s).length + (kind === 'grandchild' ? 1 : 0));
+  const cash = handed ? savings * HANDOVER_GIFT : savings;
+  const tax = inheritanceTax(cash, wageFactor);
+  const homeValue = prev.home.owned ? Math.max(0, prev.home.value) : 0;
+  const share = splitWays > 1 ? Math.max(0, (cash - tax + homeValue) / splitWays - homeValue) : cash - tax;
+  return { money: Math.round(share), homeTookShare: splitWays > 1 && homeValue > 0 };
+}
+
+/**
+ * The heir options with what the picker should show: age, job, closeness, starting money, the home and the
+ * heirlooms (review item 5). Same order as heirs(s). No RNG; safe to call while rendering.
+ */
+export function heirCards(s: GameState): HeirCard[] {
+  const opts = heirOptions(s);
+  const ids = new Set(heirs(s).map((q) => q.id));
+  const heirlooms = s.dynasty.heirlooms.map((x) => x.name);
+  return opts
+    .filter((o) => ids.has(o.person.id))
+    .map((o) => {
+      const q = o.person;
+      const age = ageOf(s, q);
+      const rel = s.player.relations.find((r) => r.personId === q.id);
+      const { money } = heirShare(s, o.kind);
+      return {
+        ...o,
+        age,
+        job: age >= 18 ? heirJobTitle(s, q) : undefined,
+        student: age >= 6 && age < 18,
+        closeness: rel?.closeness,
+        money,
+        home: s.player.home.owned,
+        heirlooms,
+        kids: Math.max(q.childIds?.length ?? 0, q.kids ?? 0),
+        stats: { ...q.stats },
+        named: `heir:${q.id}` in s.player.flags,
+      };
+    });
+}
 
 /** Grandchildren the player took in after their parent died (flag `raising:<id>`, set by base.grief_orphan). */
 export function raisedGrandkids(s: GameState): Person[] {
@@ -668,6 +823,33 @@ export function grandchildren(s: GameState): { person: Person; parent: Person }[
   return out;
 }
 
+/**
+ * Yearly rituals and anniversaries that may come back every few years for a whole life (round 4, review item 10:
+ * every other choice event fires at most twice per life). Content can also set `maxPerLife` itself.
+ */
+export const RECURRING_EVENTS = new Set<string>([
+  'base.hl_ritual',
+  'base.anniversary',
+  'base.ch_birthday',
+  'base.coworker_birthday',
+  'tr.bayram',
+  'tr.bayram_yolu',
+  'tr.kurban',
+  'tr.iftar',
+]);
+
+/** Default number of times a choice event may fire at random in one life (review item 10). */
+export const DEFAULT_MAX_PER_LIFE = 2;
+
+/** How often this event may fire at random in one life; Infinity for no cap. See EventDef.maxPerLife. */
+export function maxPerLife(def: EventDef): number {
+  if (def.maxPerLife !== undefined) return def.maxPerLife;
+  if (def.once) return 1;
+  if (!def.choices?.length || RECURRING_EVENTS.has(def.id)) return Infinity;
+  if (def.cooldown !== undefined && def.cooldown <= 2) return Infinity; // a pack's own loop (business years, campus terms)
+  return DEFAULT_MAX_PER_LIFE;
+}
+
 function eligible(c: Ctx, def: EventDef): boolean {
   const { p, age } = c;
   if (def.scheduled) return false;
@@ -677,6 +859,8 @@ function eligible(c: Ctx, def: EventDef): boolean {
   if (last !== undefined) {
     if (def.once) return false;
     if (age - last < (def.cooldown ?? 4)) return false;
+    // older saves have no counts: they start counting from now
+    if ((p.eventCount?.[def.id] ?? 0) >= maxPerLife(def)) return false;
   }
   if (p.jailYears > 0 && def.category !== 'crime') return false;
   return def.when ? def.when(c) : true;
@@ -693,6 +877,8 @@ export function openEvent(s: GameState, def: EventDef): boolean {
   const c = makeCtx(s);
   def.setup?.(c);
   s.player.eventLastAge[def.id] = c.age;
+  const counts = (s.player.eventCount ??= {});
+  counts[def.id] = (counts[def.id] ?? 0) + 1;
   const body = txt(def.text, c) ?? '';
   if (!def.choices || def.choices.length === 0) {
     const line = def.apply?.(c);
@@ -730,7 +916,8 @@ export function ageUp(s: GameState): void {
 
   if (scheduled) {
     const found = findEvent(scheduled);
-    if (found && openEvent(s, found.def)) return;
+    // a scheduled event may still check that its moment holds (a partner who died later the same year)
+    if (found && (!found.def.when || found.def.when(makeCtx(s))) && openEvent(s, found.def)) return;
   }
   if (c.rng.chance(0.85)) {
     const ev = pickRandomEvent(s);
@@ -743,6 +930,7 @@ export function ageUp(s: GameState): void {
   }
   if (!s.pending && s.player.log.length === logStart) quietYear(makeCtx(s));
   checkGoals(s);
+  watchDebt(makeCtx(s));
   if (s.player.deathCause) finishLife(s);
 }
 
@@ -755,10 +943,15 @@ export function choose(s: GameState, choiceId: string): void {
   if (!found || !ch || !shown || shown.disabled) return;
   s.pending = null;
   const c = makeCtx(s, { ...pend.vars });
+  const logStart = s.player.log.length;
   const line = ch.resolve(c);
   const tone = typeof ch.tone === 'function' ? ch.tone(c) : ch.tone;
   if (line) c.h.log(line, tone);
+  // the event's title goes on the first line it wrote, so the log reads in context (review item 4)
+  const first = s.player.log[logStart];
+  if (first && pend.title && !first.title) first.title = pend.title;
   checkGoals(s);
+  watchDebt(c);
   if (s.player.deathCause) finishLife(s);
 }
 
@@ -823,6 +1016,7 @@ export function doActivity(s: GameState, id: string): void {
     if (found) openEvent(s, found.def);
   }
   checkGoals(s);
+  watchDebt(c);
   if (s.player.deathCause && !s.pending) finishLife(s);
 }
 
@@ -859,6 +1053,7 @@ const HEIRLOOM_WORDS: Record<string, [string, string]> = {
   recipes: ['Page twelve of the recipe book, {heir}. Use less salt than it says.', 'Tarif defterinin on ikinci sayfası, {heir}. Yazandan az tuz koy.'],
   trophy: ['Polish the trophy, {heir}. And tell them I was fast.', 'Kupayı parlat, {heir}. Bir de herkese ne kadar hızlı olduğumu anlat.'],
   painting: ['Never sell the painting, {heir}. Unless you really must.', 'Tabloyu satma, {heir}. Gerçekten mecbur kalmadıkça.'],
+  ...MORE_LAST_WORDS,
 };
 
 const FINAL_WORDS: [string, string][] = [
@@ -1079,6 +1274,43 @@ export function passTorch(s: GameState, heirId: string): boolean {
   return true;
 }
 
+/** Jobs an heir of this education and smarts could hold: the graduate jobs for a graduate when there are any. */
+function heirJobPool(s: GameState, education: Education, smarts: number, gender?: Gender) {
+  const options = allJobs(s.enabledPacks).filter((j) => hireableIn(j, s.player.countryId, gender) && EDUCATION_RANK[j.education] <= EDUCATION_RANK[education] && j.minSmarts <= smarts);
+  const matched = options.filter((j) => EDUCATION_RANK[j.education] === EDUCATION_RANK[education]);
+  return matched.length ? matched : options;
+}
+
+/** The rung an heir of this age has reached in their job. */
+const heirLevel = (titles: number, age: number) => Math.min(titles - 1, Math.floor(Math.max(0, age - 22) / 8));
+
+/**
+ * Children, grandchildren, nieces and nephews settle their education and a job when they reach 22, so the heir
+ * picker can show what they do (review item 5) and the heir keeps that job when they take over. One `chance` for
+ * the degree (when it is in doubt), one for having a job and one pick; the same in both languages.
+ */
+function growUpHeirs(c: Ctx): void {
+  const { s, rng } = c;
+  const people = [...livingChildren(s), ...grandchildren(s).map((g) => g.person), ...niblings(s).map((g) => g.person)];
+  for (const q of people) {
+    if (q.deathYear !== undefined || q.jobId !== undefined || ageOf(s, q) < 22) continue;
+    q.education = educationForAge(ageOf(s, q), q.stats.smarts, rng.chance);
+    const pool = heirJobPool(s, q.education, q.stats.smarts, q.gender);
+    if (pool.length && rng.chance(0.8)) {
+      const job = rng.pick(pool);
+      q.jobId = job.id;
+      q.jobTitle = titleFor(job, heirLevel(job.titles.length, ageOf(s, q)), s.lang);
+    } else q.jobId = null;
+  }
+}
+
+/** An heir's job title at their current age, in the story language (undefined without a job). */
+export function heirJobTitle(s: GameState, q: Person): string | undefined {
+  if (!q.jobId) return q.jobId === null ? undefined : q.jobTitle;
+  const job = allJobs(s.enabledPacks).find((j) => j.id === q.jobId);
+  return job ? titleFor(job, heirLevel(job.titles.length, ageOf(s, q)), s.lang) : q.jobTitle;
+}
+
 function educationForAge(age: number, smarts: number, rngChance: (p: number) => boolean): Education {
   if (age >= 22 && (smarts > 60 || (smarts > 40 && rngChance(0.5)))) return 'university';
   if (age >= 18) return 'highschool';
@@ -1124,22 +1356,27 @@ export function continueAsChild(s: GameState, heirId: string): void {
   delete np.kids;
   delete np.estate;
   np.money = Math.round(share);
-  np.education = educationForAge(age, child.stats.smarts, rng.chance);
+  np.education = child.education ?? educationForAge(age, child.stats.smarts, rng.chance);
   np.school = age >= 6 && age < 14 ? 'primary' : age >= 14 && age < 18 ? 'highschool' : null;
   np.home = prev.home.owned ? { ...prev.home, furniture: [...prev.home.furniture] } : np.home;
-  if (age >= 20 && rng.chance(0.75)) {
-    const options = allJobs(s.enabledPacks).filter(
-      (j) => EDUCATION_RANK[j.education] <= EDUCATION_RANK[np.education] && j.minSmarts <= child.stats.smarts,
-    );
+  // the job the heir already had (growUpHeirs, shown on the heir card); older saves and heirs under 22 draw one
+  const known = child.jobId ? allJobs(s.enabledPacks).find((j) => j.id === child.jobId) : undefined;
+  delete np.jobTitle;
+  if (known) {
+    np.jobId = known.id;
+    np.jobLevel = heirLevel(known.titles.length, age);
+    np.jobTitle = titleFor(known, np.jobLevel, s.lang);
+  } else if (child.jobId === undefined && age >= 20 && rng.chance(0.75)) {
     // a graduate works in a graduate job when there is one (no doctors down the mine)
-    const matched = options.filter((j) => EDUCATION_RANK[j.education] === EDUCATION_RANK[np.education]);
+    const options = heirJobPool(s, np.education, child.stats.smarts, child.gender);
     if (options.length) {
-      const job = rng.pick(matched.length ? matched : options);
+      const job = rng.pick(options);
       np.jobId = job.id;
-      np.jobLevel = Math.min(job.titles.length - 1, Math.floor(Math.max(0, age - 22) / 8));
+      np.jobLevel = heirLevel(job.titles.length, age);
       np.jobTitle = titleFor(job, np.jobLevel, s.lang);
     }
   }
+  if (np.jobId) np.lastSalary = salaryFor(allJobs(s.enabledPacks).find((j) => j.id === np.jobId)!, np.jobLevel, wageFactor);
   // family links
   const prevAsParent = prev.gender === 'female' ? 'mother' : 'father';
   const other = prev.relations.find((r) => r.kind === 'spouse' || r.kind === 'partner');

@@ -1,13 +1,12 @@
 import type { EventDef } from '../types';
-import { cap, kin, nm } from '../base/util';
+import { nm } from '../base/util';
 import { addJail, crimeState, inside, release } from './state';
 import { say, type Pair } from '../base/lines';
 import { inTr } from '../base/events-flavour';
-import type { RelationKind } from '../../engine/types';
+import { streetCrimeEvents } from '../base/street-crime';
 
 // Life on the inside. Only crime-category events fire while you are in prison, so these carry those years.
 
-const LETTER_KINDS: RelationKind[] = ['mother', 'father', 'spouse', 'partner', 'child', 'sibling'];
 
 // Prison years come in runs, so the repeatable outcomes draw from pools (one rng call each, see base/lines.ts).
 const FIGHT_WON: Pair[] = [
@@ -28,37 +27,15 @@ const FIGHT_GIVE: Pair[] = [
   ['You gave him the dessert. A week later he gave you half an orange. Prison diplomacy.', 'Tatlıyı ona verdin. Bir hafta sonra o sana yarım portakal verdi. Cezaevi diplomasisi.'],
   ['You gave it up and told yourself you were on a diet anyway.', 'Tatlıdan vazgeçtin ve kendine zaten diyette olduğunu söyledin.'],
 ];
-const CLASS_DONE: Pair[] = [
-  ['You took a literature class and wrote a poem the warden pinned on his wall.', 'Edebiyat dersine girdin ve müdürün duvarına astığı bir şiir yazdın.'],
-  ['You took a history class and now correct the guards on dates.', 'Tarih dersine girdin. Artık gardiyanların tarihlerini düzeltiyorsun.'],
-  ['You learned basic accounting. Your cellmate now pays you in biscuits to do his canteen sums.', 'Temel muhasebe öğrendin. Koğuş arkadaşın kantin hesabını yapman için sana bisküviyle ödeme yapıyor.'],
-  ['You finished a language course. You can now order coffee and apologise in a new language.', 'Bir dil kursunu bitirdin. Artık yeni bir dilde kahve isteyip özür dileyebiliyorsun.'],
-  ['You took a philosophy class. The teacher asked what freedom is, and the whole room laughed.', 'Felsefe dersine girdin. Hoca özgürlüğün ne olduğunu sordu, bütün sınıf güldü.'],
-  ['You studied for a certificate in computer basics on a machine older than you.', 'Senden yaşlı bir bilgisayarda temel bilgisayar sertifikası için çalıştın.'],
-];
-const CLASS_SKIP: Pair[] = [
-  ['You did push-ups in the yard instead.', 'Onun yerine havalandırmada şınav çektin.'],
-  ['You walked laps of the yard and counted the bricks again. Still 4,112.', 'Havalandırmada tur atıp tuğlaları yeniden saydın. Hâlâ 4.112 tane.'],
-  ['You played cards in the yard. You lost three weeks of dessert.', 'Havalandırmada kâğıt oynadın. Üç haftalık tatlını kaybettin.'],
-  ['You sat in the sun with your eyes closed and pretended to be somewhere else.', 'Gözlerin kapalı güneşte oturup başka bir yerdeymiş gibi yaptın.'],
-];
-const LETTER_WRITE: Pair[] = [
-  ["You wrote back four pages. You crossed out 'sorry' six times and left it in on the seventh.", "Dört sayfalık bir cevap yazdın. 'Özür dilerim' cümlesini altı kez karaladın, yedincide bıraktın."],
-  ['You wrote back the same night, by the light from the corridor. You did not mention the food.', 'Aynı gece koridordan gelen ışıkta cevap yazdın. Yemeklerden hiç bahsetmedin.'],
-  ['You wrote back and drew a little picture of your cell, with a window it does not have.', 'Cevap yazdın ve koğuşunun küçük bir resmini çizdin; olmayan bir pencereyle.'],
-  ['You wrote back about the books you are reading. It was the first letter you ever wrote without lying.', 'Okuduğun kitapları anlatan bir cevap yazdın. Hayatında yalansız yazdığın ilk mektuptu.'],
-  ['Your reply was short: "Thank you. Write again." You meant every word.', 'Cevabın kısaydı: "Teşekkür ederim. Yine yaz." Her kelimesinde ciddiydin.'],
-  ['You wrote back and asked about everyone by name, even the neighbour you never liked.', 'Cevap yazdın ve herkesi tek tek adıyla sordun; hiç sevmediğin komşuyu bile.'],
-];
-const LETTER_IGNORE: Pair[] = [
-  ['You put the letter under your pillow and never answered. It is still there.', 'Mektubu yastığının altına koydun ve hiç cevap vermedin. Hâlâ orada duruyor.'],
-  ['You read it twice and put it in a box with the others. You tell yourself you will answer them all at once.', 'İki kez okudun ve ötekilerle birlikte bir kutuya koydun. Hepsine birden cevap vereceğini söylüyorsun kendine.'],
-  ['You started a reply three times and tore it up three times.', 'Üç kez cevap yazmaya başladın, üçünü de yırttın.'],
-  ['You did not answer. Shame is heavier than a pen.', 'Cevap vermedin. Utanç, kalemden ağır geliyor.'],
-];
 
+
+// The evening classes and the letters from home moved to the free game in round 4 (base.jail_class, base.jail_letters).
+// Their old ids stay here as never-random aliases, so a save made while one of them was open still resolves.
+const alias = (id: string, of: string): EventDef => ({ ...streetCrimeEvents.find((e) => e.id === of)!, id, when: () => false, weight: 0 });
 
 export const prisonEvents: EventDef[] = [
+  alias('crime.prison_class', 'base.jail_class'),
+  alias('crime.letters', 'base.jail_letters'),
   {
     id: 'crime.prison_fight',
     category: 'crime',
@@ -87,34 +64,6 @@ export const prisonEvents: EventDef[] = [
           c.h.stat('happiness', -4);
           return say(c, 'crime.prison_fight.give', FIGHT_GIVE);
         },
-      },
-    ],
-  },
-  {
-    id: 'crime.prison_class',
-    category: 'crime',
-    when: inside,
-    title: (c) => c.t('The prison library offers evening classes.', 'Cezaevi kütüphanesinde akşam kursları açılmış.'),
-    text: (c) => c.t('A retired teacher volunteers every Tuesday.', 'Emekli bir öğretmen her salı gönüllü ders veriyor.'),
-    choices: [
-      {
-        id: 'study',
-        label: (c) => c.t('Sign up', 'Kaydol'),
-        resolve: (c) => {
-          c.h.stat('smarts', 6);
-          c.h.flag('prison_class');
-          if (c.p.education === 'none' || c.p.education === 'primary') {
-            c.p.education = 'highschool';
-            return c.t('You earned your high school diploma behind bars. The teacher cried.', 'Parmaklıklar ardında lise diplomanı aldın. Öğretmen ağladı.');
-          }
-          return say(c, 'crime.prison_class', CLASS_DONE);
-        },
-        tone: 'good',
-      },
-      {
-        id: 'skip',
-        label: (c) => c.t('Spend the time in the yard', 'Vaktini havalandırmada geçir'),
-        resolve: (c) => (c.h.stat('health', 2), say(c, 'crime.prison_class.skip', CLASS_SKIP)),
       },
     ],
   },
@@ -180,47 +129,6 @@ export const prisonEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', -2);
           return c.t('You got your transfer. The new cellmate snores in two languages.', 'İsteğin kabul edildi. Yeni koğuş arkadaşın iki dilde horluyor.');
-        },
-      },
-    ],
-  },
-  {
-    id: 'crime.letters',
-    category: 'crime',
-    cooldown: 3,
-    when: (c) => inside(c) && c.h.relatives(LETTER_KINDS).some((r) => c.h.ageOf(r.person) >= 8),
-    setup: (c) => {
-      const r = c.rng.pick(c.h.relatives(LETTER_KINDS).filter((x) => c.h.ageOf(x.person) >= 8));
-      c.vars.pid = r.person.id;
-      c.vars.kind = r.rel.kind;
-    },
-    title: (c) => c.t(`Mail call: ${nm(c)} wrote to you.`, `Mektup var: ${nm(c)} sana yazmış.`),
-    text: (c) => {
-      const p = c.h.person(String(c.vars.pid));
-      const k = kin(c, p, String(c.vars.kind));
-      return c.t(
-        `Your ${k} writes about the neighbors, the weather and, at the very end, in smaller letters, that ${c.h.he(p)} misses you.`,
-        `${cap(k)} komşuları, havayı ve en sonda, daha küçük harflerle, seni özlediğini yazmış.`,
-      );
-    },
-    choices: [
-      {
-        id: 'write',
-        label: (c) => c.t('Write back', 'Cevap yaz'),
-        resolve: (c) => {
-          c.h.closeness(String(c.vars.pid), 10);
-          c.h.stat('happiness', 5);
-          return say(c, 'crime.letters', LETTER_WRITE);
-        },
-        tone: 'good',
-      },
-      {
-        id: 'ignore',
-        label: (c) => c.t('Leave it unanswered', 'Cevapsız bırak'),
-        resolve: (c) => {
-          c.h.closeness(String(c.vars.pid), -8);
-          c.h.stat('happiness', -3);
-          return say(c, 'crime.letters.ignore', LETTER_IGNORE);
         },
       },
     ],

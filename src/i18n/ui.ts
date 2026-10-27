@@ -1,5 +1,6 @@
 import type { Lang } from '../engine/types';
 import { TR_DAILY } from './ui-daily';
+import { TR_UI4 } from '../ui/tr-strings';
 
 /**
  * Interface strings. Keys are the English text, so screens stay readable:
@@ -100,6 +101,7 @@ export const TR: Record<string, string> = {
   'You are in prison. Most activities are off-limits.': 'Cezaevindesin. Aktivitelerin çoğu yasak.',
   'Done for this year': 'Bu yıl yapıldı',
   'Mind & Body': 'Zihin ve Beden',
+  School: 'Okul',
   Love: 'Aşk',
   Campus: 'Kampüs',
   Career: 'Kariyer',
@@ -362,9 +364,15 @@ export const TR: Record<string, string> = {
   'See the family tree': 'Soy ağacını gör',
   "Generation {n}. Your parent's life is now part of the family tree, and everything they left behind is yours.":
     '{n}. kuşak. Annenin ya da babanın hayatı artık soy ağacında; geride bıraktığı her şey artık senin.',
+  // systems (round 4): the free street activities group and the dating preference setting
+  Street: 'Sokak',
+  'Dating preference': 'İlgi duyduğun kişiler',
+  'Men and women': 'Kadınlar ve erkekler',
+  Women: 'Kadınlar',
+  Men: 'Erkekler',
 };
 
-Object.assign(TR, TR_DAILY);
+Object.assign(TR, TR_DAILY, TR_UI4);
 const DICTS: Partial<Record<Lang, Record<string, string>>> = { tr: TR };
 
 /** Translate an interface string into the current language, filling {placeholders}. */

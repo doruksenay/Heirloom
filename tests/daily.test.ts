@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAILY_CATEGORIES, dailyPlan, liveStreak, medalFor, newDailyGame, recordDaily, scoreDaily, trackDaily } from '../src/engine/daily';
+import { DAILY_CATEGORIES, dailyMoments, dailyPlan, liveStreak, medalFor, newDailyGame, recordDaily, scoreDaily, trackDaily } from '../src/engine/daily';
 import { ageUp, choose, refreshPacks } from '../src/engine/game';
 import type { Profile } from '../src/engine/types';
 
@@ -85,5 +85,22 @@ describe('daily challenge', () => {
     p = recordDaily(p, r('2026-11-05', 0));
     expect(p.daily!.streak).toBe(1);
     expect(p.daily!.bestStreak).toBe(3);
+  });
+});
+
+describe('daily moments (review 4, item 14)', () => {
+  it('returns 6–8 moments for a full life: birth first, death last, in order', () => {
+    const s = newDailyGame('2026-11-03', { entitlements: [], settings: { themeId: 'evening', adultContent: false, sound: true } });
+    for (let y = 0; y < 130 && !s.dead; y++) {
+      ageUp(s);
+      let guard = 0;
+      while (s.pending && guard++ < 8) choose(s, s.pending.choices.find((c) => !c.disabled)!.id);
+    }
+    const m = dailyMoments(s);
+    expect(m.length).toBeGreaterThanOrEqual(6);
+    expect(m.length).toBeLessThanOrEqual(8);
+    expect(m[0]).toBe(s.player.log[0]);
+    expect(m[m.length - 1]).toBe(s.player.log[s.player.log.length - 1]);
+    for (let i = 1; i < m.length; i++) expect(s.player.log.indexOf(m[i])).toBeGreaterThan(s.player.log.indexOf(m[i - 1]));
   });
 });

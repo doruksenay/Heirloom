@@ -7,6 +7,7 @@ import { homeTitle } from '../../content/base/activities-home';
 import { heirloomDef } from '../../engine/heirlooms';
 import { fmtMoney } from '../../engine/context';
 import { Icon } from '../icons';
+import { FurnitureArt } from '../FurnitureArt';
 import { T, Tn } from '../../i18n/ui';
 
 // ---------------------------------------------------------------- pets, drawn around their feet at (0, 0)
@@ -552,6 +553,14 @@ function Room({ items, heirlooms, pets, garden }: { items: string[]; heirlooms: 
           </g>
         )}
 
+        {/* empty spots are sketched in dashes: a place waiting for something (round 4: the room looked bare) */}
+        <g class="ghost" fill="none" stroke-width="1.6" stroke-dasharray="4 4" stroke-linecap="round" style={{ stroke: 'var(--muted)' }} opacity="0.4">
+          {!lamp && <path d="M148 106h24l-5-18h-14zM160 106v68M152 175h16" />}
+          {!rug && <ellipse cx="214" cy="226" rx="84" ry="15" />}
+          {!bed && <path d="M8 230h112v18H8zM14 222h26v8" />}
+          {!desk && <path d="M346 206h88M352 206v44M428 206v44" />}
+        </g>
+
         {/* foreground: rug, bed, desk, pet corner and pets */}
         {rug === 'rug_kilim' && (
           <g>
@@ -691,17 +700,23 @@ function FurnitureRow({ app, f, garden, showSet }: { app: AppApi; f: FurnitureDe
   const needsGarden = f.slot === 'garden' && !garden;
   const set = STYLE_SETS.find((x) => x.id === f.set);
   return (
-    <div class="item" style={owned ? { boxShadow: 'inset 0 0 0 2px var(--accent)' } : undefined}>
-      <div class="grow">
-        <div class="item-title">{app.lang === 'tr' ? f.nameTr : f.name}</div>
-        <div class="item-sub">
-          {T('+{n} Happiness', { n: f.happiness })}
-          {set && showSet && ` · ${app.lang === 'tr' ? set.nameTr : set.name}`}
-        </div>
+    <div class={`furn${owned ? ' owned' : ''}`}>
+      <div class="furn-pic">
+        <FurnitureArt f={f} owned={owned} size={52} />
+        {owned && (
+          <span class="furn-placed" aria-hidden="true">
+            <Icon name="check" size={12} />
+          </span>
+        )}
+      </div>
+      <div class="furn-name">{app.lang === 'tr' ? f.nameTr : f.name}</div>
+      <div class="furn-sub">
+        {T('+{n} Happiness', { n: f.happiness })}
+        {set && showSet && ` · ${app.lang === 'tr' ? set.nameTr : set.name}`}
       </div>
       <button
         type="button"
-        class="btn small"
+        class="btn small furn-buy"
         disabled={owned || needsGarden || p.money < price || p.jailYears > 0}
         onClick={() => app.act((g) => void buyFurniture(g, f.id))}
       >
@@ -857,7 +872,7 @@ export function Home({ app }: { app: AppApi }) {
               <div class="eyebrow">{g.label}</div>
               {g.note && <span class="chip accent num">{g.note}</span>}
             </div>
-            <div class="list">
+            <div class="furn-grid">
               {g.items.map((f) => (
                 <FurnitureRow key={f.id} app={app} f={f} garden={garden} showSet={view === 'room'} />
               ))}

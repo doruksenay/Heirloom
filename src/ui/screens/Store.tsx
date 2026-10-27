@@ -1,19 +1,27 @@
 import { useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
-import { PRODUCTS, purchases, type Product } from '../../platform/purchases';
+import { PRODUCTS, PACK_IDS, expandEntitlements, purchases, type Product } from '../../platform/purchases';
+import { THEMES } from '../../themes/registry';
 import { Icon } from '../icons';
+import { Cover, ThemeSwatch } from '../brand/covers';
 import { T, Tn } from '../../i18n/ui';
 import { track } from '../../platform/analytics';
 
+type Section = 'packs' | 'theme' | 'premium';
+
 export function Store({ app }: { app: AppApi }) {
-  const [section, setSection] = useState<'expansion' | 'theme' | 'premium'>('expansion');
+  const [section, setSection] = useState<Section>('packs');
   const [confirming, setConfirming] = useState<string | null>(null);
   const owned = (id: string) => app.profile.entitlements.includes(id);
   const tr = app.lang === 'tr';
   const title = (p: Product) => (tr && p.titleTr ? p.titleTr : p.title);
   const desc = (p: Product) => (tr && p.descriptionTr ? p.descriptionTr : p.description);
+  // the bundle counts as owned once every pack is, however they were bought
+  const ownsAllPacks = PACK_IDS.every((id) => owned(id));
+  const isOwned = (p: Product) => (p.kind === 'bundle' ? ownsAllPacks : owned(p.id));
 
   const buy = async (prod: Product) => {
+    // the bundle needs no age check: its 18+ pack stays off until adult content is switched on in Settings
     if (prod.mature && !app.profile.settings.adultContent && confirming !== prod.id) {
       setConfirming(prod.id);
       return;
@@ -24,71 +32,120 @@ export function Store({ app }: { app: AppApi }) {
     if (!ok) return app.toast(T('Purchase was cancelled.'));
     app.updateProfile((p) => ({
       ...p,
-      entitlements: [...new Set([...p.entitlements, prod.id])],
+      entitlements: expandEntitlements([...p.entitlements, prod.id]),
       settings: prod.mature ? { ...p.settings, adultContent: true } : p.settings,
     }));
     setConfirming(null);
     app.toast(prod.kind === 'theme' ? T('{name} unlocked. Pick it in Settings.', { name: title(prod) }) : T('{name} unlocked.', { name: title(prod) }));
   };
 
-  const list = PRODUCTS.filter((p) => p.kind === section);
+  const list = PRODUCTS.filter((p) => (section === 'packs' ? p.kind === 'bundle' || p.kind === 'expansion' : p.kind === section));
+  const separate = PRODUCTS.filter((p) => PACK_IDS.includes(p.id as (typeof PACK_IDS)[number]));
+
   return (
-    <div class="screen">
-      <h1 class="title-xl">{T('Store')}</h1>
+    <div class="screen store">
+      <div class="row between">
+        <h1 class="title-xl">{T('Store')}</h1>
+        <button
+          type="button"
+          class="btn small ghost"
+          onClick={async () => {
+            const restored = await purchases.restore();
+            track('restore', { count: restored.length });
+            app.updateProfile((p) => ({ ...p, entitlements: expandEntitlements([...p.entitlements, ...restored]) }));
+            app.toast(restored.length ? Tn(restored.length, 'Restored {n} purchase.', 'Restored {n} purchases.') : T('No purchases to restore.'));
+          }}
+        >
+          {T('Restore purchases')}
+        </button>
+      </div>
       {purchases.isDev && <div class="banner">{T('Test build: every purchase is free.')}</div>}
-      <button
-        type="button"
-        class="btn small ghost"
-        style={{ alignSelf: 'flex-start' }}
-        onClick={async () => {
-          const restored = await purchases.restore();
-          track('restore', { count: restored.length });
-          app.updateProfile((p) => ({ ...p, entitlements: [...new Set([...p.entitlements, ...restored])] }));
-          app.toast(restored.length ? Tn(restored.length, 'Restored {n} purchase.', 'Restored {n} purchases.') : T('No purchases to restore.'));
-        }}
-      >
-        {T('Restore purchases')}
-      </button>
+      <p class="muted store-lede">{T('The whole life is free: jobs, love, family, street crime, a first taste of fame and Türkiye. Packs add depth on top.')}</p>
       <div class="seg" role="tablist" aria-label={T('Store sections')}>
-        {(['expansion', 'theme', 'premium'] as const).map((k) => (
+        {(['packs', 'theme', 'premium'] as const).map((k) => (
           <button type="button" role="tab" aria-selected={section === k} aria-pressed={section === k} key={k} onClick={() => setSection(k)}>
-            {k === 'expansion' ? T('Expansions') : k === 'theme' ? T('Themes') : T('Premium')}
+            {k === 'packs' ? T('Expansions') : k === 'theme' ? T('Themes') : 'Heirloom+'}
           </button>
         ))}
       </div>
-      <div class="list" style={{ gap: '10px' }}>
-        {list.map((prod) => (
-          <div class="card" key={prod.id} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div class="row" style={{ gap: '8px' }}>
-              {prod.mature && <span class="chip" style={{ background: 'var(--bad)', color: 'var(--bg)' }}>18+</span>}
-              {prod.comingSoon && <span class="chip">{T('Coming soon')}</span>}
-            </div>
-            <h2 class="title-l" style={{ fontSize: '22px' }}>
-              {title(prod)}
-            </h2>
-            <p style={{ margin: 0, color: 'var(--text-soft)', lineHeight: 1.45 }}>{desc(prod)}</p>
-            {confirming === prod.id && (
-              <div class="banner" style={{ color: 'var(--text)' }}>
-                {T('This expansion contains crime, violence and adult themes. Tap again to confirm you are 18 or older.')}
+      <div class="list" style={{ gap: '14px' }}>
+        {list.map((prod) => {
+          const theme = prod.kind === 'theme' ? THEMES.find((t) => t.entitlement === prod.id) : undefined;
+          const got = isOwned(prod);
+          const bullets = (tr ? prod.includesTr : prod.includes) ?? [];
+          return (
+            <article class={`pack${prod.kind === 'bundle' ? ' pack-hero' : ''}`} key={prod.id}>
+              <div class="pack-art">
+                {theme ? <ThemeSwatch tokens={theme.tokens} /> : <Cover id={prod.id} height={prod.kind === 'bundle' ? 160 : 132} />}
+                <div class="pack-badges">
+                  {prod.free && <span class="badge free">{T('Free')}</span>}
+                  {prod.kind === 'bundle' && !got && <span class="badge save">{T('Save {n}%', { n: savePercent(separate, prod) })}</span>}
+                  {prod.mature && <span class="badge mature">18+</span>}
+                  {prod.comingSoon && <span class="badge">{T('Coming soon')}</span>}
+                </div>
               </div>
-            )}
-            <div class="row between">
-              <span class="muted" style={{ fontSize: '13px' }}>
-                {prod.mature ? T('Age check required') : prod.kind === 'theme' ? T('Colors, fonts and layout') : ''}
-              </span>
-              {owned(prod.id) ? (
-                <span class="chip accent row" style={{ gap: '4px' }}>
-                  <Icon name="check" size={14} /> {T('Owned')}
-                </span>
-              ) : (
-                <button type="button" class="btn primary small" disabled={prod.comingSoon} onClick={() => buy(prod)}>
-                  {confirming === prod.id ? T('I am 18+, buy') : prod.price}
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
+              <div class="pack-body">
+                <h2 class="pack-title">{title(prod)}</h2>
+                <p class="pack-desc">{desc(prod)}</p>
+                {bullets.length > 0 && (
+                  <ul class="pack-gets" aria-label={T('What you get')}>
+                    {bullets.map((b) => (
+                      <li key={b}>
+                        <Icon name="check" size={15} />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {confirming === prod.id && (
+                  <div class="banner" style={{ color: 'var(--text)' }}>
+                    {T('This expansion contains crime, violence and adult themes. Tap again to confirm you are 18 or older.')}
+                  </div>
+                )}
+                <div class="row between pack-foot">
+                  <span class="muted" style={{ fontSize: '13px' }}>
+                    {prod.free
+                      ? T('Included for everyone')
+                      : prod.mature
+                        ? T('Age check required')
+                        : prod.kind === 'theme'
+                          ? owned('premium.no_ads') && !owned(prod.id)
+                            ? T('Included with Heirloom+')
+                            : T('Also included in Heirloom+')
+                          : prod.kind === 'bundle'
+                            ? T('Instead of {p} one by one', { p: sumPrices(separate) })
+                            : ''}
+                  </span>
+                  {prod.free ? (
+                    <span class="chip accent row" style={{ gap: '4px' }}>
+                      <Icon name="check" size={14} /> {T('Free')}
+                    </span>
+                  ) : got || (theme && owned('premium.no_ads')) ? (
+                    <span class="chip accent row" style={{ gap: '4px' }}>
+                      <Icon name="check" size={14} /> {T('Owned')}
+                    </span>
+                  ) : (
+                    <button type="button" class="btn primary small" disabled={prod.comingSoon} onClick={() => buy(prod)}>
+                      {confirming === prod.id ? T('I am 18+, buy') : prod.price}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
+}
+
+const dollars = (p: string) => Number(p.replace(/[^0-9.]/g, '')) || 0;
+
+function sumPrices(ps: Product[]): string {
+  return `$${ps.reduce((a, p) => a + dollars(p.price), 0).toFixed(2)}`;
+}
+
+function savePercent(ps: Product[], bundle: Product): number {
+  const sum = ps.reduce((a, p) => a + dollars(p.price), 0);
+  return sum ? Math.round((1 - dollars(bundle.price) / sum) * 100) : 0;
 }

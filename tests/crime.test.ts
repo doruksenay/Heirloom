@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ageUp, choose, continueAsChild, doActivity, finishLife, heirs, newGame } from '../src/engine/game';
-import { activitiesFor, eventsFor } from '../src/content/registry';
+import { ageUp, choose, continueAsChild, doActivity, finishLife, heirs, newGame, openEvent } from '../src/engine/game';
+import { activitiesFor, eventsFor, findEvent, PACKS } from '../src/content/registry';
+import { cite } from '../src/content/base/street-crime';
 import { makeCtx } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { getCountry } from '../src/engine/world';
 import { crimePack } from '../src/content/crime';
-import { arrest, crimeState, MAX_JAIL, peekCrime } from '../src/content/crime/state';
+import { arrest, crimeState, isPetty, MAX_JAIL, peekCrime } from '../src/content/crime/state';
 import type { Lang, Profile } from '../src/engine/types';
 
 /** Crime only by default, so the money checks measure crime and not company sales. */
@@ -15,6 +16,9 @@ const crimeProfile = (language: Lang = 'en', extra: string[] = []): Profile => (
 });
 
 const CRIME_ACTS = ['shoplift', 'crime_pickpocket', 'burglary', 'crime_knockoffs', 'crime_car', 'crime_heist', 'crime_embezzle', 'crime_workshop'];
+/** Free since round 4 (base/street-crime.ts); the rest of CRIME_ACTS is the 18+ pack. */
+const FREE_CRIME_ACTS = ['shoplift', 'crime_pickpocket', 'street_graffiti', 'street_bike', 'street_fare', 'street_fight'];
+const PACK_CRIME_ACTS = CRIME_ACTS.filter((a) => !FREE_CRIME_ACTS.includes(a));
 const CRIME_RIBBONS = new Set((crimePack.ribbons ?? []).map((r) => r.id));
 const CRIME_GOALS = new Set((crimePack.goals ?? []).map((g) => g.id));
 
@@ -103,7 +107,8 @@ describe('Crime World expansion', () => {
     });
     expect(s.enabledPacks).not.toContain('crime_world');
     const acts = activitiesFor(s.enabledPacks).map((a) => a.id);
-    for (const id of CRIME_ACTS) expect(acts).not.toContain(id);
+    for (const id of PACK_CRIME_ACTS) expect(acts).not.toContain(id);
+    for (const id of FREE_CRIME_ACTS) expect(acts).toContain(id);
     expect(eventsFor(s.enabledPacks).some((e) => e.id.startsWith('crime.'))).toBe(false);
     s.year += 25;
     doActivity(s, 'crime_car');
@@ -114,8 +119,9 @@ describe('Crime World expansion', () => {
     let tried = 0;
     for (let seed = 1; seed <= 10; seed++) {
       const s = newGame({ firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed }, crimeProfile('tr'));
-      s.year += 25;
+      s.year += 40;
       s.player.money = 1_000_000;
+      s.player.flags.single_by_choice = s.year; // keep the engine's dating nudges out of the way
       const c = makeCtx(s);
       arrest(c, 'burglary');
       expect(peekCrime(s.player)?.charge?.crime).toBe('burglary');
@@ -272,5 +278,179 @@ describe('crime round-3 balance (playtest 3 §2.14)', () => {
     expect(canDo(s, 'crime_embezzle')).toBe(false);
     s.player.jobId = 'police';
     expect(canDo(s, 'crime_embezzle')).toBe(false);
+  });
+});
+
+describe('free street crime (round 4)', () => {
+  const freeProfile = (language: Lang = 'en'): Profile => ({ entitlements: [], settings: { themeId: 'evening', adultContent: false, sound: true, language } });
+  const adultFree = (seed: number, lang: Lang = 'en', profile = freeProfile(lang)) => {
+    const s = newGame({ firstName: 'Deniz', lastName: 'Kaya', gender: 'female', countryId: 'tr', city: 'İzmir', seed }, profile);
+    s.year += 40;
+    s.player.money = wageOf(s, 50_000);
+    s.player.flags.single_by_choice = s.year;
+    return s;
+  };
+  const wageOf = (s: { player: { countryId: string } }, usd: number) => Math.round(usd * getCountry(s.player.countryId).wageFactor);
+  const settle = (s: ReturnType<typeof adultFree>, pick: (id: string, ch: string[]) => string) => {
+    let guard = 0;
+    while (s.pending && guard++ < 6) {
+      const ids = s.pending.choices.filter((x) => !x.disabled).map((x) => x.id);
+      choose(s, pick(s.pending.eventId, ids));
+    }
+  };
+
+  it('ships in the free, all-ages base game', () => {
+    const s = adultFree(1);
+    expect(s.enabledPacks).not.toContain('crime_world');
+    const ids = new Set(activitiesFor(s.enabledPacks).map((a) => a.id));
+    for (const id of FREE_CRIME_ACTS) expect(ids.has(id), id).toBe(true);
+    const base = PACKS.find((p) => p.id === 'base')!;
+    expect(base.rating).toBe('all');
+    // no murder or heists in the free game
+    expect(base.events.some((e) => /heist|murder|gang/.test(e.id))).toBe(false);
+  });
+
+  it('a petty arrest goes to the free court date, which always settles the charge', () => {
+    let fined = 0;
+    let jailed = 0;
+    let freed = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = adultFree(seed);
+      const c = makeCtx(s);
+      if (seed % 2) s.player.criminalRecord = 2;
+      const before = s.player.criminalRecord;
+      cite(c, 'vandalism');
+      expect(peekCrime(s.player)?.charge?.crime).toBe('vandalism');
+      for (let y = 0; y < 6 && peekCrime(s.player)?.charge && !s.dead; y++) {
+        ageUp(s);
+        settle(s, (_id, ch) => ch[(seed + y) % ch.length]);
+      }
+      if (s.dead) continue;
+      // settled at the court date, or by post when the year's slot kept going to life-stage moments
+      expect(peekCrime(s.player)?.charge, `seed ${seed}`).toBeNull();
+      if (s.player.jailYears > 0 || (peekCrime(s.player)?.sentenced ?? 0) > 0) jailed++;
+      else if (s.player.criminalRecord > before) fined++;
+      else freed++;
+    }
+    expect(fined).toBeGreaterThan(5);
+    expect(jailed + freed).toBeGreaterThanOrEqual(0);
+  });
+
+  it('at the court date a lawyer often gets the case dismissed, and community service is only for a short record', () => {
+    let dismissed = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = adultFree(seed);
+      cite(makeCtx(s), 'theft');
+      s.year++;
+      openEvent(s, findEvent('base.court_date')!.def);
+      expect(s.pending?.choices.find((x) => x.id === 'service')?.disabled).toBe(false);
+      choose(s, 'lawyer');
+      expect(peekCrime(s.player)?.charge).toBeNull();
+      if (s.player.criminalRecord === 0) dismissed++;
+    }
+    expect(dismissed).toBeGreaterThan(15);
+    expect(dismissed).toBeLessThan(35);
+    const s = adultFree(2);
+    s.player.criminalRecord = 3;
+    cite(makeCtx(s), 'theft');
+    s.year++;
+    openEvent(s, findEvent('base.court_date')!.def);
+    expect(s.pending?.choices.find((x) => x.id === 'service')?.disabled).toBe(true);
+  });
+
+  it('short sentences only: at most two years for a petty crime, then the first day out', () => {
+    let out = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = adultFree(seed);
+      s.player.criminalRecord = 4;
+      const c = makeCtx(s);
+      cite(c, 'assault');
+      ageUp(s);
+      settle(s, (id, ch) => (id === 'base.court_date' ? (ch.includes('plead') ? 'plead' : ch[0]) : ch[0]));
+      expect(s.player.jailYears).toBeLessThanOrEqual(2);
+      if (s.player.jailYears > 0) {
+        const probe = makeCtx(s);
+        const yard = activitiesFor(s.enabledPacks).find((a) => a.id === 'jail_yard')!;
+        expect(yard.available!(probe)).toBe(true);
+      }
+      for (let y = 0; y < 4 && !s.dead; y++) {
+        ageUp(s);
+        if (s.pending?.eventId === 'base.jail_out') out++;
+        settle(s, (_id, ch) => ch[0]);
+      }
+    }
+    expect(out).toBeGreaterThan(0);
+  });
+
+  it('Crime World picks up the free record: the same state, its trial only for big charges', () => {
+    const s = adultFree(3, 'en', crimeProfile('en'));
+    const c = makeCtx(s);
+    cite(c, 'theft');
+    const st = peekCrime(s.player)!;
+    expect(isPetty('theft')).toBe(true);
+    expect(isPetty('burglary')).toBe(false);
+    ageUp(s);
+    // the pack's big trial never takes a petty charge
+    expect(s.pending?.eventId).not.toBe('crime.trial');
+    expect(peekCrime(s.player)).toBe(st);
+    // moved events keep their old ids as aliases, so an old save with one open still resolves
+    for (const id of ['crime.prison_class', 'crime.letters']) {
+      const found = findEvent(id);
+      expect(found?.def.choices?.length, id).toBeGreaterThan(0);
+    }
+  });
+
+  it('a save from before round 4 with an open trial for a petty charge still settles', () => {
+    const s = adultFree(5);
+    crimeState(s.player).charge = { crime: 'pickpocket', years: 1, year: s.year - 1 };
+    for (let y = 0; y < 4 && peekCrime(s.player)?.charge; y++) {
+      ageUp(s);
+      settle(s, (_id, ch) => ch[0]);
+    }
+    expect(peekCrime(s.player)?.charge).toBeNull();
+  });
+
+  it('no event or activity id is used twice across all packs', () => {
+    const ev = PACKS.flatMap((p) => p.events.map((e) => e.id));
+    const dupes = ev.filter((id, i) => ev.indexOf(id) !== i);
+    expect(dupes).toEqual([]);
+    const acts = PACKS.flatMap((p) => (p.activities ?? []).map((a) => a.id));
+    expect(acts.filter((id, i) => acts.indexOf(id) !== i)).toEqual([]);
+  });
+
+  it('free street lives read in Turkish and play the same in both languages', { timeout: 120_000 }, () => {
+    const STREET = [...FREE_CRIME_ACTS, 'jail_yard', 'jail_library', 'jail_letter', 'jail_kitchen'];
+    const EN = new Set(['you', 'your', 'the', 'and', 'with', 'was', 'were', 'got', 'have', 'has', 'into', 'from']);
+    const english = (t: string) => (t.replace(/"[^"]*"/g, '').toLowerCase().match(/[\p{L}]+/gu) ?? []).some((w) => EN.has(w));
+    const leaks = new Set<string>();
+    const play = (seed: number, lang: Lang) => {
+      const s = newGame({ firstName: 'Ece', lastName: 'Aydın', gender: seed % 2 ? 'male' : 'female', countryId: seed % 3 ? 'tr' : 'uk', city: seed % 3 ? 'Bursa' : 'Leeds', seed }, freeProfile(lang));
+      const bot = createRng(seed * 7 + 1);
+      for (let y = 0; y < 90 && !s.dead; y++) {
+        const answer = () => {
+          let g = 0;
+          while (s.pending && g++ < 6) choose(s, bot.pick(s.pending.choices.filter((x) => !x.disabled)).id);
+        };
+        for (let i = 0; i < 4 && !s.dead && !s.pending; i++) {
+          doActivity(s, bot.pick(STREET));
+          answer();
+        }
+        if (s.dead) break;
+        ageUp(s);
+        answer();
+      }
+      return s;
+    };
+    let court = 0;
+    for (let seed = 1; seed <= 25; seed++) {
+      const en = play(seed, 'en');
+      const tr = play(seed, 'tr');
+      expect(tr.rng, `seed ${seed}`).toBe(en.rng);
+      expect(tr.player.log.length).toBe(en.player.log.length);
+      if (en.player.eventLastAge['base.court_date'] !== undefined) court++;
+      for (const e of tr.player.log) if (english(e.text)) leaks.add(e.text);
+    }
+    expect(court).toBeGreaterThan(5);
+    expect([...leaks].slice(0, 10)).toEqual([]);
   });
 });

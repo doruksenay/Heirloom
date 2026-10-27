@@ -37,12 +37,19 @@ export function fmtMoney(n: number, countryId = 'us', lang: Lang = 'en'): string
   return formatter(countryId, false, lang).format(Math.round(n * getCountry(countryId).currency.rate));
 }
 
-/** Short form for tiles: ₺957K in English, ₺957 B / ₺1,54 Mn in Turkish. */
+const trNum = (v: number, digits: number) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: digits }).format(v);
+
+/** Short form for tiles: ₺957K in English; in Turkish the way people say it: ₺957 bin, ₺1,5 milyon, ₺2,3 milyar. */
 export function fmtMoneyShort(n: number, countryId = 'us', lang: Lang = 'en'): string {
   const v = n * getCountry(countryId).currency.rate;
-  if (Math.abs(v) < 10000) return formatter(countryId, false, lang).format(Math.round(v));
+  const a = Math.abs(v);
+  if (a < 10000) return formatter(countryId, false, lang).format(Math.round(v));
   if (lang !== 'tr') return formatter(countryId, true).format(v);
-  return `${v < 0 ? '-' : ''}${symbolOf(countryId)}${formatter(countryId, true, 'tr').format(Math.abs(v))}`;
+  const sign = v < 0 ? '-' : '';
+  const sym = symbolOf(countryId);
+  if (Math.round(a / 1e3) < 1000) return `${sign}${sym}${trNum(Math.round(a / 1e3), 0)} bin`;
+  if (a < 1e9) return `${sign}${sym}${trNum(a / 1e6, a < 1e7 ? 1 : 0)} milyon`;
+  return `${sign}${sym}${trNum(a / 1e9, a < 1e10 ? 1 : 0)} milyar`;
 }
 
 export function ageOf(s: GameState, person: Person): number {

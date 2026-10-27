@@ -18,6 +18,15 @@ export const HEIRLOOMS: Record<string, HeirloomDef> = {
   painting: { id: 'painting', icon: 'painting', effect: 'Grows in value', effectTr: 'Değeri artar' },
 };
 
+/**
+ * Adds heirloom types from content (round 4: the adult agent grows 7 types to 15+). Call at module load from the
+ * content file that drops them; an id that already exists is left alone. `icon` must be one of HeirloomIcon (the UI
+ * draws those); pick the closest. Effects live in content (h.hasHeirloom), like the built-in ones.
+ */
+export function registerHeirlooms(defs: HeirloomDef[]): void {
+  for (const d of defs) if (!HEIRLOOMS[d.id]) HEIRLOOMS[d.id] = d;
+}
+
 export function heirloomDef(id: string): HeirloomDef {
   return HEIRLOOMS[id] ?? HEIRLOOMS.clock;
 }

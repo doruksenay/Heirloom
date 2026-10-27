@@ -1,5 +1,6 @@
 import type { Ctx } from '../types';
 import { da, dat, gen, wth } from './util';
+import { carOf, removeCar } from './street-cars';
 
 // Ending a relationship from an event. A partner is a break-up; a spouse is a real divorce:
 // "boşandınız", the savings split, the house bought out, and the children stay in the family.
@@ -28,10 +29,15 @@ export function divorceTerms(c: Ctx, pid: string): string {
     const share = Math.round(c.p.home.value * 0.25);
     const buyout = Math.min(share, Math.max(0, c.p.money));
     if (buyout > 0) c.h.money(-buyout);
+    // short of the buyout, the ex takes the real car when there is one (base/street-cars.ts), otherwise the furniture
+    const car = buyout < share && !!carOf(c.p);
+    if (car) removeCar(c.p);
     parts.push(
       buyout >= share
         ? c.t(`You kept the house; buying out ${n}'s share cost ${c.h.fmt(buyout)}.`, `Evde sen kaldın; ${gen(n)} payını ödemek ${c.h.fmt(buyout)} tuttu.`)
-        : c.t(`You kept the house. ${n} took the car and the good sofa instead.`, `Ev sende kaldı; ${da(n)} arabayı ve güzel koltuğu aldı.`),
+        : car
+          ? c.t(`You kept the house. ${n} took the car and the good sofa instead.`, `Ev sende kaldı; ${da(n)} arabayı ve güzel koltuğu aldı.`)
+          : c.t(`You kept the house. ${n} took the good sofa and the record player instead.`, `Ev sende kaldı; ${da(n)} güzel koltuğu ve pikabı aldı.`),
     );
   }
   // the children stay family: young ones split the week, grown ones get two dinners

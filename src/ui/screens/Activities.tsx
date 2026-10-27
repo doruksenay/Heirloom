@@ -11,7 +11,7 @@ import { T } from '../../i18n/ui';
 import { Tip } from '../Tip';
 import type { Txt } from '../../content/types';
 
-const GROUPS: ActivityGroup[] = ['Mind & Body', 'Love', 'Family', 'Campus', 'Career', 'Business', 'Fame', 'Money', 'Pets', 'After dark'];
+const GROUPS: ActivityGroup[] = ['Mind & Body', 'School', 'Love', 'Family', 'Campus', 'Career', 'Business', 'Fame', 'Money', 'Street', 'Pets', 'After dark'];
 
 /** Remembered while the app is open, so switching tabs keeps the player's place. */
 let lastGroup: ActivityGroup | null = null;

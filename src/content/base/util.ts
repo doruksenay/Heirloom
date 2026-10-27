@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
-import { EDUCATION_RANK } from '../../engine/careers';
+import { EDUCATION_RANK, EVENT_ONLY, PART_TIME_IDS, type JobDef } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { getCountry } from '../../engine/world';
 import { familyFirstNames as familyNamesOf, inMourning } from '../../engine/context';
@@ -37,38 +37,63 @@ export const single = (c: Ctx) => !c.h.partner();
 
 /** Nobody hires through listings, headhunters or tips past this age. */
 export const MAX_HIRE_AGE = 62;
-/** Jobs a high-school student (or anyone under 18) can do after class. */
-export const PART_TIME_JOBS = new Set(['barista', 'retail']);
+/** Jobs a high-school student (or anyone under 18) can do after class: barista, retail and every part-time job. */
+export const PART_TIME_JOBS = new Set(['barista', 'retail', ...PART_TIME_IDS]);
 
-/** Jobs this player could realistically be hired for. */
+/** Below this age (or while at university) part-time jobs still come up in offers; later only through the job board. */
+const PART_TIME_OFFER_AGE = 23;
+
+/** A pupil (under 18, or still in primary or high school): only after-school work. */
+export const isPupil = (c: Ctx) => c.age < 18 || c.p.school === 'highschool' || c.p.school === 'primary';
+
+/** Whether a job exists for this player at all: not event-only, open in their country, not limited to the other gender. */
+export function jobShown(c: Ctx, j: JobDef): boolean {
+  if (j.eventOnly || j.minSmarts >= EVENT_ONLY) return false;
+  if (j.countries && !j.countries.includes(c.p.countryId)) return false;
+  if (j.req?.gender && j.req.gender !== c.p.gender) return false;
+  return true;
+}
+
+/** Why a shown job would not hire this player, most important first ([] = they qualify). No RNG. */
+export type JobGap = 'too_old' | 'too_young' | 'over_age' | 'student' | 'education' | 'smarts' | 'health' | 'record' | 'other';
+export function jobGaps(c: Ctx, j: JobDef): JobGap[] {
+  const gaps: JobGap[] = [];
+  const r = j.req ?? {};
+  const p = c.p;
+  if (c.age > MAX_HIRE_AGE) gaps.push('too_old');
+  if (c.age < Math.max(r.minAge ?? 0, j.partTime ? 14 : 16)) gaps.push('too_young');
+  if (r.maxAge !== undefined && c.age > r.maxAge) gaps.push('over_age');
+  if (isPupil(c) && !PART_TIME_JOBS.has(j.id)) gaps.push('student');
+  if (EDUCATION_RANK[j.education] > EDUCATION_RANK[p.education]) gaps.push('education');
+  if (j.minSmarts > p.stats.smarts + 10 || (r.smarts !== undefined && p.stats.smarts < r.smarts)) gaps.push('smarts');
+  if (r.health !== undefined && p.stats.health < r.health) gaps.push('health');
+  if (r.cleanRecord && p.criminalRecord > 0) gaps.push('record');
+  if (!gaps.length && j.requires && !j.requires(c)) gaps.push('other');
+  return gaps;
+}
+
+/** Jobs this player could realistically be hired for (offers, tips, headhunters). The job board lists more: see job-board.ts. */
 export function eligibleJobs(c: Ctx) {
   if (c.age > MAX_HIRE_AGE) return [];
-  const student = c.age < 18 || c.p.school === 'highschool' || c.p.school === 'primary';
-  return allJobs(c.s.enabledPacks).filter(
-    (j) =>
-      (!student || PART_TIME_JOBS.has(j.id)) &&
-      EDUCATION_RANK[j.education] <= EDUCATION_RANK[c.p.education] &&
-      j.minSmarts <= c.p.stats.smarts + 10 &&
-      j.id !== c.p.jobId &&
-      (!j.requires || j.requires(c)),
-  );
+  const partTimeOk = isPupil(c) || c.age < PART_TIME_OFFER_AGE || c.p.school === 'university';
+  return allJobs(c.s.enabledPacks).filter((j) => j.id !== c.p.jobId && jobShown(c, j) && (partTimeOk || !j.partTime) && jobGaps(c, j).length === 0);
 }
 
 /**
  * What a working day looks like, for work lines and job-gated events:
- * - office: desks, inboxes, meetings, HR (office and tech jobs, plus a few desk-bound creative and campus jobs)
- * - trade: hands and tools (miner, electrician, mechanic, farmer, fisher)
- * - service: shifts and customers (barista, retail, taxi, cabin crew, chef)
- * - health: patients and night shifts (nurse, doctor, vet, dentist)
- * - uniform: public safety and the forces (police, firefighter, soldier, officer)
- * - school: a classroom or a training pitch (teacher, coach)
- * - studio: work alone or on the field (artist, athlete, pilot)
+ * - office: desks, inboxes, meetings, HR (office and tech jobs, plus desk-bound public and creative jobs: civil servant, judge, librarian, curator)
+ * - trade: hands and tools (miner, electrician, mechanic, farmer, fisher, builder, plumber, butcher, sailor…)
+ * - service: shifts and customers (barista, retail, taxi, cabin crew, chef, waiter, bus and dolmuş drivers, çaycı…)
+ * - health: patients and night shifts (nurse, doctor, vet, dentist, paramedic, pharmacist, caregiver…)
+ * - uniform: public safety and the forces (police, firefighter, soldier, officer, security, rangers, prison officers, bekçi)
+ * - school: a classroom or a training pitch (teacher, coach, preschool, driving instructor, tutor)
+ * - studio: work alone, on the field or before the public (artist, athlete, pilot, freelancers, musician, imam, muhtar, politician)
  * - none: no job, retired, or the player is the owner (nobody above them)
  */
 export type WorkKind = 'office' | 'trade' | 'service' | 'health' | 'uniform' | 'school' | 'studio' | 'none';
 
 /** Desk jobs outside the office/tech fields; pilots are 'tech' but fly, not sit. */
-const OFFICE_EXTRA = new Set(['designer', 'journalist', 'architect', 'academic', 'research']);
+const OFFICE_EXTRA = new Set(['designer', 'journalist', 'architect', 'academic', 'research', 'civil_servant', 'social_worker', 'librarian', 'diplomat', 'judge', 'curator']);
 const BY_ID: Record<string, WorkKind> = {
   pilot: 'studio',
   artist: 'studio',
@@ -80,6 +105,20 @@ const BY_ID: Record<string, WorkKind> = {
   firefighter: 'uniform',
   soldier: 'uniform',
   officer: 'uniform',
+  // round 4
+  security: 'uniform',
+  bus_driver: 'service',
+  postal: 'service',
+  preschool: 'school',
+  driving_instructor: 'school',
+  tutor: 'school',
+  politician: 'studio',
+  muhtar: 'studio',
+  imam: 'studio',
+  musician: 'studio',
+  photographer: 'studio',
+  writer: 'studio',
+  translator: 'studio',
 };
 const BY_FIELD: Record<string, WorkKind> = { office: 'office', tech: 'office', trade: 'trade', service: 'service', health: 'health', public: 'uniform', creative: 'studio' };
 

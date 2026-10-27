@@ -3,6 +3,7 @@ import type { AppApi } from '../app-state';
 import type { DailyResult, GameState } from '../../engine/types';
 import {
   categoryById,
+  dailyMoments,
   dailyPlan,
   liveStreak,
   medalFor,
@@ -13,7 +14,7 @@ import {
   todayKey,
   type DailyCategory,
 } from '../../engine/daily';
-import { fmtMoneyShort } from '../../engine/context';
+import { fmtShort } from '../money';
 import { getCountry } from '../../engine/world';
 import { cityName } from '../../engine/places';
 import { T, fmtInt } from '../../i18n/ui';
@@ -29,7 +30,7 @@ export function dateLabel(date: string, lang: string) {
 
 /** A category value for display; money is stored in US-baseline dollars over the wage factor. */
 export function fmtScore(cat: DailyCategory, v: number, countryId: string, lang: string) {
-  if (cat.unit === 'money') return fmtMoneyShort(v * getCountry(countryId).wageFactor, countryId, lang as 'en' | 'tr');
+  if (cat.unit === 'money') return fmtShort(v * getCountry(countryId).wageFactor, countryId, lang as 'en' | 'tr');
   if (cat.unit === 'years') return T('{n} yrs', { n: v });
   if (v >= 10_000) return new Intl.NumberFormat(lang === 'tr' ? 'tr-TR' : 'en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
   return fmtInt(v);
@@ -233,7 +234,7 @@ export function DailyEnd({ app }: { app: AppApi }) {
     }
   }, []);
   const r = recorded ?? fresh;
-  const big = g.player.log.filter((e) => e.tone === 'big').slice(-5);
+  const big = dailyMoments(g, 8);
   return (
     <div class="screen">
       <div class="eyebrow row" style={{ gap: '8px' }}>
@@ -286,11 +287,17 @@ export function DailyEnd({ app }: { app: AppApi }) {
       {big.length > 0 && (
         <div class="card" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <h2 class="title-l">{T('Moments from your life')}</h2>
-          {big.map((e, i) => (
-            <div key={i} class="muted" style={{ lineHeight: 1.45 }}>
-              <b class="num">{e.age}</b> · {e.text}
-            </div>
-          ))}
+          <ol class="moments">
+            {big.map((e, i) => (
+              <li key={i} class={e.tone ? `tone-${e.tone}` : ''}>
+                <span class="m-age num">{e.age}</span>
+                <span class="m-text">
+                  {e.title && <b>{e.title}</b>}
+                  <span>{e.text}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
       <button type="button" class="btn" onClick={() => app.backToFamily()}>

@@ -84,6 +84,12 @@ export interface EventDef {
   weight?: number | ((c: Ctx) => number);
   once?: boolean;
   cooldown?: number; // years before it can fire again (default 4)
+  /**
+   * Most times this event may fire at random in one life. Default: 2 for events with choices (1 with `once`),
+   * no cap for events without choices, for events with an explicit `cooldown` of 2 or less (pack loops), and for
+   * the yearly rituals listed in RECURRING_EVENTS (game.ts). Set it to raise or lower the cap.
+   */
+  maxPerLife?: number;
   /** Only fires when explicitly scheduled by the engine (life-stage moments). */
   scheduled?: boolean;
   when?: (c: Ctx) => boolean;
@@ -97,7 +103,7 @@ export interface EventDef {
   tone?: Tone;
 }
 
-export type ActivityGroup = 'Mind & Body' | 'Love' | 'Family' | 'Campus' | 'Career' | 'Business' | 'Fame' | 'Money' | 'Pets' | 'After dark';
+export type ActivityGroup = 'Mind & Body' | 'School' | 'Love' | 'Family' | 'Campus' | 'Career' | 'Business' | 'Fame' | 'Money' | 'Street' | 'Pets' | 'After dark';
 
 export interface ActivityDef {
   id: string;

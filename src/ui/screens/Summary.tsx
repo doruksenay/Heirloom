@@ -1,10 +1,11 @@
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
 import { getRibbon, ribbonDesc, ribbonName } from '../../engine/ribbons';
 import { T, Tn, fmtInt } from '../../i18n/ui';
 import { causeTr } from '../../engine/game';
 import { goalDef, goalLabel } from '../../engine/goals';
-import { continueAsChild, heirOptions, heirs } from '../../engine/game';
+import { continueAsChild, heirCards, heirOptions, heirs } from '../../engine/game';
+import { HeirCardView, fromCard } from '../HeirCard';
 import { ageOf } from '../../engine/context';
 import { Avatar } from '../Avatar';
 import { cityName } from '../../engine/places';
@@ -25,11 +26,12 @@ export function Summary({ app }: { app: AppApi }) {
   const ribbon = getRibbon(r.ribbon);
   const tr = app.lang === 'tr';
   const rName = ribbon ? ribbonName(ribbon, app.lang) : '';
+  // a first-time ribbon is marked on the ribbon chip itself, not with a toast over the heir cards (review item 5)
+  const [newRibbon] = useState(() => !!ribbon && !(app.profile.ribbons ?? []).includes(ribbon.id));
   useEffect(() => {
     track('life_end', { age: r.age, gen: r.generation, ribbon: r.ribbon ?? '', children: r.children, goals: (s.player.goals ?? []).filter((g) => g.done).length });
     if (ribbon && !(app.profile.ribbons ?? []).includes(ribbon.id)) {
       app.updateProfile((p) => ({ ...p, ribbons: [...(p.ribbons ?? []), ribbon.id] }));
-      app.toast(T('New ribbon: {name}', { name: rName }));
     }
   }, [r.personId]);
   // the end of a dynasty: a closing word for the whole family line when nobody is left to carry it on
@@ -99,7 +101,7 @@ export function Summary({ app }: { app: AppApi }) {
         </div>
         {ribbon && (
           <div class="chip accent" style={{ fontSize: '14px', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', whiteSpace: 'normal' }}>
-            <span>{T('Ribbon: {name}', { name: rName })}</span>
+            <span>{newRibbon ? T('New ribbon: {name}', { name: rName }) : T('Ribbon: {name}', { name: rName })}</span>
             <span style={{ fontWeight: 500, opacity: 0.85 }}>{ribbonDesc(ribbon, app.lang)}</span>
           </div>
         )}
@@ -135,21 +137,33 @@ export function Summary({ app }: { app: AppApi }) {
         </div>
       )}
       <div class="list" style={{ gap: '10px' }}>
-        {kids.map((k) => (
-          <button type="button" class="btn primary" key={k.id} onClick={() => {
-              track('continue_child', { gen: s.dynasty.generation + 1 });
-              app.act((g) => continueAsChild(g, k.id));
-              app.go('life');
-            }} style={{ minHeight: '58px' }}>
-            {grandkid.has(k.id)
-              ? T('Continue as your grandchild {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
-              : nibling.has(k.id)
-                ? k.gender === 'female'
-                  ? T('Continue as your niece {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
-                  : T('Continue as your nephew {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
-                : T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })}
-          </button>
-        ))}
+        {kids.length > 0 && <h2 class="title-l">{T('Who carries on?')}</h2>}
+        {/* heir cards (ui agent): job, closeness, starting money, home and heirlooms per option */}
+        <div class="heir-list">
+          {heirCards(s).map(({ person: k, ...card }) => (
+            <HeirCardView
+              key={k.id}
+              v={fromCard({ person: k, ...card })}
+              s={s}
+              lang={app.lang}
+              cta
+              label={
+                grandkid.has(k.id)
+                  ? T('Continue as your grandchild {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+                  : nibling.has(k.id)
+                    ? k.gender === 'female'
+                      ? T('Continue as your niece {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+                      : T('Continue as your nephew {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+                    : T('Continue as {name}, {n}', { name: k.firstName, n: ageOf(s, k) })
+              }
+              onPick={() => {
+                track('continue_child', { gen: s.dynasty.generation + 1 });
+                app.act((g) => continueAsChild(g, k.id));
+                app.go('life');
+              }}
+            />
+          ))}
+        </div>
         {kids.length === 0 && (
           <div class="banner">
             <strong>{T('The {name} family story ends here', { name: s.dynasty.familyName })}</strong>

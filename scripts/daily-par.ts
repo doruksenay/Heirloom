@@ -1,6 +1,8 @@
 // Medal thresholds for the Daily Challenge: plays many simulated challenge lives and prints percentiles.
 // A bot player chases one of the day's categories (as a real player would) and otherwise plays sensibly.
-// Run: npx vite-node scripts/daily-par.ts -- [days=60] [triesPerDay=4]
+// Run: npx vite-node scripts/daily-par.ts -- [days=60] [triesPerDay=4] [passive]
+// With "passive" the bot only answers events (no activities, no interactions), like a player who just taps "Age up";
+// bronze should sit near the passive median so a calm life still earns something (review item 14).
 import { ageUp, choose, doActivity, playerAge } from '../src/engine/game';
 import { activitiesFor } from '../src/content/registry';
 import { interact, interactionsFor } from '../src/engine/interactions';
@@ -11,6 +13,7 @@ import type { GameState, Profile } from '../src/engine/types';
 const args = process.argv.slice(2).filter((a) => a !== '--');
 const DAYS = Number(args[0] ?? 60);
 const TRIES = Number(args[1] ?? 4);
+const PASSIVE = args[2] === 'passive';
 
 function mulberry(a: number) {
   return () => {
@@ -69,6 +72,12 @@ function play(s: GameState, focus: string, R: () => number) {
   };
   for (let y = 0; y < 130 && !s.dead; y++) {
     const age = playerAge(s);
+    if (PASSIVE) {
+      ageUp(s);
+      trackDaily(s);
+      answer();
+      continue;
+    }
     const n = 2 + Math.floor(R() * 3);
     for (let i = 0; i < n && !s.dead; i++) {
       if (s.pending) answer();
@@ -112,6 +121,9 @@ function play(s: GameState, focus: string, R: () => number) {
 }
 
 const values: Record<string, number[]> = {};
+const medalCount = [0, 0, 0, 0];
+let lives = 0;
+let noMedal = 0;
 const start = Date.parse('2026-11-01T00:00:00Z');
 for (let d = 0; d < DAYS; d++) {
   const date = new Date(start + d * 86_400_000).toISOString().slice(0, 10);
@@ -125,6 +137,10 @@ for (let d = 0; d < DAYS; d++) {
     play(s, focus, R);
     const res = scoreDaily(s);
     for (const [id, v] of Object.entries(res.scores)) (values[id] ??= []).push(v);
+    lives++;
+    const ms = Object.values(res.medals);
+    for (const m of ms) medalCount[m]++;
+    if (ms.every((m) => m === 0)) noMedal++;
   }
 }
 
@@ -139,3 +155,7 @@ for (const cat of DAILY_CATEGORIES) {
     `${cat.id.padEnd(8)} n=${String(xs.length).padStart(3)}  p50=${pct(xs, 50)}  p75=${pct(xs, 75)}  p90=${pct(xs, 90)}  max=${pct(xs, 100)}   now=${cat.medals.join('/')}`,
   );
 }
+const tot = medalCount.reduce((a, b) => a + b, 0);
+console.log(
+  `${PASSIVE ? 'passive' : 'active'} lives=${lives}: category results none ${((100 * medalCount[0]) / tot).toFixed(0)}% bronze ${((100 * medalCount[1]) / tot).toFixed(0)}% silver ${((100 * medalCount[2]) / tot).toFixed(0)}% gold ${((100 * medalCount[3]) / tot).toFixed(0)}% | lives with no medal ${((100 * noMedal) / lives).toFixed(0)}%`,
+);

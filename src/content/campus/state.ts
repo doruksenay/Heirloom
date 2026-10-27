@@ -154,6 +154,10 @@ export function majorJobs(c: Ctx, fields: JobDef['field'][], leeway = 10): JobDe
     .filter(
       (j) =>
         fields.includes(j.field) &&
+        !j.partTime &&
+        !j.eventOnly &&
+        (!j.countries || j.countries.includes(c.p.countryId)) &&
+        (!j.req?.gender || j.req.gender === c.p.gender) &&
         EDUCATION_RANK[j.education] <= EDUCATION_RANK[c.p.education] &&
         j.minSmarts <= c.p.stats.smarts + leeway &&
         j.id !== c.p.jobId,
@@ -197,11 +201,11 @@ export const COMPANIES = COMPANIES_INTL;
  * recruited as a firefighter). Undeclared students are filed under Business. Pack jobs are listed by id.
  */
 export const MAJOR_JOBS: Record<Major, string[]> = {
-  engineering: ['engineer', 'research', 'architect', 'pilot'],
-  medicine: ['doctor', 'nurse', 'dentist', 'vet', 'research'],
-  law: ['lawyer', 'accountant', 'journalist'],
-  business: ['accountant', 'realtor', 'journalist', 'engineer'],
-  arts: ['designer', 'architect', 'journalist', 'artist'],
-  education: ['teacher', 'academic', 'journalist'],
+  engineering: ['engineer', 'research', 'architect', 'pilot', 'civil_engineer', 'data_scientist', 'game_dev', 'atc', 'it_support'],
+  medicine: ['doctor', 'nurse', 'dentist', 'vet', 'research', 'surgeon', 'pharmacist', 'psychologist', 'physio', 'midwife', 'lab_tech', 'paramedic'],
+  law: ['lawyer', 'accountant', 'journalist', 'judge', 'diplomat', 'civil_servant', 'politician'],
+  business: ['accountant', 'realtor', 'journalist', 'engineer', 'banker', 'marketing', 'hr', 'sales', 'bank_teller', 'data_scientist', 'hotel'],
+  arts: ['designer', 'architect', 'journalist', 'artist', 'curator', 'photographer', 'writer', 'musician', 'game_dev', 'translator'],
+  education: ['teacher', 'academic', 'journalist', 'preschool', 'librarian', 'social_worker', 'translator', 'tour_guide'],
 };
 export const fitsMajor = (m: Major | null, jobId: string) => MAJOR_JOBS[m ?? 'business'].includes(jobId);

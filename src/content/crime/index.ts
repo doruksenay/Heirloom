@@ -7,13 +7,16 @@ import { afterEvents } from './events-after';
 import { justiceEvents } from './events-justice';
 import { prisonEvents } from './events-prison';
 import { streetEvents } from './events-street';
-import { crimeState, localMoney, peekCrime, yearsServed } from './state';
+import { convictFor, crimeState, isPetty, localMoney, peekCrime, yearsServed } from './state';
 
 // "Crime World" expansion (18+). Bundled with the app, unlocked by purchase + adult-content opt-in.
 // Tone: satirical with real consequences (prison, lost jobs, broken relationships). No real-world how-to.
 //
+// Builds on the free street crime (base/street-crime.ts: shoplifting, pickpocketing, graffiti, fights, the court date,
+// short sentences and a few things to do inside). Both use the same state in p.ext.crime (base/street-law.ts).
+//
 // Files:
-//   state.ts          crime state in p.ext.crime, convict() / arrest() / sentence caps
+//   state.ts          re-exports base/street-law.ts: crime state, convict() / arrest() / sentence caps
 //   events-street.ts  the crime ladder: burglary, gang, knockoffs, car theft, heist, embezzlement, tax fraud, raid
 //   events-justice.ts trial, detective, statute of limitations
 //   events-prison.ts  fights, classes, parole, cellmate, letters, riot, escape
@@ -34,20 +37,20 @@ export function infamous(prev: Player, year: number): boolean {
 export const crimePack: ContentPack = {
   id: 'crime_world',
   title: 'Crime World',
-  description: 'Gangs, heists, trials and prison life. Every choice has a cost, and your family remembers.',
+  description: 'Burglary, gangs, heists, big trials and prison life in depth. Builds on the free street crime: every choice has a cost, and your family remembers.',
   rating: 'mature',
   entitlement: CRIME_ENTITLEMENT,
   events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents],
   activities: crimeActivities,
 
+  // heat cooling and noticing a release run in the free game (base/street.ts streetOnYear) on the same state
   onYear: (c) => {
-    const st = peekCrime(c.p);
-    if (st) {
-      st.heat = Math.max(st.fugitive ? 50 : 0, st.heat - 8);
-      if (st.inside && c.p.jailYears === 0) {
-        st.inside = false;
-        st.releasedYear = c.s.year;
-      }
+    // a big charge that waited three years for crime.trial (the year's slot kept going to life-stage moments) is
+    // tried anyway: the plea deal, half the sentence asked for
+    const ch = peekCrime(c.p)?.charge;
+    if (ch && !isPetty(ch.crime) && c.p.jailYears === 0 && c.s.year - ch.year >= 3) {
+      crimeState(c.p).charge = null;
+      c.h.log(c.t('Your trial finally came round. Your lawyer took the plea deal. ', 'Davan sonunda görüldü. Avukatın itiraf pazarlığını kabul etti. ') + convictFor(c, ch.crime, Math.max(1, Math.ceil(ch.years / 2))), 'bad');
     }
     if (c.h.has('lied_on_cv')) {
       if (!c.p.jobId) c.h.unflag('lied_on_cv');

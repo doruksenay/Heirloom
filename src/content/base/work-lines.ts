@@ -1,6 +1,7 @@
 import type { Ctx } from '../types';
 import type { Pair } from './lines';
-import { ownsWork, workKind, type WorkKind } from './util';
+import { PART_TIME_JOBS, isPupil, ownsWork, workKind, type WorkKind } from './util';
+import { COMMUNITY, COMMUNITY_JOBS, JOB_R4, PART_TIME } from './work-lines-r4';
 
 // Work lines by the kind of working day (playtest 3, problem 1: a miner answering emails on a Sunday, a fire
 // chief zeroing the inbox). `workPool(c)` gives the kind's pool plus a few lines written for the exact job,
@@ -368,12 +369,17 @@ const KIND_POOL: Record<Exclude<WorkKind, 'none'>, Pair[]> = {
 /** Crew jobs read their own pool (pilots and cabin crew are 'studio' and 'service' kinds for events). */
 const CREW_JOBS = new Set(['pilot', 'cabin_crew']);
 
+/** An after-school job held by a pupil or a young student: the part-time pool fits better than the kind's. */
+const partTimer = (c: Ctx) => PART_TIME_JOBS.has(c.p.jobId ?? '') && (isPupil(c) || c.p.school === 'university' || c.age < 23);
+
 /** The "work extra hard" pool for the player's job: kind pool (or the owner's) plus the job's own lines. */
 export function workPool(c: Ctx): Pair[] {
   const id = c.p.jobId ?? '';
-  const extra = JOB[id] ?? [];
+  const extra = JOB[id] ?? JOB_R4[id] ?? [];
   if (ownsWork(c)) return [...OWNER, ...extra];
   if (CREW_JOBS.has(id)) return [...CREW, ...COMMON, ...extra];
+  if (COMMUNITY_JOBS.has(id)) return [...COMMUNITY, ...extra];
+  if (partTimer(c)) return [...PART_TIME, ...extra];
   const kind = workKind(c);
   return [...(kind === 'none' ? COMMON : KIND_POOL[kind]), ...extra];
 }
@@ -382,6 +388,8 @@ export function workPool(c: Ctx): Pair[] {
 export function workKey(c: Ctx): string {
   const id = c.p.jobId ?? 'none';
   if (ownsWork(c)) return `work_hard.owner.${id}`;
+  if (COMMUNITY_JOBS.has(id)) return `work_hard.community.${id}`;
+  if (partTimer(c)) return `work_hard.parttime.${id}`;
   return `work_hard.${CREW_JOBS.has(id) ? 'crew' : workKind(c)}.${id}`;
 }
 

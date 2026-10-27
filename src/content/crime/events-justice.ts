@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { nm, wage } from '../base/util';
-import { arrest, CRIMES, convictFor, crimeState, free, isCrimeKey, MAX_SENTENCE, peekCrime, sentenceFor, type CrimeKey } from './state';
+import { arrest, CRIMES, convictFor, crimeState, free, isCrimeKey, isPetty, MAX_SENTENCE, peekCrime, sentenceFor, type CrimeKey } from './state';
 
 // Trials, the detective who will not let go, and the statute of limitations.
 
@@ -28,9 +28,11 @@ export const justiceEvents: EventDef[] = [
     minAge: 12,
     weight: 500,
     cooldown: 1,
+    maxPerLife: 12, // one trial per charge
     when: (c) => {
       const ch = peekCrime(c.p)?.charge;
-      return free(c) && !!ch && ch.year < c.s.year;
+      // petty charges go to the free court date (base.court_date); this is the big trial
+      return free(c) && !!ch && ch.year < c.s.year && !isPetty(ch.crime);
     },
     setup: (c) => {
       const ch = crimeState(c.p).charge!;

@@ -1,5 +1,5 @@
 import type { Ctx, EventDef } from '../types';
-import { isCareerUpgrade, titleFor } from '../../engine/careers';
+import { isCareerUpgrade, sameTrack, titleFor } from '../../engine/careers';
 import { abl, acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, employee, officeJob, workKind, quietInMourning } from './util';
 import { BURNOUT, LAYOFF } from './work-lines';
 import { byCountry, him, he, type ByCountry } from './events-flavour';
@@ -22,7 +22,7 @@ const NOT_HEADHUNTED = new Set(['athlete', 'coach', 'soldier', 'officer', 'artis
 const headhunted = (c: Ctx) => {
   const cur = c.h.job();
   if (!cur || !employee(c) || NOT_HEADHUNTED.has(cur.id)) return [];
-  return eligibleJobs(c).filter((j) => !NOT_HEADHUNTED.has(j.id) && j.field === cur.field && isCareerUpgrade(c, j, 1));
+  return eligibleJobs(c).filter((j) => !NOT_HEADHUNTED.has(j.id) && j.field === cur.field && sameTrack(j, cur) && isCareerUpgrade(c, j, 1));
 };
 
 /** base.flu lines by life stage; every bucket has three, so the rng call is the same at every age. */

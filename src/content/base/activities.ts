@@ -4,9 +4,11 @@ import type { Person } from '../../engine/types';
 import { cityName, isCoastal } from '../../engine/places';
 import { MAX_HIRE_AGE, abl, acc, cap, dat, gen, kin, loc, single, wage, wth } from './util';
 import { workKey, workPool } from './work-lines';
+import { JOB_BOARD_EVENT } from './job-board';
 import { inPrison, say, sayWith, type Pair } from './lines';
 import { ABROAD_CITIES, aNum, isAbroad } from './events-flavour';
 import { gkAge, grandkids } from './events-elder';
+import { BABY_GAP, BABY_TOO_SOON, babyOdds, youngestChildAge } from './events-scheduled';
 
 // Every repeatable line here must fit every age (and place) it can fire at: lines are split into
 // life-stage buckets, and `say` (lines.ts) keeps a line from coming back until most of its bucket
@@ -1075,8 +1077,10 @@ export const baseActivities: ActivityDef[] = [
     },
     run: (c) => {
       const p = c.h.partner()!;
-      const herAge = c.p.gender === 'female' ? c.age : c.h.ageOf(p.person);
-      if (c.rng.chance(herAge < 35 ? 0.6 : 0.35)) return { event: 'base.baby_name' };
+      // a newborn in the house: wait a little (review item 7: a baby nearly every year, 13 in one life)
+      if (youngestChildAge(c) < BABY_GAP) return say(c, 'baby.too_soon', BABY_TOO_SOON);
+      // odds by the mother's age, the children already born and money (babyOdds in events-scheduled.ts)
+      if (c.rng.chance(babyOdds(c))) return { event: 'base.baby_name' };
       // with children already, "still no baby" would contradict the family: these lines know the youngest
       const kids = c.h.relatives('child');
       if (kids.length) {
@@ -1180,12 +1184,14 @@ export const baseActivities: ActivityDef[] = [
   {
     id: 'job_search',
     label: (c) => c.t('Look for a job', 'İş ara'),
-    description: (c) => c.t('Browse job listings', 'İş ilanlarına göz at'),
+    description: (c) => c.t('Every opening, with salary and requirements', 'Bütün ilanlar, maaş ve şartlarıyla'),
     group: 'Career',
     minAge: 16,
     maxAge: MAX_HIRE_AGE,
+    // two looks a year: a rejection can be followed by a second application (round 4 job board)
+    perYear: 2,
     available: (c) => c.p.jailYears === 0 && !c.p.retired && c.p.school !== 'primary',
-    run: () => ({ event: 'base.job_search' }),
+    run: () => ({ event: JOB_BOARD_EVENT }),
   },
   {
     id: 'work_hard',

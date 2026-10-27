@@ -10,7 +10,10 @@ import {
   continueAsChild,
   doActivity,
   finishLife,
+  heirCards,
   heirOptions,
+  maxPerLife,
+  DEBT_LETTERS_PER_LIFE,
   heirs,
   newGame,
   openEvent,
@@ -21,8 +24,10 @@ import { activitiesFor, allJobs, findEvent } from '../src/content/registry';
 import { makeCtx } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { assignGoals, BASE_GOALS, goalDef } from '../src/engine/goals';
-import { familyFirstNames, kin } from '../src/content/base/util';
+import { PART_TIME_JOBS, familyFirstNames, kin } from '../src/content/base/util';
 import { ribbonFor } from '../src/engine/ribbons';
+import { tuitionFor, yearBudget } from '../src/engine/economy';
+import { babyOdds } from '../src/content/base/events-scheduled';
 import type { GameState, Lang, Person, Profile } from '../src/engine/types';
 import type { ActivityDef } from '../src/content/types';
 
@@ -518,7 +523,7 @@ describe('job listings', () => {
       setAge(teen, 16);
       teen.player.school = 'highschool';
       teen.player.education = 'primary';
-      for (const j of listing(teen)) expect(['barista', 'retail']).toContain(j.id);
+      for (const j of listing(teen)) expect(PART_TIME_JOBS.has(j.id), j.id).toBe(true);
     }
   });
 
@@ -804,5 +809,177 @@ describe('round 3 engine fixes (playtest 3)', () => {
       });
       expect(runs[0]).toEqual(runs[1]);
     }
+  });
+});
+
+describe('round 4 engine (review 4)', () => {
+  /** Ages up with no activities, answering every event with `pick`. */
+  const passive = (s: GameState, pick: (ids: string[]) => string, years = 130) => {
+    for (let y = 0; y < years && !s.dead; y++) {
+      ageUp(s);
+      let guard = 0;
+      while (s.pending && guard++ < 8) choose(s, pick(s.pending.choices.filter((c) => !c.disabled).map((c) => c.id)));
+    }
+  };
+
+  it('a passive first life is offered love and children, and an agreeable one rarely ends the family (item 3)', { timeout: 120_000 }, () => {
+    let childless = 0;
+    let offered = 0;
+    let lives = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = fresh(seed, false, 'en', ['tr', 'us', 'uk', 'de', 'br'][seed % 5]);
+      passive(s, (ids) => ids[0]); // always the first choice: "Give it a chance", "Propose", "Start trying"
+      if (s.dead!.age < 40) continue;
+      lives++;
+      if ((s.player.eventCount?.['base.nudge_date'] ?? 0) > 0 || s.player.achievements.includes('married')) offered++;
+      if (heirs(s).length === 0) childless++;
+    }
+    expect(offered / lives).toBeGreaterThan(0.9);
+    expect(childless / lives).toBeLessThan(0.15);
+  });
+
+  it('never forces it: "happy single" ends the set-ups', () => {
+    const s = fresh(3);
+    setAge(s, 24);
+    openEvent(s, findEvent('base.nudge_date')!.def);
+    choose(s, 'single');
+    expect(s.player.relations.some((r) => r.kind === 'partner')).toBe(false);
+    for (let i = 0; i < 10; i++) {
+      ageUp(s);
+      settle(s);
+    }
+    expect(s.player.eventCount?.['base.nudge_date']).toBe(1);
+  });
+
+  it('warns a childless player from 45 that there is no heir, with adoption on offer', () => {
+    const s = fresh(4);
+    setAge(s, 45);
+    s.player.money = 50_000;
+    let seen = false;
+    for (let i = 0; i < 4 && !seen; i++) {
+      ageUp(s);
+      if (s.pending?.eventId === 'base.no_heir') {
+        seen = true;
+        expect(s.pending.choices.find((c) => c.id === 'adopt')!.disabled).toBe(false);
+      }
+      settle(s);
+    }
+    expect(seen).toBe(true);
+  });
+
+  it('caps every non-recurring choice event at its maxPerLife (item 10)', { timeout: 120_000 }, () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = fresh(seed, false, 'en', ['tr', 'us', 'uk', 'de', 'br'][seed % 5]);
+      const bot = createRng(seed);
+      passive(s, (ids) => bot.pick(ids));
+      for (const [id, n] of Object.entries(s.player.eventCount ?? {})) {
+        const def = findEvent(id)!.def;
+        if (def.scheduled) continue;
+        expect(n, `${id} fired ${n} times`).toBeLessThanOrEqual(maxPerLife(def));
+      }
+    }
+    expect(maxPerLife(findEvent('base.hl_ritual')!.def)).toBe(Infinity);
+  });
+
+  it('logs the event title with the answer (item 4)', () => {
+    const s = fresh(5);
+    setAge(s, 24);
+    openEvent(s, findEvent('base.nudge_date')!.def);
+    const title = s.pending!.title;
+    const n = s.player.log.length;
+    choose(s, 'later');
+    expect(s.player.log[n].title).toBe(title);
+  });
+
+  it('no tuition at a Turkish state university, and no living costs in the parents\' home under 26 (item 6)', () => {
+    expect(tuitionFor('tr')).toBe(0);
+    expect(tuitionFor('us')).toBeGreaterThan(0);
+    const s = fresh(6);
+    setAge(s, 24);
+    const b = yearBudget(s.player, 24, 0, false, 0);
+    expect(b.cost).toBe(0);
+    expect(b.support).toBe(0);
+    expect(yearBudget(s.player, 27, 0, false, 0).cost).toBeGreaterThan(0);
+  });
+
+  it('warns once the first time money goes negative, and sends at most two bank letters a life', () => {
+    const s = fresh(7);
+    setAge(s, 30);
+    s.player.money = -200_000;
+    let letters = 0;
+    for (let i = 0; i < 40 && !s.dead; i++) {
+      ageUp(s);
+      if (s.pending?.eventId === 'base.debt_letter') {
+        letters++;
+        choose(s, 'ignore');
+      }
+      settle(s);
+      if (s.player.money > -200_000) s.player.money = -200_000;
+    }
+    expect(letters).toBeGreaterThan(0);
+    expect(letters).toBeLessThanOrEqual(DEBT_LETTERS_PER_LIFE);
+    expect(s.player.log.filter((e) => /in the red for the first time/.test(e.text)).length).toBe(1);
+  });
+
+  it('baby odds fall with age and children, and wait after a birth (item 7)', () => {
+    const s = fresh(8);
+    setAge(s, 26);
+    const c = makeCtx(s);
+    c.h.addRelation(c.h.newPerson({ age: 27, gender: 'male' }), 'spouse', 80);
+    const young = babyOdds(makeCtx(s));
+    setAge(s, 39);
+    const older = babyOdds(makeCtx(s));
+    expect(young).toBeGreaterThan(older);
+    setAge(s, 26);
+    makeCtx(s).h.addRelation(makeCtx(s).h.newPerson({ age: 0 }), 'child', 90);
+    expect(babyOdds(makeCtx(s))).toBe(0);
+    doActivity(s, 'baby');
+    expect(s.pending).toBeNull();
+    s.people[s.player.relations[s.player.relations.length - 1].personId].birthYear -= 3;
+    const withOne = babyOdds(makeCtx(s));
+    expect(withOne).toBeGreaterThan(0);
+    expect(withOne).toBeLessThan(young);
+  });
+
+  it('heir cards show the job, money and heirlooms, and the heir keeps that job (item 5)', () => {
+    const s = fresh(9);
+    setAge(s, 60);
+    s.player.money = 100_000;
+    const c = makeCtx(s);
+    const kids = [c.h.newPerson({ age: 21 }), c.h.newPerson({ age: 21 })];
+    for (const k of kids) c.h.addRelation(k, 'child', 70);
+    for (let i = 0; i < 2; i++) {
+      ageUp(s);
+      settle(s);
+    }
+    if (s.dead) return;
+    for (const k of kids) expect(k.jobId).not.toBeUndefined();
+    finishLife(s);
+    const cards = heirCards(s);
+    expect(cards.length).toBe(2);
+    for (const card of cards) {
+      expect(card.heirlooms.length).toBe(s.dynasty.heirlooms.length);
+      expect(card.money).toBeGreaterThan(0);
+      expect(card.closeness).toBeDefined();
+      if (card.person.jobId) expect(card.job).toBeTruthy();
+    }
+    const pick = cards[0].person;
+    const jobId = pick.jobId;
+    const money = cards[0].money;
+    continueAsChild(s, pick.id);
+    expect(s.player.jobId).toBe(jobId ?? null);
+    expect(s.player.money).toBe(money);
+  });
+
+  it('draws only goals the player can reach (item 15)', () => {
+    const s = fresh(10);
+    setAge(s, 20);
+    s.player.stats.smarts = 34;
+    const ids = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      assignGoals(s, createRng(i + 1));
+      for (const g of s.player.goals!) ids.add(g.id);
+    }
+    for (const id of ['genius', 'viral', 'marathon', 'new_heirloom', 'age90']) expect(ids.has(id), id).toBe(false);
   });
 });
