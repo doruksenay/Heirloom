@@ -50,7 +50,7 @@ export const ADVICE: Record<string, L[]> = {
     says('Never tell the teacher something was easy. Next time it will be harder.', 'Öğretmene kolay olduğunu asla söyleme. Zorlaştırıyorlar.'),
     says('If you hide the vegetables under the rice, nobody checks.', 'Sebzeleri pilavın altına saklarsan kimse bakmaz.'),
     says('Pretend to be asleep in the car and someone carries you in.', 'Arabada uyuyor numarası yaparsan biri seni taşıyarak içeri götürür.'),
-    says('Always say you are "nearly done". Nobody checks.', 'Her zaman "Bitmek üzere" de. Kimse kontrol etmiyor.'),
+    says('Always say you are "nearly done". Nobody checks.', 'Her zaman \'Bitmek üzere\' de. Kimse kontrol etmiyor.'),
   ],
   /** A parent to a teenager. */
   'parent:teen': [

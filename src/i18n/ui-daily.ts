@@ -16,7 +16,7 @@ export const TR_DAILY: Record<string, string> = {
   "Best streak": "En uzun seri",
   "Recent days": "Son günler",
   "{n} medal points": "{n} madalya puanı",
-  "Medals compare you with thousands of simulated lives. Only your first try each day counts.": "Madalyalar seni binlerce benzetim hayatla kıyaslar. Her gün yalnızca ilk denemen sayılır.",
+  "Medals compare you with thousands of simulated lives. Only your first try each day counts.": "Madalyalar sonucunu binlerce simüle edilmiş hayatla karşılaştırır. Her gün yalnızca ilk denemen sayılır.",
   "Medal": "Madalya",
   "Died at {n}": "{n} yaşında öldü",
   "{medal} at {v}": "{medal} için: {v}",

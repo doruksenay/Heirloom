@@ -273,7 +273,7 @@ export const youngChildEvents: EventDef[] = [
     choices: [
       opt('plan', ['Draw a detailed care plan', 'Ayrıntılı bir bakım planı çiz'], (c) => {
         near(c, 'par', 3);
-        return out(c, { sma: 2, hap: 2 }, `Your plan included a "dinosaur room". ${Kw(c, 'par')} framed it. You got a goldfish called T-Rex.`, `Planında bir "dinozor odası" bile vardı. ${Kw(c, 'par')} onu çerçeveletti. Sana T-Rex adında bir japon balığı alındı.`);
+        return out(c, { sma: 2, hap: 2 }, `Your plan included a "dinosaur room". ${Kw(c, 'par')} framed it. You got a goldfish called T-Rex.`, `Planında bir "dinozor odası" bile vardı. ${Kw(c, 'par')} onu çerçeveletti. Sana T-Rex adında bir Japon balığı alındı.`);
       }),
       opt('egg', ['Find an egg and wait', 'Bir yumurta bul ve bekle'], (c) =>
         out(c, { hap: 1 }, 'You sat on a potato for two days. Nothing hatched. You remain hopeful.', 'İki gün bir patatesin üstünde oturdun. Hiçbir şey çıkmadı. Umudunu koruyorsun.'),
@@ -522,7 +522,7 @@ export const youngChildEvents: EventDef[] = [
           0.75,
           (c) => {
             befriend(c, 'kid', 60);
-            return out(c, { hap: 6 }, `The hideout held. Mostly. You and ${nmc(c, 'kid')} spent the whole summer up there.`, `Sığınak dayandı. Çoğunlukla. ${nmc(c, 'kid', 'wth')} bütün yazı orada geçirdiniz.`);
+            return out(c, { hap: 6 }, `The hideout held. Mostly. You and ${nmc(c, 'kid')} spent the whole summer up there.`, `Sığınak dayandı. Sayılır. ${nmc(c, 'kid', 'wth')} bütün yazı orada geçirdiniz.`);
           },
           (c) => out(c, { hap: 1, hea: -4 }, 'The floor gave way on day one. You have a cast and a great story.', 'Zemin ilk gün çöktü. Kolunda alçı, dilinde harika bir hikâye var.'),
         ),
@@ -706,7 +706,7 @@ export const youngChildEvents: EventDef[] = [
         return out(c, { hap: 3 }, `You played until dark. Nobody won, nobody lost, and ${nmc(c, 'kid')} became a friend.`, `Hava kararana kadar oynadınız. Kimse kazanmadı, kimse kaybetmedi; ${da(nmc(c, 'kid'))} arkadaşın oldu.`);
       }),
       opt('practise', ['Practise first, alone', 'Önce tek başına çalış'], (c) =>
-        out(c, { sma: 1, hap: 1 }, 'You practised in the hallway all week. Your aim is deadly. Your mother found eleven marbles under the fridge.', 'Bütün hafta koridorda çalıştın. Nişanın artık ölümcül. Buzdolabının altından on bir misket çıktı.'),
+        out(c, { sma: 1, hap: 1 }, 'You practised in the hallway all week. Your aim is deadly. Eleven marbles turned up under the fridge.', 'Bütün hafta koridorda çalıştın. Nişanın artık ölümcül. Buzdolabının altından on bir misket çıktı.'),
       ),
     ],
   },
@@ -885,7 +885,7 @@ export const youngChildEvents: EventDef[] = [
       ),
       opt('gift', ['Buy presents for your family', 'Ailene hediye al'], (c) => {
         allParents(c, 6);
-        return out(c, { hap: 4 }, 'You bought everyone something small and strange. Your mum still uses the egg-shaped keyring.', 'Herkese küçük ve tuhaf bir şey aldın. Yumurta biçimli anahtarlık hâlâ kullanılıyor.');
+        return out(c, { hap: 4 }, 'You bought everyone something small and strange. The egg-shaped keyring is still in use at home.', 'Herkese küçük ve tuhaf bir şey aldın. Yumurta biçimli anahtarlık hâlâ kullanılıyor.');
       }, { tone: 'good' }),
     ],
   },

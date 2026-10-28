@@ -5,6 +5,8 @@ import { byCountry, cityOf, coastal, inTr, type ByCountry } from './events-flavo
 import { canEnlist, canTryOut, isJob } from './activities-careers';
 import { jobBoardEvents } from './job-board';
 import { careerEventsR4 } from './events-careers-r4';
+import { majorEvents } from './events-careers-majors';
+import { careerEventsR5 } from './events-careers-r5';
 
 // v0.7 careers: job-specific events. Every event is guarded by the player's current job.
 
@@ -2802,4 +2804,6 @@ export const careerEvents: EventDef[] = [
   // round 4: the job board and events for the new jobs
   ...jobBoardEvents,
   ...careerEventsR4,
+  ...majorEvents,
+  ...careerEventsR5,
 ];

@@ -4,13 +4,16 @@ import { da } from '../../i18n/tr-grammar';
 import { say, sayWith, type Pair } from './lines';
 import type { Gender, Person } from '../../engine/types';
 import { furniture as furnitureItem } from '../../engine/home';
+import { tuitionFor } from '../../engine/economy';
 import { atParents, inTr } from './events-flavour';
 import { firstNames } from '../../engine/world';
 import { EDUCATION_RANK, titleFor, type JobDef } from '../../engine/careers';
 import { MAJORS, peekCampus } from '../campus/state';
 import { moveTo } from './activities-home';
+import { homeEquity } from '../../engine/economy';
 import { adoptChild, adoptTone, canAdopt } from './adoption';
 import { ringWeddingLine } from './heirloom-words';
+import { retirementScene } from './career-helpers';
 
 // Events opened by the engine at life-stage moments or by activities. They never fire at random.
 
@@ -44,7 +47,7 @@ const VIBES_TR = [
   'güzel sorular sordu ve cevapları gerçekten dinledi',
   'maratona hazırlanıyor ve bunu on bir kez söyledi',
   'ne olur ne olmaz diye yanında bir kutu oyunu getirdi',
-  'pizza malzemeleri hakkında çok net fikirleri var',
+  'pizza malzemeleri konusunda çok net fikirlere sahip',
   'garsonun şakasına biraz fazla uzun güldü',
   'bahşişi bol keseden bıraktı ve seni kapıya kadar geçirdi',
 ];
@@ -87,7 +90,7 @@ const DATE_NO: DateLine[] = [
 const DATE_PASS: DateLine[] = [
   (p) => [`You and ${p.firstName} split the bill and went your separate ways.`, `${wth(p.firstName)} hesabı bölüştünüz ve herkes kendi yoluna gitti.`],
   (p) => [`You faked an urgent phone call. ${p.firstName} faked believing it.`, `Acil bir telefon gelmiş gibi yaptın. ${da(p.firstName)} inanmış gibi yaptı.`],
-  (p) => [`You and ${p.firstName} agreed, very politely, that there was no spark.`, `${wth(p.firstName)} çok kibar bir şekilde aranızda kıvılcım olmadığında anlaştınız.`],
+  (p) => [`You and ${p.firstName} agreed, very politely, that there was no spark.`, `${wth(p.firstName)} çok kibar bir şekilde aranızda kıvılcım olmadığı konusunda anlaştınız.`],
   (p) => [`You said goodnight to ${p.firstName} at the bus stop and deleted the app on the way home.`, `Otobüs durağında ${dat(p.firstName)} iyi geceler dedin ve eve dönerken uygulamayı sildin.`],
   (p) => [`${p.firstName} was lovely. Lovely is not enough.`, `${p.firstName} çok tatlıydı. Ama tatlı yetmiyor.`],
   (p) => [`You left before dessert. ${p.firstName} ordered yours anyway.`, `Tatlıdan önce kalktın. ${p.firstName} seninkini de sipariş etti.`],
@@ -303,7 +306,7 @@ const TOGETHER_WAIT: DateLine[] = [
 const TRY_LINES: ((n: string) => Pair)[] = [
   (n) => [`You and ${n} decided to try for a baby. The spare room is already being measured.`, `${wth(n)} bebek için denemeye karar verdiniz. Boş oda şimdiden ölçülüyor.`],
   (n) => [`You and ${n} agreed: it is time. ${n} bought a baby-names book the same afternoon.`, `${wth(n)} karar verdiniz: zamanı geldi. ${n} aynı öğleden sonra bir bebek isimleri kitabı aldı.`],
-  (n) => [`You told ${n} yes. Your mother found out within a day, somehow.`, `${dat(n)} evet dedin. Annen bir gün içinde öğrendi; nasıl, kimse bilmiyor.`],
+  (n) => [`You told ${n} yes. The whole family knew within a day, somehow.`, `${dat(n)} evet dedin. Bütün aile bir gün içinde duydu; nasıl, kimse bilmiyor.`],
 ];
 
 const KIDS_LATER: ((n: string) => Pair)[] = [
@@ -623,7 +626,10 @@ export const scheduledEvents: EventDef[] = [
             c.h.flag('scholarship');
             return c.t('You got into university with a full scholarship!', 'Üniversiteyi tam bursla kazandın!');
           }
-          return c.t('You enrolled at university. Tuition is not cheap.', 'Üniversiteye kaydoldun. Harçlar hiç ucuz değil.');
+          // Türkiye: a state university has no tuition (economy.ts TUITION_USD); lives there take the YKS tercih instead
+          return tuitionFor(c.p.countryId) === 0
+            ? c.t('You enrolled at university. No tuition, but the dorm and the canteen still want their money.', 'Üniversiteye kaydoldun. Harç yok ama yurt ve yemekhane yine de parasını istiyor.')
+            : c.t('You enrolled at university. Tuition is not cheap.', 'Üniversiteye kaydoldun. Harçlar hiç ucuz değil.');
         },
         tone: 'good',
       },
@@ -635,6 +641,7 @@ export const scheduledEvents: EventDef[] = [
       {
         id: 'gap',
         label: (c) => c.t('Take a gap year and travel', 'Bir yıl ara ver ve gez'),
+        badge: 'Costs more', // it is paid from savings, and can start adult life in debt (review 5 §3.7)
         resolve: (c) => {
           c.h.money(-wage(c, 2500));
           c.h.stat('happiness', 10);
@@ -651,13 +658,9 @@ export const scheduledEvents: EventDef[] = [
     id: 'base.retirement',
     category: 'work',
     scheduled: true,
-    title: (c) =>
-      c.t('You are 65. Your company offers you a retirement party.', '65 yaşındasın. Şirketin sana emeklilik partisi veriyor.'),
-    text: (c) =>
-      c.t(
-        `After ${c.p.jobYears} years, your colleagues have already bought the cake.`,
-        `${c.p.jobYears} yılın ardından iş arkadaşların pastayı çoktan almış bile.`,
-      ),
+    // round 5 (careers): the party fits the work: own shop, public service, office, trade, ward, school
+    title: (c) => retirementScene(c).title,
+    text: (c) => retirementScene(c).text,
     choices: [
       {
         id: 'retire',
@@ -907,7 +910,7 @@ export const scheduledEvents: EventDef[] = [
           c.h.stat('happiness', -4);
           if (!c.h.has('restructured')) {
             c.h.flag('restructured');
-            const unsecured = Math.max(0, -c.p.money - (c.p.home.owned ? c.p.home.value : 0));
+            const unsecured = Math.max(0, -c.p.money - homeEquity(c.p.home));
             const cut = Math.round(unsecured * 0.3);
             c.h.money(cut);
             return c.t(

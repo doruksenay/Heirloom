@@ -1,10 +1,11 @@
 import type { Ctx } from '../types';
 import type { Player } from '../../engine/types';
 import type { JobDef } from '../../engine/careers';
-import { EDUCATION_RANK } from '../../engine/careers';
+import { EDUCATION_RANK, MAJOR_INFO, majorAllows, type MajorId } from '../../engine/careers';
 import { allJobs } from '../registry';
 
-export type Major = 'engineering' | 'medicine' | 'law' | 'business' | 'arts' | 'education';
+/** Same ids as the engine's field of study (careers.ts MAJOR_IDS). */
+export type Major = MajorId;
 export type Club = 'debate' | 'music' | 'sports' | 'startup' | 'theatre';
 export type Honors = 'summa' | 'magna' | 'cum';
 export type GradProgram = 'masters' | 'phd';
@@ -49,7 +50,8 @@ export function campusState(p: Player): CampusState {
   if (!p.ext[KEY]) {
     p.ext[KEY] = {
       startYear: 0,
-      major: null,
+      // a major chosen at enrollment (base game or the YKS tercih) carries into Campus
+      major: (MAJOR_INFO[p.major as Major] ? (p.major as Major) : null),
       gpa: 0,
       clubs: [],
       parties: 0,
@@ -85,14 +87,25 @@ export interface MajorDef {
   minSmarts: number;
 }
 
-export const MAJORS: Record<Major, MajorDef> = {
-  engineering: { en: 'Engineering', tr: 'Mühendislik', fields: ['tech'], curve: -0.2, minSmarts: 50 },
-  medicine: { en: 'Medicine', tr: 'Tıp', fields: ['health'], curve: -0.25, minSmarts: 60 },
-  law: { en: 'Law', tr: 'Hukuk', fields: ['office'], curve: -0.1, minSmarts: 50 },
-  business: { en: 'Business', tr: 'İşletme', fields: ['office', 'tech'], curve: 0, minSmarts: 0 },
-  arts: { en: 'Fine Arts', tr: 'Güzel Sanatlar', fields: ['creative'], curve: 0.15, minSmarts: 0 },
-  education: { en: 'Education', tr: 'Öğretmenlik', fields: ['public'], curve: 0.15, minSmarts: 0 },
+const CURVE: Record<Major, number> = {
+  medicine: -0.25,
+  dentistry: -0.2,
+  pharmacy: -0.15,
+  law: -0.1,
+  engineering: -0.2,
+  architecture: -0.1,
+  psychology: 0,
+  vet: -0.15,
+  nursing: 0.05,
+  education: 0.15,
+  business: 0,
+  arts: 0.15,
 };
+
+/** Campus view of the engine's majors (names, job fields and smarts from careers.ts MAJOR_INFO, plus a grading curve). */
+export const MAJORS: Record<Major, MajorDef> = Object.fromEntries(
+  (Object.keys(MAJOR_INFO) as Major[]).map((m) => [m, { en: MAJOR_INFO[m].en, tr: MAJOR_INFO[m].tr, fields: MAJOR_INFO[m].fields, curve: CURVE[m], minSmarts: MAJOR_INFO[m].minSmarts }]),
+) as Record<Major, MajorDef>;
 
 export const CLUBS: Record<Club, { en: string; tr: string }> = {
   debate: { en: 'Debate Club', tr: 'Münazara Kulübü' },
@@ -160,6 +173,7 @@ export function majorJobs(c: Ctx, fields: JobDef['field'][], leeway = 10): JobDe
         (!j.req?.gender || j.req.gender === c.p.gender) &&
         EDUCATION_RANK[j.education] <= EDUCATION_RANK[c.p.education] &&
         j.minSmarts <= c.p.stats.smarts + leeway &&
+        majorAllows(c.p, j) &&
         j.id !== c.p.jobId,
     )
     .sort((a, b) => b.baseSalary - a.baseSalary);
@@ -201,11 +215,17 @@ export const COMPANIES = COMPANIES_INTL;
  * recruited as a firefighter). Undeclared students are filed under Business. Pack jobs are listed by id.
  */
 export const MAJOR_JOBS: Record<Major, string[]> = {
-  engineering: ['engineer', 'research', 'architect', 'pilot', 'civil_engineer', 'data_scientist', 'game_dev', 'atc', 'it_support'],
-  medicine: ['doctor', 'nurse', 'dentist', 'vet', 'research', 'surgeon', 'pharmacist', 'psychologist', 'physio', 'midwife', 'lab_tech', 'paramedic'],
-  law: ['lawyer', 'accountant', 'journalist', 'judge', 'diplomat', 'civil_servant', 'politician'],
-  business: ['accountant', 'realtor', 'journalist', 'engineer', 'banker', 'marketing', 'hr', 'sales', 'bank_teller', 'data_scientist', 'hotel'],
-  arts: ['designer', 'architect', 'journalist', 'artist', 'curator', 'photographer', 'writer', 'musician', 'game_dev', 'translator'],
-  education: ['teacher', 'academic', 'journalist', 'preschool', 'librarian', 'social_worker', 'translator', 'tour_guide'],
+  engineering: ['engineer', 'research', 'civil_engineer', 'data_scientist', 'game_dev', 'atc', 'pilot', 'it_support'],
+  medicine: ['doctor', 'surgeon', 'research', 'academic', 'lab_tech'],
+  dentistry: ['dentist', 'research', 'lab_tech'],
+  pharmacy: ['pharmacist', 'research', 'lab_tech'],
+  vet: ['vet', 'zookeeper', 'research'],
+  nursing: ['nurse', 'midwife', 'paramedic', 'physio', 'caregiver'],
+  psychology: ['psychologist', 'social_worker', 'hr', 'academic'],
+  architecture: ['architect', 'designer', 'civil_engineer', 'curator'],
+  law: ['lawyer', 'judge', 'diplomat', 'civil_servant', 'politician', 'journalist'],
+  business: ['accountant', 'realtor', 'journalist', 'banker', 'marketing', 'hr', 'sales', 'bank_teller', 'data_scientist', 'hotel'],
+  arts: ['designer', 'journalist', 'artist', 'curator', 'photographer', 'writer', 'musician', 'game_dev', 'translator'],
+  education: ['teacher', 'preschool', 'academic', 'journalist', 'librarian', 'social_worker', 'translator', 'tour_guide'],
 };
 export const fitsMajor = (m: Major | null, jobId: string) => MAJOR_JOBS[m ?? 'business'].includes(jobId);

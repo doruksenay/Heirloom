@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
-import { EDUCATION_RANK, EVENT_ONLY, PART_TIME_IDS, type JobDef } from '../../engine/careers';
+import { EDUCATION_RANK, EVENT_ONLY, PART_TIME_IDS, majorAllows, type JobDef } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { getCountry } from '../../engine/world';
 import { familyFirstNames as familyNamesOf, inMourning } from '../../engine/context';
@@ -55,7 +55,7 @@ export function jobShown(c: Ctx, j: JobDef): boolean {
 }
 
 /** Why a shown job would not hire this player, most important first ([] = they qualify). No RNG. */
-export type JobGap = 'too_old' | 'too_young' | 'over_age' | 'student' | 'education' | 'smarts' | 'health' | 'record' | 'other';
+export type JobGap = 'too_old' | 'too_young' | 'over_age' | 'student' | 'education' | 'major' | 'smarts' | 'health' | 'record' | 'other';
 export function jobGaps(c: Ctx, j: JobDef): JobGap[] {
   const gaps: JobGap[] = [];
   const r = j.req ?? {};
@@ -65,6 +65,8 @@ export function jobGaps(c: Ctx, j: JobDef): JobGap[] {
   if (r.maxAge !== undefined && c.age > r.maxAge) gaps.push('over_age');
   if (isPupil(c) && !PART_TIME_JOBS.has(j.id)) gaps.push('student');
   if (EDUCATION_RANK[j.education] > EDUCATION_RANK[p.education]) gaps.push('education');
+  // round 5: doctors need a medicine degree, lawyers a law degree (careers.ts JOB_MAJORS)
+  else if (!majorAllows(p, j)) gaps.push('major');
   if (j.minSmarts > p.stats.smarts + 10 || (r.smarts !== undefined && p.stats.smarts < r.smarts)) gaps.push('smarts');
   if (r.health !== undefined && p.stats.health < r.health) gaps.push('health');
   if (r.cleanRecord && p.criminalRecord > 0) gaps.push('record');

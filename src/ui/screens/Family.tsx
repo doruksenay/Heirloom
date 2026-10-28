@@ -9,10 +9,12 @@ import { ageOf } from '../../engine/context';
 import { TORCH_AGE, canPassTorch, passTorch, playerAge, torchHeirs } from '../../engine/game';
 import type { LifeRecord } from '../../engine/types';
 import { track } from '../../platform/analytics';
-import type { RelationKind } from '../../engine/types';
+import type { Person, Relation, RelationKind } from '../../engine/types';
 import { Avatar } from '../Avatar';
 import { cityName } from '../../engine/places';
 import { HeirCardView, torchView } from '../HeirCard';
+import { capsName } from '../caps';
+import { skinTone } from '../../engine/skin';
 
 const KIN: Record<RelationKind, [string, string]> = {
   mother: ['Mother', 'Mother'],
@@ -25,6 +27,18 @@ const KIN: Record<RelationKind, [string, string]> = {
   friend: ['Friend', 'Friend'],
   grandparent: ['Grandmother', 'Grandfather'],
 };
+/**
+ * The label under a relative's name (review 5 §3.10): an older sister is "Abla", a grandmother is "Anneanne" or
+ * "Babaanne" by side, a partner is "Sevgili", a daughter "Kızın".
+ */
+function kinLabel(rel: Relation, person: Person, me: Person, lang: 'en' | 'tr'): string {
+  const f = person.gender === 'female';
+  if (rel.step) return T(f ? 'Stepmother' : 'Stepfather');
+  if (rel.kind === 'sibling' && person.birthYear < me.birthYear) return T(f ? 'Big sister' : 'Big brother');
+  if (rel.kind === 'grandparent' && f && lang === 'tr' && rel.side) return rel.side === 'mother' ? 'Anneanne' : 'Babaanne';
+  return T(KIN[rel.kind][f ? 0 : 1]);
+}
+
 const ORDER: RelationKind[] = ['spouse', 'partner', 'child', 'mother', 'father', 'grandparent', 'sibling', 'friend', 'ex'];
 
 /** "Engineer · lived 81 (2026–2107)", or for a hand-over "… · handed over at 68, lived 84". */
@@ -123,13 +137,13 @@ export function Family({ app }: { app: AppApi }) {
         <div class="list">
           {living.map(({ rel, person }) => (
             <button type="button" class="item" key={person.id} onClick={() => setOpenId(person.id)} aria-label={T('{name}: open interactions', { name: person.firstName })}>
-              <Avatar id={person.id + person.firstName} gender={person.gender} age={ageOf(s, person)} size={44} label={person.firstName} />
+              <Avatar id={person.id + person.firstName} gender={person.gender} age={ageOf(s, person)} size={44} label={person.firstName} tone={skinTone(s, person)} />
               <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div class="row between">
                   <div class="item-title">
                     {person.firstName} {person.lastName}
                   </div>
-                  <span class="item-sub">{T(rel.step ? (person.gender === 'female' ? 'Stepmother' : 'Stepfather') : KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {ageOf(s, person)}</span>
+                  <span class="item-sub">{kinLabel(rel, person, p, app.lang)} · {ageOf(s, person)}</span>
                 </div>
                 <div class="bar" role="meter" aria-label={T('Closeness with {name}', { name: person.firstName })} aria-valuenow={rel.closeness} aria-valuemin={0} aria-valuemax={100}>
                   <div style={{ width: `${rel.closeness}%`, background: 'var(--stat-looks)' }} />
@@ -183,13 +197,13 @@ function PersonSheet({ app, personId, onClose }: { app: AppApi; personId: string
     <div class="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="person-name">
         <div class="row">
-          <Avatar id={person.id + person.firstName} gender={person.gender} age={age} size={64} label={person.firstName} />
+          <Avatar id={person.id + person.firstName} gender={person.gender} age={age} size={64} label={person.firstName} tone={skinTone(s, person)} />
           <div class="grow">
             <h2 id="person-name" class="title-l" style={{ fontSize: '22px' }}>
               {person.firstName} {person.lastName}
             </h2>
             <div class="muted">
-              {T(rel.step ? (person.gender === 'female' ? 'Stepmother' : 'Stepfather') : KIN[rel.kind][person.gender === 'female' ? 0 : 1])} · {age}
+              {kinLabel(rel, person, s.player, app.lang)} · {age}
               {person.jobTitle && age >= 18 ? ` · ${person.jobTitle}` : ''}
             </div>
           </div>
@@ -206,7 +220,7 @@ function PersonSheet({ app, personId, onClose }: { app: AppApi; personId: string
             <div style={{ width: `${rel.closeness}%`, background: 'var(--stat-looks)' }} />
           </div>
         </div>
-        <div class="eyebrow">{left > 0 ? Tn(left, '{n} interaction left with {name} this year', '{n} interactions left with {name} this year', { name: person.firstName }) : T('See {name} again next year', { name: person.firstName })}</div>
+        <div class="eyebrow">{left > 0 ? Tn(left, '{n} interaction left with {name} this year', '{n} interactions left with {name} this year', { name: capsName(person.firstName, app.lang) }) : T('See {name} again next year', { name: capsName(person.firstName, app.lang) })}</div>
         <div class="list" style={{ gap: '8px' }}>
           {options.map((o) => (
             <button type="button" class="choice" key={o.id} disabled={o.disabled} onClick={() => run(o.id)}>

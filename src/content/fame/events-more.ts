@@ -3,6 +3,7 @@ import type { Person } from '../../engine/types';
 import { acc, cap, dat, gen, kin, wage, wth } from '../base/util';
 import { fameState, gainFans, isPath, loseFans, peekFame, songTitle, type FameState } from './state';
 import { compact, fameOf, free, hasPath, motherAlive } from './util';
+import { aliveKin } from '../base/kin';
 
 // Fame v0.7: 31 more events. Music, social media, acting, and the life around fame (dynasty included).
 
@@ -820,7 +821,7 @@ export const moreFameEvents: EventDef[] = [
       {
         id: 'pass',
         label: (c) => c.t('Pass', 'Pas geç'),
-        resolve: (c) => c.t('You passed. The show ran for six seasons. Your aunt watches it every night.', 'Pas geçtin. Dizi altı sezon sürdü. Teyzen her akşam izliyor.'),
+        resolve: (c) => (aliveKin(c, 'aunt') ? c.t('You passed. The show ran for six seasons. Your aunt watches it every night.', 'Pas geçtin. Dizi altı sezon sürdü. Teyzen her akşam izliyor.') : c.t('You passed. The show ran for six seasons. Your neighbour watches it every night.', 'Pas geçtin. Dizi altı sezon sürdü. Komşun her akşam izliyor.')),
       },
     ],
   },
@@ -1287,7 +1288,8 @@ export const moreFameEvents: EventDef[] = [
         resolve: (c) => {
           const price = Number(c.vars.price);
           const old = c.p.home.owned ? c.p.home.value : 0;
-          c.h.money(old - price);
+          // the old home's mortgage is paid off from the sale
+          c.h.money(old - (c.p.home.loan?.balance ?? 0) - price);
           c.p.home = { name: c.t('Your mansion', 'Malikânen'), value: price, owned: true, furniture: c.p.home.furniture };
           c.h.stat('happiness', 10);
           c.h.achieve('homeowner');
@@ -1558,7 +1560,9 @@ export const moreFameEvents: EventDef[] = [
           const pay = Math.round(Number(c.vars.amt) * 0.006) * 100;
           c.h.money(pay);
           c.h.stat('happiness', 4);
-          return c.t(`Your memoir was warm and polite and paid ${c.h.fmt(pay)}. Your aunt bought forty copies.`, `Kitabın sıcak ve kibar oldu, ${c.h.fmt(pay)} kazandırdı. Teyzen kırk tane aldı.`);
+          return aliveKin(c, 'aunt')
+            ? c.t(`Your memoir was warm and polite and paid ${c.h.fmt(pay)}. Your aunt bought forty copies.`, `Kitabın sıcak ve kibar oldu, ${c.h.fmt(pay)} kazandırdı. Teyzen kırk tane aldı.`)
+            : c.t(`Your memoir was warm and polite and paid ${c.h.fmt(pay)}. Your old school bought forty copies.`, `Kitabın sıcak ve kibar oldu, ${c.h.fmt(pay)} kazandırdı. Eski okulun kırk tane aldı.`);
         },
         tone: 'good',
       },

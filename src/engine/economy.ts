@@ -1,4 +1,4 @@
-import type { Player } from './types';
+import type { Home, Mortgage, Player } from './types';
 import { getCountry } from './world';
 import { currentTier } from './home';
 
@@ -85,6 +85,40 @@ export const PARENTS_HOME_AGE = 26;
 export const livesWithParents = (p: Player, age: number, salary: number) =>
   !salary && age < PARENTS_HOME_AGE && !p.retired && !p.home.owned && currentTier(p) === 'parents';
 
+// ---- mortgages (review 5 §3.7: a home loan was only a negative balance, and a working owner was told to find a job)
+/** Interest over the whole loan per year of its term (20 years: 25% on top of the amount borrowed, as before). */
+export const MORTGAGE_INTEREST_PER_YEAR = 0.0125;
+export const MORTGAGE_TERM = 20;
+/** The last instalment falls before this age when the loan is taken late. */
+export const MORTGAGE_END_AGE = 70;
+
+/** A new home loan of `principal` game dollars for a borrower of this age. No RNG. */
+export function newMortgage(principal: number, age: number): Mortgage {
+  const term = Math.max(5, Math.min(MORTGAGE_TERM, MORTGAGE_END_AGE - age));
+  const balance = Math.round(principal * (1 + MORTGAGE_INTEREST_PER_YEAR * term));
+  return { balance, payment: Math.ceil(balance / term), yearsLeft: term, term, principal: Math.round(principal) };
+}
+
+/** What the home is worth to its owner: its value minus what is still owed on it (0 when not owned). */
+export const homeEquity = (home: Home) => (home.owned ? Math.max(0, home.value - (home.loan?.balance ?? 0)) : 0);
+
+/** This year's mortgage instalment (0 without a loan). */
+export const mortgagePayment = (p: Player) => (p.home.owned && p.home.loan ? Math.min(p.home.loan.payment, p.home.loan.balance) : 0);
+
+/**
+ * Books one yearly instalment (the money itself leaves with the yearly budget, see yearBudget). Returns true when
+ * this was the last one and the loan is gone.
+ */
+export function payMortgage(p: Player): boolean {
+  const loan = p.home.loan;
+  if (!loan || !p.home.owned) return false;
+  loan.balance = Math.max(0, loan.balance - Math.min(loan.payment, loan.balance));
+  loan.yearsLeft = Math.max(0, loan.yearsLeft - 1);
+  if (loan.balance > 0 && loan.yearsLeft > 0) return false;
+  delete p.home.loan;
+  return true;
+}
+
 /** Real yearly growth of an owned home's value. */
 export const HOME_GROWTH = 0.01;
 /** Owning your home cuts living costs (no rent). */
@@ -122,8 +156,11 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
   if (atHome) cost = 0; // still living with the parents: no rent, no bills
   else if (p.school === 'university') cost *= 0.2; // student life
   else if (!salary && age < 23 && !p.retired) cost = 0; // between homes, still looked after
-  cost += (p.money < 0 ? LIFESTYLE_SHARE_IN_DEBT : LIFESTYLE_SHARE) * Math.max(0, pay - cost);
+  // the mortgage instalment comes first: the household spends from what is left after it
+  const instalment = mortgagePayment(p);
+  cost += (p.money < 0 ? LIFESTYLE_SHARE_IN_DEBT : LIFESTYLE_SHARE) * Math.max(0, pay - cost - instalment);
   if (p.home.owned) cost *= OWNER_DISCOUNT;
+  cost += instalment;
   if (age >= 70) cost += country.costOfLiving * Math.min(0.5, 0.03 * (age - 69)); // care and medicine
   if ('debt_plan' in p.flags && p.money < 0) cost *= 0.9; // a repayment plan: fewer takeaways, no holidays
   if (p.jailYears > 0) return { pay: 0, cost: 0, support: 0 };
@@ -138,7 +175,7 @@ export function yearBudget(p: Player, age: number, salary: number, partner: bool
     cost += RICH_SPEND * Math.max(0, p.money - RICH_CUSHION * country.costOfLiving);
   }
   if (p.home.owned) cost += homeUpkeep(p.home.value, pay + support, country.costOfLiving);
-  const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
+  const unsecured = -p.money - homeEquity(p.home);
   if (p.money < 0 && unsecured > 0) cost += DEBT_RATE * unsecured;
   return { pay, cost, support };
 }

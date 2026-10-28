@@ -146,6 +146,8 @@ describe('Türkiye culture pack', () => {
         const pend = base.pending!;
         for (const t of [pend.title, pend.body, ...pend.choices.map((c) => c.label)]) if (english(t)) leaks.add(`${def.id}: ${t}`);
         for (const ch of def.choices ?? []) {
+          // choices hidden in this situation (the tercih's majors beyond the score) are covered by their own tests
+          if (!pend.choices.some((x) => x.id === ch.id)) continue;
           const s: GameState = JSON.parse(JSON.stringify(base));
           s.pending!.choices.forEach((c) => (c.disabled = false));
           const n = s.player.log.length;
@@ -247,5 +249,178 @@ describe('Türkiye culture pack, round-3 fixes', () => {
     s.player.jobId = 'accountant';
     s.player.ext = { ...(s.player.ext ?? {}), boss: { company: { name: 'Köşe Kahve' }, exits: 0, bankruptcies: 0, peakValuation: 0 } };
     expect(def.when!(makeCtx(s))).toBe(false);
+  });
+});
+
+describe('Türkiye life milestones (round 5)', () => {
+  const trProfile = profile([]);
+  const st = (s: GameState) => (s.player.ext?.culture_tr ?? {}) as { lise?: string; yks?: number; asker?: string; wed?: number; retake?: number; tries?: number };
+  const ageOf = (s: GameState) => s.year - s.player.birthYear;
+  /** A Turkish life aged to `age` with the first enabled choice everywhere. */
+  const grow = (age: number, gender: 'male' | 'female' = 'male', seed = 4, city = 'İstanbul') => {
+    const s = newGame({ firstName: 'Ada', lastName: 'Kaya', gender, countryId: 'tr', city, seed }, trProfile);
+    while (ageOf(s) < age && !s.dead) {
+      ageUp(s);
+      let g = 0;
+      while (s.pending && g++ < 6) choose(s, s.pending.choices.find((c) => !c.disabled)!.id);
+    }
+    return s;
+  };
+
+  it('LGS, YKS and the tercih, sünnet and askerlik come in every Turkish life, at their age', { timeout: 120_000 }, () => {
+    const miss: string[] = [];
+    let men30 = 0;
+    for (let seed = 1; seed <= 80; seed++) {
+      const s = play(seed, trProfile);
+      const age = s.dead?.age ?? ageOf(s);
+      const ev = s.player.eventLastAge;
+      if (age >= 15 && ev['tr.lgs'] === undefined) miss.push(`${seed}: no LGS`);
+      if (age >= 15 && !st(s).lise) miss.push(`${seed}: no lise`);
+      if (age >= 19 && ev['tr.yks'] === undefined && ev['tr.tercih'] === undefined) miss.push(`${seed}: no YKS`);
+      if (s.player.gender === 'male' && age >= 11 && ev['tr.sunnet'] === undefined) miss.push(`${seed}: no sünnet`);
+      if (s.player.gender === 'male' && age >= 30) {
+        men30++;
+        if (!st(s).asker) miss.push(`${seed}: no askerlik`);
+      }
+      if (ev['tr.lgs'] !== undefined) expect([13, 14]).toContain(ev['tr.lgs']);
+      if (ev['tr.sunnet'] !== undefined) expect(ev['tr.sunnet']).toBeLessThanOrEqual(11);
+    }
+    expect(men30).toBeGreaterThan(20);
+    // prison at the wrong age can push one past its window; nothing else may
+    expect(miss.length, miss.join('; ')).toBeLessThanOrEqual(2);
+  });
+
+  it('university in Türkiye goes through the tercih: the score decides the majors, and no tuition line', () => {
+    const def = cultureTrPack.events.find((e) => e.id === 'tr.tercih')!;
+    for (const [score, medicine] of [
+      [520, true],
+      [430, false],
+      [260, false],
+    ] as const) {
+      const s = grow(18);
+      s.pending = null;
+      s.player.school = null;
+      s.player.education = 'highschool';
+      s.player.ext = { ...(s.player.ext ?? {}), culture_tr: { yks: score, yksYear: s.year, tries: 1 } };
+      expect(openEvent(s, def)).toBe(true);
+      const ids = s.pending!.choices.map((c) => c.id);
+      expect(ids.includes('m_medicine'), `score ${score}: ${ids.join(',')}`).toBe(medicine);
+      expect(ids).toContain('retake');
+      expect(ids).toContain('work');
+      expect(ids.filter((x) => x.startsWith('m_') || x === 'vakif').length).toBeGreaterThan(0);
+      expect(ids.length).toBeLessThanOrEqual(5);
+      const pick = ids.find((x) => x.startsWith('m_'))!;
+      const n = s.player.log.length;
+      choose(s, pick);
+      expect(s.player.school).toBe('university');
+      expect(s.player.major).toBe(pick.slice(2));
+      for (const e of s.player.log.slice(n)) expect(e.text).not.toMatch(/Harç/);
+    }
+    // the engine's "High school is over" becomes the tercih
+    const s = grow(19, 'female', 6);
+    expect(s.player.eventLastAge['tr.tercih']).toBe(18);
+    expect(s.player.eventLastAge['base.after_highschool']).toBeUndefined();
+  });
+
+  it('sitting the YKS again (mezuna kalmak) brings a new tercih the next year', () => {
+    const def = cultureTrPack.events.find((e) => e.id === 'tr.tercih')!;
+    const s = grow(18);
+    s.pending = null;
+    s.player.school = null;
+    s.player.education = 'highschool';
+    s.player.ext = { ...(s.player.ext ?? {}), culture_tr: { yks: 300, yksYear: s.year, tries: 1 } };
+    openEvent(s, def);
+    choose(s, 'retake');
+    expect(st(s).retake).toBe(s.year);
+    ageUp(s);
+    expect((s.pending as GameState['pending'])?.eventId).toBe('tr.tercih');
+    expect(st(s).tries).toBe(2);
+  });
+
+  it('YKS does not need a living mother', () => {
+    const s = grow(16, 'female', 9);
+    for (const r of s.player.relations) if (r.kind === 'mother' || r.kind === 'father') s.people[r.personId].deathYear = s.year;
+    ageUp(s);
+    // a grief event may take the slot this year; the exam still comes in its window
+    for (let i = 0; i < 2 && s.player.eventLastAge['tr.yks'] === undefined; i++) {
+      let g = 0;
+      while (s.pending && g++ < 6) choose(s, s.pending.choices.find((c) => !c.disabled)!.id);
+      if (s.player.eventLastAge['tr.yks'] === undefined) ageUp(s);
+    }
+    expect(s.player.eventLastAge['tr.yks'] !== undefined || s.player.eventLastAge['tr.tercih'] !== undefined).toBe(true);
+  });
+
+  it('the wedding parties come the year after the nikâh: kına for a bride, düğün for a groom, takı at the party', () => {
+    for (const gender of ['female', 'male'] as const) {
+      const s = grow(27, gender, 12);
+      s.pending = null;
+      const c = makeCtx(s);
+      const sp = c.h.newPerson({ gender: gender === 'female' ? 'male' : 'female', age: 27 });
+      c.h.addRelation(sp, 'spouse', 80);
+      s.player.achievements.push('married');
+      for (const r of s.player.relations) if (r.personId === sp.id) r.sinceYear = s.year;
+      // a clean slate: no earlier wedding party, askerlik done, no court date or nudge in the way
+      s.player.ext = { ...(s.player.ext ?? {}), culture_tr: { ...st(s), wed: undefined, asker: 'er' } };
+      ageUp(s);
+      expect((s.pending as GameState['pending'])?.eventId).toBe(gender === 'female' ? 'tr.kina' : 'tr.dugun_salonu');
+      const n = s.player.log.length;
+      choose(s, s.pending!.choices[0].id);
+      expect(s.player.log.slice(n).map((e) => e.text).join(' ')).toMatch(/[Tt]akı/);
+      expect(st(s).wed).toBeDefined();
+    }
+    expect(cultureTrPack.events.find((e) => e.id === 'tr.taki')).toBeUndefined();
+  });
+
+  it('tapu only after a fresh purchase; memleket only from a big city; no aunt at graduation', () => {
+    const s = grow(35);
+    s.pending = null;
+    s.player.home = { ...s.player.home, owned: true, value: 100_000 };
+    s.player.achievements.push('homeowner');
+    s.player.ext = { ...(s.player.ext ?? {}), house: { tier: 'flat', movedYear: s.year - 20 } };
+    const sched = cultureTrPack.schedule!;
+    expect(sched(makeCtx(s), null)).not.toBe('tr.tapu');
+    (s.player.ext!.house as { movedYear: number }).movedYear = s.year - 1;
+    expect(sched(makeCtx(s), null)).toBe('tr.tapu');
+    const mem = cultureTrPack.events.find((e) => e.id === 'tr.memleket')!;
+    s.player.jobId = 'accountant';
+    expect(mem.when!(makeCtx(s))).toBe(true);
+    s.player.city = 'Trabzon';
+    expect(mem.when!(makeCtx(s))).toBe(false);
+    for (let seed = 1; seed <= 20; seed++) for (const e of play(seed, trProfile).player.log) expect(e.text).not.toMatch(/teyzen bile/);
+  });
+
+  it('women go to the tea garden or the gold day, not the kahvehane; the recruitment office is not the askerlik şubesi', () => {
+    const act = cultureTrPack.activities!.find((a) => a.id === 'tr_kahvehane')!;
+    for (const [gender, age] of [
+      ['female', 25],
+      ['female', 50],
+      ['female', 70],
+    ] as const) {
+      const s = grow(age, gender, 3);
+      s.pending = null;
+      const c = makeCtx(s);
+      expect(typeof act.label === 'function' ? act.label(c) : act.label).not.toMatch(/Kahvehane/);
+      for (let i = 0; i < 12; i++) expect(String(act.run(c))).not.toMatch(/[Kk]ahvehane|[Kk]ahveci/);
+    }
+    const enlist = activitiesFor(['base']).find((a) => a.id === 'career_enlist');
+    if (enlist) {
+      const s = grow(20, 'female', 3);
+      const label = typeof enlist.label === 'function' ? enlist.label(makeCtx(s)) : enlist.label;
+      expect(label).not.toMatch(/Askerlik şubesi/);
+    }
+  });
+
+  it('activity pools are banded and at least three times their old size', () => {
+    for (const id of ['tr_tea', 'tr_kahvehane', 'tr_tavla', 'tr_pazar', 'tr_halisaha', 'tr_bayram_tour']) {
+      const act = cultureTrPack.activities!.find((a) => a.id === id)!;
+      const seen = new Set<string>();
+      for (const age of [20, 45, 70]) {
+        if (act.maxAge !== undefined && age > act.maxAge) continue;
+        const s = grow(age, 'male', 21);
+        s.pending = null;
+        for (let i = 0; i < 40; i++) seen.add(String(act.run(makeCtx(s))));
+      }
+      expect(seen.size, id).toBeGreaterThanOrEqual(24);
+    }
   });
 });

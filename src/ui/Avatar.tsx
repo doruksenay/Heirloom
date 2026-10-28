@@ -47,10 +47,11 @@ const SHOULDERS: Record<AgeStage, string> = {
  * Six stages (baby, child, teen, adult, middle age, old): the head shrinks relative to the body,
  * the face lengthens, hair greys from the temples, and lines, glasses and baldness arrive late.
  */
-export function Avatar({ id, gender, age, size = 76, label }: { id: string; gender: Gender; age: number; size?: number; label: string }) {
+export function Avatar({ id, gender, age, size = 76, label, tone }: { id: string; gender: Gender; age: number; size?: number; label: string; tone?: number }) {
   const h = hash(id);
   const stage = ageStage(age);
-  const skin = SKIN[h % SKIN.length];
+  // the family's skin tone when the engine knows it (engine/skin.ts), otherwise one from the id
+  const skin = SKIN[tone !== undefined ? Math.max(0, Math.min(SKIN.length - 1, tone)) : h % SKIN.length];
   const base = HAIR[(h >>> 3) % HAIR.length];
   const hair = age >= 78 ? '#EDEAEE' : age >= 62 ? '#C9C4CC' : base;
   const temples = stage === 'middle' && age >= 50 ? '#B9B3BE' : hair;

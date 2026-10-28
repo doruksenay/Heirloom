@@ -131,7 +131,7 @@ const FLEA: ((amt: string) => Pair)[] = [
   (a) => [`You sold old kitchenware for ${a} and gave the best pan to a nervous young cook.`, `Eski mutfak eşyalarını sattın, kasaya ${a} girdi. En iyi tavayı da heyecanlı genç bir aşçıya hediye ettin.`],
   (a) => [`You sold a stack of old postcards for ${a}. You kept the one that made you smile.`, `Bir deste eski kartpostalı ${a} karşılığında sattın. Seni gülümseten tanesini sakladın.`],
   (a) => [`It rained all morning. You sold one umbrella for ${a} and called it a day.`, `Bütün sabah yağmur yağdı. Bir şemsiyeyi ${a} karşılığında sattın ve paydos ettin.`],
-  (a) => [`You sold a jigsaw puzzle with one piece missing for ${a}. You were honest about it. Mostly.`, `Bir parçası eksik bir yapbozu ${a} karşılığında sattın. Bu konuda dürüsttün. Çoğunlukla.`],
+  (a) => [`You sold a jigsaw puzzle with one piece missing for ${a}. You were honest about it. Mostly.`, `Bir parçası eksik bir yapbozu ${a} karşılığında sattın. Bu konuda dürüsttün. Eh, aşağı yukarı.`],
   (a) => [`Your stall made ${a}. You also made two friends and one enemy over a vase.`, `Tezgâhın ${a} kazandırdı. Bir vazo yüzünden iki arkadaş ve bir düşman da edindin.`],
 ];
 

@@ -9,6 +9,7 @@ import {
   established,
   familySince,
   handsLine,
+  holderCount,
   isType,
   keepers,
   kinName,
@@ -896,8 +897,9 @@ export const heirloomEvents: EventDef[] = [
     title: (c) => c.t(`${nm(c)} wants to know why ${subj(c, item(c))} is "so important".`, `${nm(c)}, ${subj(c, item(c))} neden "bu kadar önemli" diye soruyor.`),
     text: (c) => {
       const it = item(c);
-      if (established(c, it) && it.generations >= 2)
-        return c.t(`It has been in the family since ${it.sinceYear}, through ${it.generations} keepers.`, `${it.sinceYear} yılından beri ailede; bugüne kadar ${it.generations} kişinin elinden geçti.`);
+      const keepers = holderCount(c, it);
+      if (established(c, it) && keepers >= 2)
+        return c.t(`It has been in the family since ${it.sinceYear}, through ${keepers} keepers.`, `${it.sinceYear} yılından beri ailede; bugüne kadar ${keepers} kişinin elinden geçti.`);
       return c.t(`It has been in the family since ${it.sinceYear}.`, `${it.sinceYear} yılından beri ailede.`);
     },
     choices: [

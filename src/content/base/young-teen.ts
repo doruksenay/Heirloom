@@ -27,6 +27,7 @@ import {
   pickSibling,
   tt,
 } from './young-kit';
+import { bothParents } from './kin';
 
 // Round 4: teen years, 13–19. Home, friends, first money, first responsibilities.
 
@@ -339,7 +340,7 @@ export const youngTeenEvents: EventDef[] = [
       opt('retro', ['Your parents\' old clothes', 'Annenle babanın eski kıyafetleri'], (c) => {
         allParents(c, 3);
         return out(c, { loo: 2, hap: 3 }, 'You raided the old wardrobe. Your parents were delighted, then horrified when you made it look cool.', 'Eski dolabı yağmaladın. Annenle baban önce çok sevindi, sonra sen onları havalı gösterince dehşete düştü.');
-      }),
+      }, { hidden: (c) => !bothParents(c) }),
       opt('sport', ['Sportswear for every occasion', 'Her durumda eşofman'], (c) =>
         out(c, { hea: 1, hap: 2 }, 'You wore a tracksuit to a wedding. You were the most comfortable person there.', 'Bir düğüne eşofmanla gittin. Oradaki en rahat kişi sendin.'),
       ),

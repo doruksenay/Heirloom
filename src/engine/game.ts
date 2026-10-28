@@ -1,25 +1,27 @@
 import type { Ctx, EventDef, ChoiceDef, ActivityDef } from '../content/types';
 import type { GameState, LifeRecord, Person, Player, Profile, Gender, Education } from './types';
-import { makeCtx, ageOf, clamp, freshFirstNames } from './context';
+import { makeCtx, ageOf, clamp, freshFirstNames, driftPerformance, lastJobOf, leftWorkAge, localTitle, minYearsAtLevel, relocaliseJobs, yearsAtLevel } from './context';
 import { createRng, randomSeed, type Rng } from './rng';
 import { getCountry } from './world';
-import { BASE_JOBS, EDUCATION_RANK, hireableIn, salaryFor, titleFor } from './careers';
+import { BASE_JOBS, EDUCATION_RANK, hireableIn, majorForJob, promotionOdds, salaryFor, stepRaisePct, titleFor } from './careers';
 import { abl, acc, dat, gen, gen as gen_, loc } from '../i18n/tr-grammar';
 import { furniture, hasGarden } from './home';
+import { keepSkin, skinTone } from './skin';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals } from './goals';
-import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, PENSION_AGE, inheritanceTax, safetyNet, tuitionFor, yearBudget } from './economy';
+import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, PENSION_AGE, homeEquity, inheritanceTax, payMortgage, safetyNet, tuitionFor, yearBudget } from './economy';
 import { babyOdds, bailoutHelpers, canHaveBaby } from '../content/base/events-scheduled';
 import { canAdopt } from '../content/base/adoption';
 import { cityName } from './places';
 import { ensureGrandkids, type Grandkid } from '../content/base/events-elder';
-import { say, type Pair } from '../content/base/lines';
+import { say, sayWith, type Pair } from '../content/base/lines';
 import { courtPending, isPetty, peekCrime } from '../content/base/street-law';
 import { MORE_LAST_WORDS } from '../content/base/heirloom-more';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
 
 export const START_YEAR = 2026;
-export const ACTIVITY_LIMIT_PER_YEAR = 4;
+/** Free activities per year (review 5 §3.11: 4 felt stingy next to the ad card); Heirloom+ adds PLUS_EXTRA_ACTIVITIES. */
+export const ACTIVITY_LIMIT_PER_YEAR = 5;
 
 export interface NewLifeOptions {
   firstName: string;
@@ -226,7 +228,10 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
   h.log(
     c.t(
       `You were born ${girlOrBoy} in ${opts.city}, ${country.name}.`,
-      `${loc(cityName(opts.city, 'tr'))}, ${countryLocTr(country.nameTr)} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
+      // a life in Türkiye does not name the country (review 5 §4.23: "İstanbul'da, Türkiye'de")
+      opts.countryId === 'tr'
+        ? `${loc(cityName(opts.city, 'tr'))} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`
+        : `${loc(cityName(opts.city, 'tr'))}, ${countryLocTr(country.nameTr)} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
     ),
     'big',
   );
@@ -251,8 +256,8 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
   }
 
   if (opts.scenario === 'sano') {
-    h.addHeirloom('clock', c.t("Grandpa Mehmet's pocket watch", "Mehmet Dede'nin cep saati"), c.t('Mehmet Baba bought it with his first wage from the Zonguldak mines in 1961.', "Mehmet Baba onu 1961'de Zonguldak madenlerindeki ilk maaşıyla almıştı."));
-    h.addHeirloom('ring', c.t("Grandma Ayşe's ring", "Ayşe Nine'nin yüzüğü"), c.t('Ayşe wore it at her wedding in 1964.', "Ayşe onu 1964'teki düğününde takmıştı."));
+    h.addHeirloom('clock', c.t("Grandpa Mehmet's pocket watch", "Mehmet Dede'nin cep saati"), c.t('Mehmet Baba bought it with his first wage from the Zonguldak mines in 1961.', 'Mehmet Baba onu 1961 yılında Zonguldak madenlerindeki ilk maaşıyla almıştı.'));
+    h.addHeirloom('ring', c.t("Grandma Ayşe's ring", "Ayşe Nine'nin yüzüğü"), c.t('Ayşe wore it at her wedding in 1964.', 'Ayşe onu 1964 yılındaki düğününde takmıştı.'));
     s.dynasty.heirlooms.forEach((x) => (x.sinceYear = x.defId === 'ring' ? 1964 : 1961));
     h.log(c.t("The family's treasures, Grandpa Mehmet's pocket watch and Grandma Ayşe's ring, are waiting for you.", "Ailenin hazineleri, Mehmet Dede'nin cep saati ve Ayşe Nine'nin yüzüğü, seni bekliyor."));
   } else {
@@ -264,7 +269,10 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
     const label = { clock: 'pocket watch', ring: 'ring', quilt: 'quilt', recipes: 'recipe book' }[defId];
     const labelTr = { clock: 'cep saati', ring: 'yüzüğü', quilt: 'yorganı', recipes: 'tarif defteri' }[defId];
     const title = female ? { en: 'Great-grandma', tr: 'Nine' } : { en: 'Great-grandpa', tr: 'Dede' };
-    const item = c.t(`${title.en} ${grand}'s ${label}`, `${gen(`${grand} ${title.tr}`)} ${labelTr}`);
+    // "Ayşe Nine" is a Turkish title; a Sophie or a Leo is "Büyük ninen Sophie" (review 5 §4.25)
+    const itemTr = opts.countryId === 'tr' ? `${gen(`${grand} ${title.tr}`)} ${labelTr}` : `${female ? 'Büyük ninen' : 'Büyük deden'} ${gen(grand)} ${labelTr}`;
+    const itemEn = `${title.en} ${grand}'s ${label}`;
+    const item = c.t(itemEn, itemTr);
     const stories = FOUNDER_STORIES[defId];
     const story = stories[rng.int(0, stories.length - 1)];
     const year = rng.int(story.years[0], story.years[1]);
@@ -281,7 +289,11 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
     };
     const line = c.t(story.en(f), story.tr(f));
     h.addHeirloom(defId, item, line);
-    s.dynasty.heirlooms[s.dynasty.heirlooms.length - 1].sinceYear = year;
+    const founding = s.dynasty.heirlooms[s.dynasty.heirlooms.length - 1];
+    founding.sinceYear = year;
+    founding.alt = { en: itemEn, tr: itemTr };
+    // it came down through the family to the player's father, who keeps it until the player is grown
+    founding.holders = [grand, father.firstName];
     h.log(c.t(`The family's oldest treasure is waiting for you: ${item}. ${line}`, `Ailenin en eski hazinesi seni bekliyor: ${item}. ${line}`));
   }
   assignGoals(s, rng);
@@ -301,11 +313,35 @@ export function refreshPacks(s: GameState, profile: Profile) {
   if (s.daily) {
     // a Daily Challenge plays with the same packs and no perks for everyone; only the language follows settings
     s.lang = profile.settings.language ?? 'en';
+    relocaliseJobs(s); // job titles follow the story language (careers, round 5)
+    relocalizeHeirlooms(s);
     return;
   }
   s.enabledPacks = resolveEnabledPacks(profile);
   s.perks = perksFor(profile);
   s.lang = profile.settings.language ?? 'en';
+  relocaliseJobs(s); // job titles follow the story language (careers, round 5)
+  relocalizeHeirlooms(s);
+}
+
+/**
+ * Heirloom names known in both languages follow the story language (review 5 §3.12: "Leo Dede'nin yüzüğü to
+ * Freya" in an English life). The life records keep the item name too, so they are renamed with it. No RNG.
+ */
+export function relocalizeHeirlooms(s: GameState): void {
+  const lang = s.lang ?? 'en';
+  for (const item of s.dynasty.heirlooms) {
+    if (!item.alt) continue;
+    const next = item.alt[lang];
+    const prev = item.name;
+    if (next === prev) continue;
+    item.name = next;
+    for (const life of s.dynasty.lives) {
+      if (life.heirloomItem !== prev) continue;
+      life.heirloomItem = next;
+      if (life.heirName) life.heirloomNote = lang === 'tr' ? `${next}, ${dat(life.heirName)}` : `${next} to ${life.heirName}`;
+    }
+  }
 }
 
 // ---------------------------------------------------------------- yearly simulation
@@ -357,6 +393,35 @@ const RELEASE_LINES: Pair[] = [
   ['You stepped outside and squinted. The sky is much bigger than the yard.', 'Dışarı adım atıp gözlerini kıstın. Gökyüzü havalandırmadan çok daha büyükmüş.'],
   ['Your sentence is over. Prices have gone up and your shoes are out of fashion.', 'Cezan bitti. Fiyatlar artmış, ayakkabıların da modası geçmiş.'],
 ];
+
+/**
+ * University graduation (review 5 §3.6/§4.30: "…teyzen bile" in 413 of 728 lives, with no aunt in the family).
+ * The line names only family who are alive; one rng call whichever pool applies.
+ */
+const GRAD_PARENTS: Pair[] = [
+  ['You graduated from university! Your parents sat in the front row and filmed the whole ceremony, sideways.', 'Üniversiteden mezun oldun! Annenle baban en ön sırada oturup bütün töreni yan tutulmuş telefonla çekti.'],
+  ['You graduated from university! Your mom cried at the first speech, your dad at the last one.', 'Üniversiteden mezun oldun! Annen ilk konuşmada ağladı, baban son konuşmada.'],
+  ['You graduated from university! Your parents brought flowers, a flask of tea and their best clothes.', 'Üniversiteden mezun oldun! Annenle baban çiçekleri, bir termos çayı ve en güzel kıyafetlerini getirdi.'],
+  ['You graduated from university! Your dad shook hands with three professors as if he had taught them himself.', 'Üniversiteden mezun oldun! Baban üç hocanın elini, onları kendisi yetiştirmiş gibi sıktı.'],
+];
+const GRAD_ONE: ((k: [string, string]) => Pair)[] = [
+  (k) => [`You graduated from university! Your ${k[0]} clapped louder than anyone in the hall.`, `Üniversiteden mezun oldun! Salonda en çok ${k[1]} alkışladı.`],
+  (k) => [`You graduated from university! Your ${k[0]} kept the program and has read it ever since.`, `Üniversiteden mezun oldun! ${k[1] === 'annen' ? 'Annen' : 'Baban'} tören programını sakladı, hâlâ arada bir okuyor.`],
+  (k) => [`You graduated from university! Your ${k[0]} took forty photos, all of them of you.`, `Üniversiteden mezun oldun! ${k[1] === 'annen' ? 'Annen' : 'Baban'} kırk fotoğraf çekti, hepsinde sen varsın.`],
+];
+const GRAD_ALONE: Pair[] = [
+  ['You graduated from university! You threw your cap in the air and caught somebody else\'s.', 'Üniversiteden mezun oldun! Kepini havaya attın, inerken eline başkasınınki geçti.'],
+  ['You graduated from university! Your friends cheered your name as if it were a goal.', 'Üniversiteden mezun oldun! Arkadaşların adını gol olmuş gibi bağırdı.'],
+  ['You graduated from university! You walked across the stage and did not trip. A personal best.', 'Üniversiteden mezun oldun! Sahneden geçtin ve tökezlemedin. Kişisel rekor.'],
+];
+
+function graduationLine(c: Ctx): string {
+  const mom = c.h.relatives('mother').length > 0;
+  const dad = c.h.relatives('father').length > 0;
+  if (mom && dad) return say(c, 'engine.grad.parents', GRAD_PARENTS);
+  if (mom || dad) return sayWith(c, 'engine.grad.one', GRAD_ONE, mom ? (['mom', 'annen'] as [string, string]) : (['dad', 'baban'] as [string, string]));
+  return say(c, 'engine.grad.alone', GRAD_ALONE);
+}
 
 function yearlyTick(c: Ctx): string | null {
   const { p, h, rng, s, age } = c;
@@ -411,26 +476,34 @@ function yearlyTick(c: Ctx): string | null {
     if (p.schoolYears >= 4) {
       p.school = null;
       p.education = 'university';
-      h.log(c.t('You graduated from university! The whole family came to the ceremony.', 'Üniversiteden mezun oldun! Bütün aile törene geldi, teyzen bile.'), 'big');
+      h.log(graduationLine(c), 'big');
       h.achieve('graduate');
       h.stat('happiness', 8);
     }
   }
   if (p.school) p.schoolYears = p.school === 'university' ? p.schoolYears : p.schoolYears + 1;
 
+  // --- a pack's own life-stage moment (Türkiye: sünnet, LGS, YKS and the tercih, askerlik, the wedding parties)
+  for (const pack of enabledPacks(s.enabledPacks)) if (pack.schedule) scheduled = pack.schedule(c, scheduled);
+
   // --- work & money (see economy.ts)
   const job = h.job();
   let salary = 0;
   if (job && p.jailYears === 0) {
-    salary = salaryFor(job, p.jobLevel, country.wageFactor);
+    // round 5: seniority raises within a job, gradual raises per rung (careers.salaryFor)
+    salary = salaryFor(job, p.jobLevel, country.wageFactor, p.jobYears);
     p.lastSalary = salary;
     const peak = engineExt(p).peakJob;
     if (!job.partTime && (!peak || salary >= peak.salary)) engineExt(p).peakJob = { id: job.id, level: p.jobLevel, salary };
     p.jobYears++;
-    // ranked jobs (soldier, officer) climb by years of service in their own yearly logic instead
-    if (!job.ranked && p.jobYears >= 2 && rng.chance(0.1 + p.stats.smarts / 600 + p.jobYears / 100)) {
+    // ranked jobs (soldier, officer) climb by years of service in their own yearly logic instead.
+    // Round 5: performance-driven, after a minimum stay that grows toward the top (context.minYearsAtLevel)
+    const perf = driftPerformance(p);
+    const roll = rng.chance(promotionOdds(job, p.jobLevel, perf, age));
+    if (!job.ranked && roll && yearsAtLevel(s) >= minYearsAtLevel(p.jobLevel, job.titles.length)) {
+      const pct = stepRaisePct(p.jobLevel);
       if (h.promote()) {
-        h.log(c.t(`You were promoted to ${h.jobTitle()}. Salary +32%.`, `${h.jobTitle()} oldun. Maaşına %32 zam!`), 'good');
+        h.log(c.t(`You were promoted to ${h.jobTitle()}. Salary +${pct}%.`, `${h.jobTitle()} oldun. Maaşına %${pct} zam!`), 'good');
         h.stat('happiness', 6);
       }
     }
@@ -441,6 +514,9 @@ function yearlyTick(c: Ctx): string | null {
     const net = safetyNet(p, age, b);
     h.money(b.pay + b.support + net - b.cost);
     if (p.home.owned) p.home.value = Math.round(p.home.value * (1 + HOME_GROWTH));
+    // the instalment left with the budget; book it on the loan (paused in prison, like the budget)
+    if (p.home.loan && p.jailYears === 0 && payMortgage(p))
+      h.log(c.t('You made the last mortgage payment. The home is all yours now, every brick.', 'Konut kredisinin son taksitini ödedin. Ev artık tuğlasına kadar senin.'), 'good');
   } else if (salary) {
     h.money(salary * 0.75); // a teenager's wages, no bills yet
   }
@@ -454,7 +530,7 @@ function yearlyTick(c: Ctx): string | null {
     delete eng.deferred;
     // a pushed-back bank letter only comes if the debt is still there (an inheritance that year may have cleared it:
     // "You owe -$90,692")
-    const stillOwes = -p.money - (p.home.owned ? p.home.value : 0) > 0;
+    const stillOwes = -p.money - homeEquity(p.home) > 0;
     if ((d !== 'base.retirement' || (job && !p.retired)) && (d !== 'base.debt_letter' || stillOwes)) scheduled = d;
   }
 
@@ -476,7 +552,7 @@ function yearlyTick(c: Ctx): string | null {
   for (const pack of enabledPacks(s.enabledPacks)) pack.onYear?.(c);
 
   // --- relatives
-  let loss: { person: Person; kind: 'child' | 'spouse' } | undefined;
+  let loss: { person: Person; kind: 'child' | 'spouse' | 'parent' } | undefined;
   for (const rel of p.relations) {
     const person = s.people[rel.personId];
     if (!person || person.deathYear !== undefined) continue;
@@ -514,12 +590,15 @@ function yearlyTick(c: Ctx): string | null {
       if (rel.kind === 'ex' || rel.kind === 'friend') continue;
       const labelTr = rel.step
         ? f ? 'Üvey annen' : 'Üvey baban'
-        : { mother: 'Annen', father: 'Baban', sibling: person.birthYear < p.birthYear ? (f ? 'Ablan' : 'Ağabeyin') : f ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: f ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: f ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın', grandparent: f ? 'Büyükannen' : 'Deden' }[rel.kind];
+        : { mother: 'Annen', father: 'Baban', sibling: person.birthYear < p.birthYear ? (f ? 'Ablan' : 'Ağabeyin') : f ? 'Kız kardeşin' : 'Erkek kardeşin', spouse: f ? 'Karın' : 'Kocan', partner: 'Sevgilin', ex: 'Eski sevgilin', child: f ? 'Kızın' : 'Oğlun', friend: 'Arkadaşın', grandparent: f ? (rel.side === 'mother' ? 'Anneannen' : rel.side === 'father' ? 'Babaannen' : 'Büyükannen') : 'Deden' }[rel.kind];
       h.log(c.t(`Your ${label} ${person.firstName} passed away at ${pa}.`, `${labelTr} ${person.firstName}, ${pa} yaşında hayata gözlerini yumdu.`), 'bad');
       h.stat('happiness', -Math.round(rel.closeness / 6));
       // a child or a partner: the year belongs to the loss (playtest 3: a class reunion right after a daughter died)
       if (rel.kind === 'child' && loss?.kind !== 'child') loss = { person, kind: 'child' };
-      else if ((rel.kind === 'spouse' || rel.kind === 'partner') && !loss) loss = { person, kind: 'spouse' };
+      else if ((rel.kind === 'spouse' || rel.kind === 'partner') && (!loss || loss.kind === 'parent')) loss = { person, kind: 'spouse' };
+      // a parent who dies in the player's adult years has a moment of its own too (review 5 §3.8); a younger
+      // player has base.grief_parent (events-more.ts), which the random pool picks up in the year of the loss
+      else if ((rel.kind === 'mother' || rel.kind === 'father') && !rel.step && !loss && age >= 26 && p.jailYears === 0) loss = { person, kind: 'parent' };
       const parentLike = (rel.kind === 'mother' || rel.kind === 'father' || rel.kind === 'grandparent') && !rel.step;
       const lucky = parentLike && rng.chance(0.6);
       // a parent who handed the family over left you your share of what they kept: spent down by the years
@@ -544,7 +623,7 @@ function yearlyTick(c: Ctx): string | null {
     h.flag('mourning');
     eng.loss = loss.person.id;
     const orphans = loss.kind === 'child' && (loss.person.childIds ?? []).some((id) => s.people[id] && s.people[id].deathYear === undefined && ageOf(s, s.people[id]) < 18);
-    const ev = loss.kind === 'spouse' ? 'base.grief_spouse' : orphans ? 'base.grief_orphan' : 'base.grief_child';
+    const ev = loss.kind === 'parent' ? 'base.grief_parent_adult' : loss.kind === 'spouse' ? 'base.grief_spouse' : orphans ? 'base.grief_orphan' : 'base.grief_child';
     if (scheduled && scheduled !== ev) eng.deferred = scheduled;
     scheduled = ev;
   }
@@ -590,7 +669,7 @@ function lifeNudge(c: Ctx, costOfLiving: number): string | null {
   const kids = h.relatives('child');
   // money first: a letter from the bank when debt outgrows the home
   if (age >= 23 && p.money < 0) {
-    const unsecured = -p.money - (p.home.owned ? p.home.value : 0);
+    const unsecured = -p.money - homeEquity(p.home);
     if (unsecured > 1.5 * costOfLiving && opened(p, 'base.debt_letter') < DEBT_LETTERS_PER_LIFE && yearsSince(p, age, 'base.debt_letter') >= 6) return 'base.debt_letter';
   }
   // family steps in with a debt that keeps hanging on (at most twice a life)
@@ -619,8 +698,9 @@ function lifeNudge(c: Ctx, costOfLiving: number): string | null {
     if (age >= 45 && age <= 75 && opened(p, 'base.no_heir') < 2 && yearsSince(p, age, 'base.no_heir') >= 10) return 'base.no_heir';
   }
   // work: an adult who has gone without a job for a while sees this week's listings
-  if (!p.jobId && !p.school && !p.retired && age >= 19 && age <= 55 && yearsSince(p, age, 'base.job_search') >= 2 && opened(p, 'base.job_search') < 8) {
-    if (rng.chance(0.5)) return 'base.job_search';
+  // (round 5: the job board with salaries, not the old salary-less 'base.job_search', kept only for old saves)
+  if (!p.jobId && !p.school && !p.retired && age >= 19 && age <= 55 && yearsSince(p, age, 'base.job_board') >= 2 && opened(p, 'base.job_board') < 8) {
+    if (rng.chance(0.5)) return 'base.job_board';
   }
   return null;
 }
@@ -635,11 +715,18 @@ export function watchDebt(c: Ctx): void {
   const eng = engineExt(p);
   if (eng.debtWarned) return;
   eng.debtWarned = true;
+  // the way out depends on the life: a working player is not told to find a job (review 5 §3.7)
+  const working = !!p.jobId && p.jailYears === 0;
   c.h.log(
-    c.t(
-      `Your account is in the red for the first time: you owe ${c.h.fmt(-p.money)}. Debt grows with interest. A job, selling something or help from family will get you out.`,
-      `Hesabın ilk kez eksiye düştü, ${c.h.fmt(-p.money)} borçlusun. Borç faiziyle büyür. Bir iş bulmak, bir şeyler satmak ya da aileden yardım istemek seni kurtarır.`,
-    ),
+    working
+      ? c.t(
+          `Your account is in the red for the first time: you owe ${c.h.fmt(-p.money)}. Debt grows with interest. Spending less for a while, selling something or help from family will get you out.`,
+          `Hesabın ilk kez eksiye düştü, ${c.h.fmt(-p.money)} borçlusun. Borç faiziyle büyür. Bir süre harcamaları kısmak, bir şeyler satmak ya da aileden yardım istemek seni kurtarır.`,
+        )
+      : c.t(
+          `Your account is in the red for the first time: you owe ${c.h.fmt(-p.money)}. Debt grows with interest. A job, selling something or help from family will get you out.`,
+          `Hesabın ilk kez eksiye düştü, ${c.h.fmt(-p.money)} borçlusun. Borç faiziyle büyür. Bir iş bulmak, bir şeyler satmak ya da aileden yardım istemek seni kurtarır.`,
+        ),
     'bad',
   );
 }
@@ -678,9 +765,23 @@ function heirShare(s: GameState, kind: HeirOption['kind']): { money: number; hom
   const splitWays = Math.max(1, livingChildren(s).length + (kind === 'grandchild' ? 1 : 0));
   const cash = handed ? savings * HANDOVER_GIFT : savings;
   const tax = inheritanceTax(cash, wageFactor);
-  const homeValue = prev.home.owned ? Math.max(0, prev.home.value) : 0;
+  const homeValue = homeEquity(prev.home);
   const share = splitWays > 1 ? Math.max(0, (cash - tax + homeValue) / splitWays - homeValue) : cash - tax;
   return { money: Math.round(share), homeTookShare: splitWays > 1 && homeValue > 0 };
+}
+
+/**
+ * What an adult heir has put by of their own before taking over (review 5 §3.9: 43% of heirs started with nothing,
+ * as if a 40-year-old with a job had never saved a penny). A share of a year's pay for each working year (up to
+ * twelve), or a small cushion without a job. No RNG; the same on the heir card and at the hand-over.
+ */
+export function heirOwnSavings(s: GameState, q: Person): number {
+  const age = ageOf(s, q);
+  if (age < 20) return 0;
+  const country = getCountry(s.player.countryId);
+  const job = q.jobId ? allJobs(s.enabledPacks).find((j) => j.id === q.jobId) : undefined;
+  if (job) return Math.round(salaryFor(job, heirLevel(job.titles.length, age), country.wageFactor) * 0.08 * Math.min(12, Math.max(1, age - 21)));
+  return Math.round(country.costOfLiving * 0.25);
 }
 
 /**
@@ -697,7 +798,7 @@ export function heirCards(s: GameState): HeirCard[] {
       const q = o.person;
       const age = ageOf(s, q);
       const rel = s.player.relations.find((r) => r.personId === q.id);
-      const { money } = heirShare(s, o.kind);
+      const money = heirShare(s, o.kind).money + heirOwnSavings(s, q);
       return {
         ...o,
         age,
@@ -706,7 +807,7 @@ export function heirCards(s: GameState): HeirCard[] {
         closeness: rel?.closeness,
         money,
         home: s.player.home.owned,
-        homeValue: s.player.home.owned ? Math.max(0, s.player.home.value) : 0,
+        homeValue: homeEquity(s.player.home),
         heirlooms,
         kids: Math.max(q.childIds?.length ?? 0, q.kids ?? 0),
         stats: { ...q.stats },
@@ -880,10 +981,28 @@ function eligible(c: Ctx, def: EventDef): boolean {
   return def.when ? def.when(c) : true;
 }
 
+/**
+ * Dynasty-wide repeats (review 5 §3.5: the grandson lived his grandfather's appendicitis, model trains and pot of
+ * sarma under another name). A random event that fired in one of the last DYNASTY_REPEAT_LIVES lives of the
+ * family comes back with only DYNASTY_REPEAT_FACTOR of its weight. Rituals and anniversaries, a pack's own yearly
+ * loop and grief (which follows a real death) are exempt. Weights only: the number of RNG calls does not change.
+ */
+export const DYNASTY_REPEAT_LIVES = 2;
+export const DYNASTY_REPEAT_FACTOR = 0.05;
+const dynastyExempt = (def: EventDef) => RECURRING_EVENTS.has(def.id) || def.id.startsWith('base.grief') || (def.cooldown !== undefined && def.cooldown <= 2 && !def.once);
+
+/** Weight multiplier for an event already seen by an earlier life of the dynasty. */
+export function dynastyRepeatFactor(s: GameState, def: EventDef): number {
+  const at = s.dynasty.eventMemory?.[def.id];
+  if (at === undefined || dynastyExempt(def)) return 1;
+  const ago = s.dynasty.lives.length - at;
+  return ago >= 1 && ago <= DYNASTY_REPEAT_LIVES ? DYNASTY_REPEAT_FACTOR : 1;
+}
+
 function pickRandomEvent(s: GameState): EventDef | undefined {
   const c = makeCtx(s);
   const pool = eventsFor(s.enabledPacks).filter((d) => eligible(c, d));
-  return c.rng.weighted(pool, (d) => (typeof d.weight === 'function' ? d.weight(c) : d.weight ?? 10));
+  return c.rng.weighted(pool, (d) => (typeof d.weight === 'function' ? d.weight(c) : d.weight ?? 10) * dynastyRepeatFactor(s, d));
 }
 
 /** Runs an event: applies it directly, or opens it as a pending choice. Returns true if a choice is pending. */
@@ -893,6 +1012,8 @@ export function openEvent(s: GameState, def: EventDef): boolean {
   s.player.eventLastAge[def.id] = c.age;
   const counts = (s.player.eventCount ??= {});
   counts[def.id] = (counts[def.id] ?? 0) + 1;
+  // remembered for the whole family (not for a Daily Challenge, which is a single life)
+  if (!def.scheduled && !s.daily) (s.dynasty.eventMemory ??= {})[def.id] = s.dynasty.lives.length;
   const body = txt(def.text, c) ?? '';
   if (!def.choices || def.choices.length === 0) {
     const line = def.apply?.(c);
@@ -1188,24 +1309,37 @@ export function canPassTorch(s: GameState): boolean {
 }
 
 /**
- * The career line of a finished life: the job held at the end, "Retired …" after a retirement, otherwise the
- * best-paid job of the life ("Retired Head of Surgery" from 60, "Former …" before), then the education.
+ * The career line of a finished life, matching the log (review 5 §3.12): the job held at the end; "Retired …" with
+ * the job they retired from (not an earlier, better-paid one); "Former …" with the best job of a life that left
+ * work without retiring; then the education. Titles in the current story language.
  */
 export function careerLine(s: GameState, c: Ctx = makeCtx(s)): string {
   const p = s.player;
-  const age = s.year - p.birthYear;
+  const jobs = allJobs(s.enabledPacks);
+  const cur = p.jobId ? jobs.find((j) => j.id === p.jobId) : undefined;
+  if (cur) return titleFor(cur, p.jobLevel, c.lang);
   if (p.jobId && p.jobTitle) return p.jobTitle;
   const peak = engineExt(p).peakJob;
-  const peakDef = peak ? allJobs(s.enabledPacks).find((j) => j.id === peak.id) : undefined;
+  const peakDef = peak ? jobs.find((j) => j.id === peak.id) : undefined;
   const lvl = peakDef ? Math.min(peak!.level, peakDef.titles.length - 1) : 0;
   const peakEn = peakDef ? titleFor(peakDef, lvl, 'en') : undefined;
   const peakTr = peakDef ? titleFor(peakDef, lvl, 'tr') : undefined;
+  const last = lastJobOf(p);
+  const lastDef = last ? jobs.find((j) => j.id === last.id) : undefined;
   if (p.retired && p.jobTitle) {
-    // the retirement title, unless an earlier job paid better (a surgeon who retired from a part-time shop job)
-    const keep = !peak || !peakDef || (p.lastSalary ?? 0) >= peak.salary;
-    if (keep) return c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`);
+    // the job they retired from, as the log said; only a part-time job at the end defers to the real career
+    if (!lastDef?.partTime || !peakEn) {
+      const t = localTitle(s, p.jobTitle, last?.id) ?? p.jobTitle;
+      return c.t(`Retired ${t}`, `Emekli ${t}`);
+    }
   }
-  if (peakEn && peakTr) return p.retired || age >= PENSION_AGE ? c.t(`Retired ${peakEn}`, `Emekli ${peakTr}`) : c.t(`Former ${peakEn}`, `Eski ${peakTr}`);
+  if (peakEn && peakTr) {
+    // left work close to pension age and lived past it: retired in all but name; left long before: "Former"
+    const left = leftWorkAge(p);
+    const age = s.year - p.birthYear;
+    const retiredish = p.retired || (age >= PENSION_AGE && (left === undefined || left >= PENSION_AGE - 7));
+    return retiredish ? c.t(`Retired ${peakEn}`, `Emekli ${peakTr}`) : c.t(`Former ${peakEn}`, `Eski ${peakTr}`);
+  }
   if (p.jobTitle) return p.retired ? c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`) : p.jobTitle;
   return p.education === 'university' ? c.t('University graduate', 'Üniversite mezunu') : c.t('No career', 'Kariyeri yok');
 }
@@ -1220,7 +1354,7 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
   const children = p.relations.filter((r) => r.kind === 'child');
   const aliveKids = c.h.relatives('child');
   const grandkids = children.reduce((n, r) => n + (s.people[r.personId]?.kids ?? 0), 0);
-  const netWorth = p.money + (p.home.owned ? p.home.value : 0) + packNetWorth(s);
+  const netWorth = p.money + homeEquity(p.home) + packNetWorth(s);
   const partnerRel = p.relations.find((r) => (r.kind === 'spouse' || r.kind === 'partner') && s.people[r.personId]) ?? undefined;
   const partner = partnerRel ? s.people[partnerRel.personId] : undefined;
   const named = aliveKids.find((k) => `heir:${k.person.id}` in p.flags)?.person; // chosen in the will
@@ -1283,6 +1417,8 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
     stats: { ...p.stats },
     jobTitle: p.retired && p.jobTitle ? c.t(`Retired ${p.jobTitle}`, `Emekli ${p.jobTitle}`) : p.jobTitle,
     kids: children.length,
+    // the portrait keeps its tone once the life is a relative of the heir (engine/skin.ts)
+    skin: skinTone(s, p),
   };
   s.people[p.id] = asPerson;
   return record;
@@ -1316,30 +1452,51 @@ function heirJobPool(s: GameState, education: Education, smarts: number, gender?
 const heirLevel = (titles: number, age: number) => Math.min(titles - 1, Math.floor(Math.max(0, age - 22) / 8));
 
 /**
- * Children, grandchildren, nieces and nephews settle their education and a job when they reach 22, so the heir
- * picker can show what they do (review item 5) and the heir keeps that job when they take over. One `chance` for
- * the degree (when it is in doubt), one for having a job and one pick; the same in both languages.
+ * Relatives settle their education and a job when they reach 22, so the heir picker and the family screen show
+ * what they do (review item 5) and an heir keeps that job when they take over. Round 5 (review 5 §3.9): every adult
+ * relative, not only possible heirs (parents, siblings, partners too), nine in ten work, someone out of work looks
+ * again every few years (no 54-year-old "no job yet"), graduates get the degree their job needs, and the stored
+ * titles climb with age and follow the story language. One `chance` for the degree (when it is in doubt), one for
+ * having a job and one pick; the same in both languages.
  */
 function growUpHeirs(c: Ctx): void {
   const { s, rng } = c;
-  const people = [...livingChildren(s), ...grandchildren(s).map((g) => g.person), ...niblings(s).map((g) => g.person)];
+  const kin = s.player.relations
+    .filter((r) => r.kind === 'mother' || r.kind === 'father' || r.kind === 'sibling' || r.kind === 'spouse' || r.kind === 'partner')
+    .map((r) => s.people[r.personId])
+    .filter((q): q is Person => !!q);
+  const people = [...new Set([...livingChildren(s), ...grandchildren(s).map((g) => g.person), ...niblings(s).map((g) => g.person), ...kin])];
+  const jobs = allJobs(s.enabledPacks);
   for (const q of people) {
-    if (q.deathYear !== undefined || q.jobId !== undefined || ageOf(s, q) < 22) continue;
-    q.education = educationForAge(ageOf(s, q), q.stats.smarts, rng.chance);
-    const pool = heirJobPool(s, q.education, q.stats.smarts, q.gender);
-    if (pool.length && rng.chance(0.8)) {
-      const job = rng.pick(pool);
-      q.jobId = job.id;
-      q.jobTitle = titleFor(job, heirLevel(job.titles.length, ageOf(s, q)), s.lang);
-    } else q.jobId = null;
+    if (q.deathYear !== undefined || q.id === s.player.id) continue;
+    const age = ageOf(s, q);
+    if (age < 22) continue;
+    // a relative created with only a title (the player's parents): find the job behind it, no RNG
+    if (q.jobId === undefined && q.jobTitle) {
+      const j = jobs.find((x) => x.titles.includes(q.jobTitle!) || !!x.titlesTr?.includes(q.jobTitle!));
+      if (j) q.jobId = j.id;
+    }
+    const retry = q.jobId === null && age < 58 && age % 4 === 0;
+    if (q.jobId === undefined || retry) {
+      if (q.jobId === undefined) q.education = q.education ?? educationForAge(age, q.stats.smarts, rng.chance);
+      const pool = heirJobPool(s, q.education ?? 'highschool', q.stats.smarts, q.gender);
+      if (pool.length && rng.chance(retry ? 0.5 : 0.9)) {
+        const job = rng.pick(pool);
+        q.jobId = job.id;
+        if (q.education === 'university') q.major = majorForJob(job.id);
+      } else q.jobId = null;
+    }
+    if (q.jobId) q.jobTitle = heirJobTitle(s, q);
   }
 }
 
-/** An heir's job title at their current age, in the story language (undefined without a job). */
+/** An heir's (or any relative's) job title at their current age, in the story language (undefined without a job). */
 export function heirJobTitle(s: GameState, q: Person): string | undefined {
   if (!q.jobId) return q.jobId === null ? undefined : q.jobTitle;
   const job = allJobs(s.enabledPacks).find((j) => j.id === q.jobId);
-  return job ? titleFor(job, heirLevel(job.titles.length, ageOf(s, q)), s.lang) : q.jobTitle;
+  if (!job) return q.jobTitle;
+  const t = titleFor(job, heirLevel(job.titles.length, ageOf(s, q)), s.lang);
+  return ageOf(s, q) > 65 ? (s.lang === 'tr' ? `Emekli ${t}` : `Retired ${t}`) : t;
 }
 
 function educationForAge(age: number, smarts: number, rngChance: (p: number) => boolean): Education {
@@ -1375,21 +1532,29 @@ export function continueAsChild(s: GameState, heirId: string): void {
   const splitWays = Math.max(1, kids.length + (opt.kind === 'grandchild' ? 1 : 0));
   const handed = handedOver ? savings * HANDOVER_GIFT : savings;
   const tax = inheritanceTax(handed, wageFactor);
-  const homeValue = prev.home.owned ? Math.max(0, prev.home.value) : 0;
+  const homeValue = homeEquity(prev.home);
   const share = splitWays > 1 ? Math.max(0, (handed - tax + homeValue) / splitWays - homeValue) : handed - tax;
   const homeTookShare = splitWays > 1 && homeValue > 0;
   const prevPerson = s.people[prev.id];
   if (handedOver && prevPerson) prevPerson.estate = Math.round((savings * (1 - HANDOVER_GIFT)) / splitWays);
 
+  // fix the family's skin tones as seen from the old player before the point of view moves (engine/skin.ts)
+  for (const r of prev.relations) if (s.people[r.personId]) keepSkin(s, s.people[r.personId]);
+  for (const g of [...grandchildren(s), ...niblings(s)]) keepSkin(s, g.person);
+  keepSkin(s, child);
   const { childIds: ownKids = [], kids: kidCount = 0 } = child;
   const np = makePlayer({ ...child }, prev.countryId, prev.city);
   delete np.childIds;
   delete np.kids;
   delete np.estate;
   np.money = Math.round(share);
+  // the heir's own savings come on top (computed before the job below, from the record the heir card read)
+  const own = heirOwnSavings(s, child);
   np.education = child.education ?? educationForAge(age, child.stats.smarts, rng.chance);
   np.school = age >= 6 && age < 14 ? 'primary' : age >= 14 && age < 18 ? 'highschool' : null;
-  np.home = prev.home.owned ? { ...prev.home, furniture: [...prev.home.furniture] } : np.home;
+  // the home comes with whatever is still owed on it
+  np.home = prev.home.owned ? { ...prev.home, furniture: [...prev.home.furniture], loan: prev.home.loan ? { ...prev.home.loan } : undefined } : np.home;
+  if (!np.home.loan) delete np.home.loan;
   // the job the heir already had (growUpHeirs, shown on the heir card); older saves and heirs under 22 draw one
   const known = child.jobId ? allJobs(s.enabledPacks).find((j) => j.id === child.jobId) : undefined;
   delete np.jobTitle;
@@ -1431,7 +1596,7 @@ export function continueAsChild(s: GameState, heirId: string): void {
     np.relations.push({ personId: parent.id, kind: parent.gender === 'female' ? 'mother' : 'father', closeness: rng.int(60, 90), sinceYear: child.birthYear });
     for (const r of prev.relations)
       if ((r.kind === 'mother' || r.kind === 'father') && !r.step && s.people[r.personId])
-        np.relations.push({ personId: r.personId, kind: 'grandparent', closeness: 70, sinceYear: child.birthYear });
+        np.relations.push({ personId: r.personId, kind: 'grandparent', closeness: 70, sinceYear: child.birthYear, side: parent.gender === 'female' ? 'mother' : 'father' });
     for (const id of parent.childIds ?? []) {
       const sib = s.people[id];
       if (sib && id !== child.id && sib.deathYear === undefined) np.relations.push({ personId: id, kind: 'sibling', closeness: rng.int(40, 85), sinceYear: sib.birthYear });
@@ -1439,8 +1604,9 @@ export function continueAsChild(s: GameState, heirId: string): void {
   } else {
     const parent = opt.parent!;
     np.relations.push({ personId: parent.id, kind: parent.gender === 'female' ? 'mother' : 'father', closeness: rng.int(60, 90), sinceYear: child.birthYear });
-    np.relations.push({ personId: prev.id, kind: 'grandparent', closeness: 80, sinceYear: child.birthYear });
-    if (op) np.relations.push({ personId: op.id, kind: 'grandparent', closeness: 70, sinceYear: child.birthYear });
+    const side = parent.gender === 'female' ? 'mother' : 'father';
+    np.relations.push({ personId: prev.id, kind: 'grandparent', closeness: 80, sinceYear: child.birthYear, side });
+    if (op) np.relations.push({ personId: op.id, kind: 'grandparent', closeness: 70, sinceYear: child.birthYear, side });
     for (const id of parent.childIds ?? []) {
       const sib = s.people[id];
       if (sib && id !== child.id && sib.deathYear === undefined) np.relations.push({ personId: id, kind: 'sibling', closeness: rng.int(40, 85), sinceYear: sib.birthYear });
@@ -1506,6 +1672,14 @@ export function continueAsChild(s: GameState, heirId: string): void {
   const pn = prev.firstName;
   const gen = s.dynasty.generation;
   const fam = s.dynasty.familyName;
+  // one brother or sister is named; several are "your brothers and sisters" (review 5 §3.9: "split between 2
+  // siblings" and "your brothers and sisters shared the savings" for a single sister)
+  const sibs = opt.kind === 'child' ? kids.filter((k) => k.id !== child.id) : [];
+  const one = sibs.length === 1 ? sibs[0] : undefined;
+  const oneF = one?.gender === 'female';
+  const oneTr = one ? (one.birthYear < child.birthYear ? (oneF ? 'ablan' : 'ağabeyin') : oneF ? 'kız kardeşin' : 'erkek kardeşin') : '';
+  const sibEn = one ? `your ${oneF ? 'sister' : 'brother'} ${one.firstName}` : 'your brothers and sisters';
+  const sibTr = one ? `${oneTr} ${one.firstName}` : 'kardeşlerin';
   if (handedOver) {
     c2.h.log(
       c2.t(
@@ -1520,14 +1694,18 @@ export function continueAsChild(s: GameState, heirId: string): void {
           ? c2.t(`${prev.firstName} shared out half of the family savings. You got the family home and ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını paylaştırdı. Sana aile evi ve ${c2.h.fmt(np.money)} düştü.`)
           : gk
             ? c2.t(`${pn} shared out half of the family savings between ${f ? 'her' : 'his'} children. The family home is yours.`, `${pn} aile birikiminin yarısını çocukları arasında paylaştırdı. Aile evi sana kaldı.`)
-            : c2.t(`${pn} shared out half of the family savings between your brothers and sisters. The family home is yours.`, `${pn} aile birikiminin yarısını kardeşlerin arasında paylaştırdı. Aile evi sana kaldı.`),
+            : one
+              ? c2.t(`${pn} gave half of the family savings to ${sibEn}. The family home is yours.`, `${pn} aile birikiminin yarısını ${oneTr} ${dat(one.firstName)} verdi. Aile evi sana kaldı.`)
+              : c2.t(`${pn} shared out half of the family savings between your brothers and sisters. The family home is yours.`, `${pn} aile birikiminin yarısını kardeşlerin arasında paylaştırdı. Aile evi sana kaldı.`),
       );
     else if (np.money > 0)
       c2.h.log(
         splitWays > 1
           ? gk
             ? c2.t(`${pn} shared out half of the family savings between ${f ? 'her' : 'his'} children and you. Your part: ${c2.h.fmt(np.money)}.`, `${pn} aile birikiminin yarısını çocuklarıyla senin aranda paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
-            : c2.t(`${pn} shared out half of the family savings between the children. Your part: ${c2.h.fmt(np.money)}.`, `${pn} aile birikiminin yarısını çocuklar arasında paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
+            : one
+              ? c2.t(`${pn} split half of the family savings between you and ${sibEn}. Your part: ${c2.h.fmt(np.money)}.`, `${pn} aile birikiminin yarısını seninle ${sibTr} arasında paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
+              : c2.t(`${pn} shared out half of the family savings between the children. Your part: ${c2.h.fmt(np.money)}.`, `${pn} aile birikiminin yarısını çocuklar arasında paylaştırdı. Sana düşen: ${c2.h.fmt(np.money)}.`)
           : c2.t(`${prev.firstName} gave you half of the family savings: ${c2.h.fmt(np.money)}.`, `${prev.firstName} aile birikiminin yarısını sana verdi: ${c2.h.fmt(np.money)}.`),
       );
     if (tax > 0) c2.h.log(c2.t(`The tax office took its cut of the gift: ${c2.h.fmt(tax)}.`, `Vergi dairesi bu bağıştan payını aldı: ${c2.h.fmt(tax)} intikal vergisi.`));
@@ -1551,12 +1729,16 @@ export function continueAsChild(s: GameState, heirId: string): void {
         tax > 0 && splitWays > 1
           ? gk
             ? c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${pn}'s children and you.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${gen_(pn)} çocuklarıyla senin aranda bölündü.`)
-            : c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${splitWays} children.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${splitWays} kardeş arasında bölündü.`)
+            : one
+              ? c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between you and ${sibEn}.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı seninle ${sibTr} arasında bölündü.`)
+              : c2.t(`The estate was settled: ${t} in inheritance tax, and the rest split between ${splitWays} children.`, `Miras paylaştırıldı: ${t} veraset vergisi ödendi, kalanı ${splitWays} kardeş arasında bölündü.`)
           : tax > 0
             ? c2.t(`The estate was settled. The tax office took ${t} in inheritance tax.`, `Miras işlemleri bitti. Vergi dairesi ${t} veraset vergisi aldı.`)
             : gk
               ? c2.t(`The savings were split between ${pn}'s children and you.`, `Birikim, ${gen_(pn)} çocuklarıyla senin aranda bölündü.`)
-              : c2.t(`The savings were split between ${splitWays} children.`, `Birikim ${splitWays} kardeş arasında bölündü.`),
+              : one
+                ? c2.t(`The savings were split between you and ${sibEn}.`, `Birikim, seninle ${sibTr} arasında bölündü.`)
+                : c2.t(`The savings were split between ${splitWays} children.`, `Birikim ${splitWays} kardeş arasında bölündü.`),
       );
     }
     const home = prev.home.owned;
@@ -1575,12 +1757,25 @@ export function continueAsChild(s: GameState, heirId: string): void {
               `The family home${hl ? ' and the heirlooms' : ''} came to you; ${pn}'s children shared the savings.`,
               `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi ${gen_(pn)} çocukları paylaştı.`,
             )
-          : c2.t(
-              `The family home${hl ? ' and the heirlooms' : ''} came to you; your brothers and sisters shared the savings.`,
-              `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi kardeşlerin paylaştı.`,
-            ),
+          : one
+            ? c2.t(`The family home${hl ? ' and the heirlooms' : ''} came to you; the savings went to ${sibEn}.`, `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi ${sibTr} aldı.`)
+            : c2.t(
+                `The family home${hl ? ' and the heirlooms' : ''} came to you; your brothers and sisters shared the savings.`,
+                `Aile evi${hl ? ' ve yadigârlar' : ''} sana kaldı; birikimi kardeşlerin paylaştı.`,
+              ),
       );
   }
+  if (own > 0) {
+    np.money += own;
+    c2.h.log(c2.t(`You also had savings of your own put by: ${c2.h.fmt(own)}.`, `Kenarda kendi birikimin de vardı: ${c2.h.fmt(own)}.`));
+  }
+  if (np.home.loan)
+    c2.h.log(
+      c2.t(
+        `The home came with its mortgage: ${c2.h.fmt(np.home.loan.balance)} still to pay, ${c2.h.fmt(np.home.loan.payment)} a year.`,
+        `Ev, kredisiyle birlikte geldi: ödenecek ${c2.h.fmt(np.home.loan.balance)} kaldı, yıllık taksit ${c2.h.fmt(np.home.loan.payment)}.`,
+      ),
+    );
   assignGoals(s, c2.rng);
 }
 

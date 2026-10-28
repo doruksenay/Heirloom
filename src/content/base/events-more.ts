@@ -4,6 +4,7 @@ import { acc, cap, da, dat, gen, kin, loc, nm, single, wage, who, wth, employee,
 import { catName, syncFlagCat } from '../../engine/pets';
 import { pickIndex } from './lines';
 import { byCountry, cityOf, didFor, He, him, his, markFor, settled } from './events-flavour';
+import { aliveKin } from './kin';
 
 /** base.coworker_birthday: two cake lines for each kind of workplace. */
 const CAKE: Partial<Record<WorkKind, [string, string][]>> = {
@@ -219,6 +220,7 @@ export const moreEvents: EventDef[] = [
     minAge: 9,
     maxAge: 13,
     once: true,
+    when: (c) => aliveKin(c, 'parents'),
     title: (c) => c.t('Everyone in your class has a phone except you.', 'Sınıfta senden başka telefonu olmayan kalmadı.'),
     text: (c) =>
       c.t('You have rehearsed a 12-point argument for your parents.', 'Ailen için 12 maddelik bir savunma hazırladın ve prova ettin.'),

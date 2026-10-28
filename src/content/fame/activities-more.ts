@@ -3,6 +3,7 @@ import { wage } from '../base/util';
 import { say } from '../base/lines';
 import { fameState, gainFans, isPath, loseFans, peekFame } from './state';
 import { compact, fameOf, free, grandmaAlive, hasPath, motherAlive } from './util';
+import { aliveKin } from '../base/kin';
 
 // Fame v0.7: six more things to do with your fame.
 
@@ -45,10 +46,15 @@ export const moreFameActivities: ActivityDef[] = [
           `The video for "${song.title}" is decent. The comments are mostly about your jacket. ${compact(c, g)} new fans.${paid}`,
           `"${song.title}" klibi fena olmadı. Yorumların çoğu ceketinle ilgili. ${compact(c, g)} yeni hayran.${paid}`,
         );
-      return c.t(
-        `You shot the video for "${song.title}" in your aunt's living room. It shows. ${compact(c, g)} new fans anyway.${paid}`,
-        `"${song.title}" klibini teyzenin oturma odasında çektin. Belli oluyor. Yine de ${compact(c, g)} yeni hayran.${paid}`,
-      );
+      return aliveKin(c, 'aunt')
+        ? c.t(
+            `You shot the video for "${song.title}" in your aunt's living room. It shows. ${compact(c, g)} new fans anyway.${paid}`,
+            `"${song.title}" klibini teyzenin oturma odasında çektin. Belli oluyor. Yine de ${compact(c, g)} yeni hayran.${paid}`,
+          )
+        : c.t(
+            `You shot the video for "${song.title}" in your own kitchen. It shows. ${compact(c, g)} new fans anyway.${paid}`,
+            `"${song.title}" klibini kendi mutfağında çektin. Belli oluyor. Yine de ${compact(c, g)} yeni hayran.${paid}`,
+          );
     },
   },
   {

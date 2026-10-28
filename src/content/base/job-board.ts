@@ -1,10 +1,9 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import type { GameState } from '../../engine/types';
-import { EDUCATION_RANK, salaryFor, titleFor, type JobDef } from '../../engine/careers';
+import { EDUCATION_RANK, MAJOR_INFO, jobMajors, majorOf, majorReason, salaryFor, titleFor, type JobDef } from '../../engine/careers';
 import { makeCtx } from '../../engine/context';
 import { getCountry } from '../../engine/world';
 import { allJobs } from '../registry';
-import { MAJORS, peekCampus } from '../campus/state';
 import { aOrAn, jobGaps, jobShown, MAX_HIRE_AGE, type JobGap } from './util';
 import { sayWith, type Pair } from './lines';
 
@@ -86,8 +85,11 @@ const EDU_LABEL: Record<string, [string, string]> = {
 export function jobRequirements(c: Ctx, j: JobDef): string[] {
   const out: string[] = [];
   const r = j.req ?? {};
+  const need = jobMajors(j);
   const edu = EDU_LABEL[j.education];
   if (edu) out.push(c.t(edu[0], edu[1]));
+  // round 5: a gated job also names the degree ("Medicine degree")
+  if (need.length) out.push(c.t(`${MAJOR_INFO[need[0]].en} degree`, `${MAJOR_INFO[need[0]].tr} diploması`));
   const smarts = Math.max(r.smarts ?? 0, j.minSmarts - 10);
   if (smarts > 0) out.push(c.t(`Smarts ${smarts}+`, `Zekâ ${smarts}+`));
   if (r.minAge !== undefined && r.minAge > 16) out.push(c.t(`Age ${r.minAge}+`, `En az ${r.minAge} yaş`));
@@ -115,6 +117,8 @@ export function gapReason(c: Ctx, j: JobDef, gap: JobGap): string {
       const en = j.education === 'university' ? 'a university degree' : j.education === 'highschool' ? 'a high school diploma' : 'primary school';
       return c.t(`Needs ${en}.`, `${e[1]} gerekiyor.`);
     }
+    case 'major':
+      return `${majorReason(j, c.lang)}.`;
     case 'smarts':
       return c.t(`Needs Smarts ${Math.max(r.smarts ?? 0, j.minSmarts - 10)}+.`, `Zekâ ${Math.max(r.smarts ?? 0, j.minSmarts - 10)}+ gerekiyor.`);
     case 'health':
@@ -140,11 +144,12 @@ const oddsOf = (x: number): JobOdds => (x >= 0.7 ? 'high' : x >= 0.45 ? 'medium'
 
 /** Fit with the player's education and degree: graduates see graduate jobs first (no doctors down the mine). */
 function matchOf(c: Ctx, j: JobDef): number {
-  const major = peekCampus(c.p)?.major;
-  const fields = major ? MAJORS[major].fields : [];
+  const major = majorOf(c.p);
+  const fields = major ? MAJOR_INFO[major].fields : [];
   const rank = EDUCATION_RANK[c.p.education];
   let m = 0;
-  if (fields.includes(j.field)) m += 2;
+  if (major && jobMajors(j).includes(major)) m += 3;
+  else if (fields.includes(j.field)) m += 2;
   if (EDUCATION_RANK[j.education] === rank) m += 1;
   if (j.partTime && c.age >= 18 && c.p.school !== 'university') m -= 2;
   return m;
@@ -223,7 +228,7 @@ export function applyToJob(s: GameState, jobId: string): string | null {
 
 const REJECT: ((t: string) => Pair)[] = [
   (t) => [`You interviewed for ${t}, but they went with someone else.`, `${t} pozisyonu için mülakata girdin ama başkasını seçtiler.`],
-  (t) => [`The ${t} interview went well, you thought. They never called back.`, `${t} mülakatı bence iyi geçti dedin. Bir daha aramadılar.`],
+  (t) => [`The ${t} interview went well, you thought. They never called back.`, `${t} mülakatının iyi geçtiğini düşünmüştün. Bir daha aramadılar.`],
   (t) => [`They said you were "a strong candidate" for ${t}. Then they hired their cousin.`, `${t} için "güçlü bir aday" olduğunu söylediler. Sonra kuzenlerini aldılar.`],
   (t) => [`You were second out of forty for ${t}. Second gets a polite email.`, `${t} için kırk kişi arasında ikinci oldun. İkinciye kibar bir e-posta düşüyor.`],
   (t) => [`The ${t} interview had a group exercise with a tower of spaghetti. Your tower fell. So did your chances.`, `${t} mülakatında makarnadan kule yapma etkinliği vardı. Senin kulen yıkıldı. Şansın da.`],
@@ -301,6 +306,13 @@ export const jobBoardEvents: EventDef[] = [
         : c.age > MAX_HIRE_AGE
           ? c.t('The listings want "young, dynamic team players". You have earned your rest.', 'İlanlar "genç ve dinamik ekip arkadaşları" arıyor. Sen dinlenmeyi hak ettin.')
           : c.t('Nothing matches you right now. Study, get fitter, or try again next year.', 'Şu an sana uygun bir ilan yok. Oku, formunu toparla ya da seneye yine bak.'),
-    choices: [...Array.from({ length: SLOTS }, (_, i) => jobChoice(i)), { id: 'none', label: (c) => c.t('Keep looking later', 'Sonra yine bakarsın'), resolve: () => '' }],
+    choices: [...Array.from({ length: SLOTS }, (_, i) => jobChoice(i)), {
+        id: 'none',
+        label: (c) => c.t('Keep looking later', 'Sonra yine bakarsın'),
+        // a line, so a year whose only event was the listings still has something in the story (round 5: the
+        // yearly nudge for the jobless opens this board now, not the old salary-less listings)
+        resolve: (c) =>
+          c.vars.job0 ? c.t('You closed the listings. Maybe next week.', 'İlanları kapattın. Belki haftaya.') : c.t('Nothing for you this week. You will look again.', 'Bu hafta sana uygun bir ilan yok. Yine bakacaksın.'),
+      }],
   },
 ];

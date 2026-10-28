@@ -1,6 +1,7 @@
 import type { Ctx, EventDef } from '../types';
 import { atParents, inTr, settled } from './events-flavour';
 import { single, wth } from './util';
+import { aliveKin } from './kin';
 import {
   Kw,
   alive,
@@ -244,7 +245,9 @@ export const youngAdultEvents: EventDef[] = [
     text: tt('You have had it for three weeks. It was the one thing you were responsible for.', 'Üç haftadır sende. Sorumlu olduğun tek şey oydu.'),
     choices: [
       opt('research', ['Research plant care for hours', 'Saatlerce bitki bakımı araştır'], (c) =>
-        out(c, { sma: 2, hap: 4 }, 'You moved it to the window, stopped drowning it and spoke to it gently. It grew a new leaf. You told your mum.', 'Pencereye taşıdın, boğmayı bıraktın ve onunla yumuşak bir sesle konuştun. Yeni bir yaprak çıkardı. Annene anlattın.'),
+        aliveKin(c, 'mother')
+          ? out(c, { sma: 2, hap: 4 }, 'You moved it to the window, stopped drowning it and spoke to it gently. It grew a new leaf. You told your mum.', 'Pencereye taşıdın, boğmayı bıraktın ve onunla yumuşak bir sesle konuştun. Yeni bir yaprak çıkardı. Annene anlattın.')
+          : out(c, { sma: 2, hap: 4 }, 'You moved it to the window, stopped drowning it and spoke to it gently. It grew a new leaf. You sent a photo of it to everyone you know.', 'Pencereye taşıdın, boğmayı bıraktın ve onunla yumuşak bir sesle konuştun. Yeni bir yaprak çıkardı. Fotoğrafını tanıdığın herkese attın.'),
         { tone: 'good' },
       ),
       opt('replace', ['Secretly replace it with an identical one', 'Gizlice aynısıyla değiştir'], (c) =>
@@ -276,7 +279,7 @@ export const youngAdultEvents: EventDef[] = [
       opt('parent', ['Call a parent', 'Annene ya da babana telefon et'], (c) => {
         allParents(c, 3);
         return out(c, { hap: 2 }, 'Your parent did it over the phone in eight minutes and then talked about pensions for forty.', 'Ailenden biri telefonda sekiz dakikada halletti, sonra kırk dakika emeklilikten bahsetti.');
-      }),
+      }, { hidden: (c) => !aliveKin(c, 'parents') }),
       opt('pay', ['Pay someone to do it', 'Birine para verip yaptır'], (c) =>
         out(c, { hap: 3, usd: -150 }, 'An accountant did it in five minutes while eating a sandwich. Worth every penny.', 'Bir muhasebeci sandviç yerken beş dakikada halletti. Her kuruşuna değdi.'),
       ),
@@ -758,7 +761,7 @@ export const youngAdultEvents: EventDef[] = [
         { badge: 'Risky' },
       ),
       opt('half', ['Share a half portion with a friend', 'Bir arkadaşınla yarım porsiyon paylaş'], (c) =>
-        out(c, { hap: 3 }, 'Half the risk, all the joy. You both sat on the curb and agreed this was what being young was for.', 'Yarı risk, tam keyif. Kaldırıma oturdunuz ve gençliğin tam da bunun için olduğunda anlaştınız.'),
+        out(c, { hap: 3 }, 'Half the risk, all the joy. You both sat on the curb and agreed this was what being young was for.', 'Yarı risk, tam keyif. Kaldırıma oturdunuz ve gençliğin tam da bunun için olduğu konusunda anlaştınız.'),
       ),
       opt('home', ['Go home and eat toast', 'Eve git, kızarmış ekmek ye'], (c) =>
         out(c, { hea: 1 }, 'You ate toast at home. Your stomach thanked you. Your soul did not.', 'Evde kızarmış ekmek yedin. Miden teşekkür etti. Ruhun etmedi.'),
@@ -821,7 +824,9 @@ export const youngAdultEvents: EventDef[] = [
     text: tt('It is shining at you under the bathroom light.', 'Banyo ışığının altında sana parlıyor.'),
     choices: [
       opt('pull', ['Pull it out', 'Kopar'], (c) =>
-        out(c, { hap: 1 }, 'You pulled it out. Your grandmother says two will come to its funeral. You do not believe her. Yet.', 'Kopardın. Büyükannen cenazesine iki tane geleceğini söylüyor. Henüz inanmıyorsun.'),
+        aliveKin(c, 'grandparent', 'female')
+          ? out(c, { hap: 1 }, 'You pulled it out. Your grandmother says two will come to its funeral. You do not believe her. Yet.', 'Kopardın. Ninen cenazesine iki tane geleceğini söylüyor. Henüz inanmıyorsun.')
+          : out(c, { hap: 1 }, 'You pulled it out. An old saying has it that two will come to its funeral. You do not believe it. Yet.', 'Kopardın. Eskiler cenazesine iki tane gelir der. Henüz inanmıyorsun.'),
       ),
       opt('name', ['Name it', 'Ona bir isim ver'], (c) =>
         out(c, { hap: 3 }, 'You named it Gerald. Gerald is distinguished. Gerald stays.', 'Adını Nuri koydun. Nuri çok ağırbaşlı. Nuri kalıyor.'),

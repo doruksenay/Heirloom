@@ -133,12 +133,26 @@ describe('homes', () => {
     expect(s.player.home.owned).toBe(false);
     expect(s.player.money).toBe(1000 + Math.round(price * 0.95));
 
-    // a mortgage leaves you in debt, never more than the price plus interest
+    // a mortgage (round 5): the savings go in, the bank lends the rest as a loan with a term and yearly instalments,
+    // never more than the price plus interest; money itself does not go below zero
     s.player.money = Math.round(price * 0.25);
     const before = s.player.money;
     moveTo(c, 'flat', 'buy');
-    expect(s.player.money).toBeLessThan(0);
-    expect(before - s.player.money).toBeLessThanOrEqual(Math.round(price * 1.25));
+    expect(s.player.money).toBe(0);
+    const loan = s.player.home.loan!;
+    expect(loan.principal).toBe(price - before);
+    expect(loan.balance).toBeLessThanOrEqual(Math.round(price * 1.25));
+    expect(loan.payment * loan.yearsLeft).toBeGreaterThanOrEqual(loan.balance);
+    // a year of the budget pays one instalment off the loan
+    const owed = loan.balance;
+    s.player.money = 50_000;
+    ageUp(s);
+    if (s.pending) s.pending = null;
+    expect(s.player.home.loan!.balance).toBe(owed - loan.payment);
+    expect(s.player.home.loan!.yearsLeft).toBe(loan.term - 1);
+    // selling pays the loan off from the sale
+    moveTo(c, 'flat', 'buy'); // owner: the old flat is sold, its loan repaid
+    expect(s.player.home.owned).toBe(true);
   });
 
   it('plays home-heavy lives without money spikes from moving', { timeout: 120_000 }, () => {

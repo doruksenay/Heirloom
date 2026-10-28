@@ -28,6 +28,7 @@ import {
   ys,
   ysPeek,
 } from './young-kit';
+import { aliveKin } from './kin';
 
 // Round 4: school life, 6–17. Random school events, plus school interactions the player starts from the
 // Activities screen (talk to a teacher, sit with a classmate, deal with a bully, join a club, study, skip).
@@ -372,7 +373,9 @@ export const youngSchoolEvents: EventDef[] = [
         out(c, { hap: 4 }, 'You crossed your eyes at the exact moment. The photo is now a family legend.', 'Tam o anda gözlerini şaşı yaptın. Fotoğraf artık bir aile efsanesi.'),
       ),
       opt('blink', ['Try very hard not to blink', 'Gözünü kırpmamak için çok uğraş'], (c) =>
-        out(c, { hap: 1 }, 'You did not blink. You looked like you had seen a ghost. Your mother loves it anyway.', 'Gözünü kırpmadın. Hayalet görmüş gibi çıktın. Annen yine de bayılıyor.'),
+        aliveKin(c, 'mother')
+          ? out(c, { hap: 1 }, 'You did not blink. You looked like you had seen a ghost. Your mother loves it anyway.', 'Gözünü kırpmadın. Hayalet görmüş gibi çıktın. Annen yine de bayılıyor.')
+          : out(c, { hap: 1 }, 'You did not blink. You looked like you had seen a ghost. The family loves it anyway.', 'Gözünü kırpmadın. Hayalet görmüş gibi çıktın. Ailen yine de bayılıyor.'),
       ),
     ],
   },

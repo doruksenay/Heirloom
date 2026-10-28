@@ -1,9 +1,9 @@
 import type { ActivityDef, Ctx } from '../types';
-import type { GameState, Player, StatKey } from '../../engine/types';
+import type { GameState, Mortgage, Player, StatKey } from '../../engine/types';
 import { getCountry } from '../../engine/world';
 import { salaryFor } from '../../engine/careers';
 import { nameClashesWithFamily } from '../../engine/context';
-import { yearlyIncome } from '../../engine/economy';
+import { newMortgage, yearlyIncome } from '../../engine/economy';
 import { FURNITURE, STYLE_SETS, currentTier, setProgress, homeTier, houseState, type HomeTier, type HomeTierDef } from '../../engine/home';
 import {
   MAX_PETS,
@@ -106,19 +106,28 @@ export function moveTo(c: Ctx, tier: HomeTier, mode: 'rent' | 'buy'): string {
   const parts: string[] = [];
   if (p.home.owned) {
     const sale = Math.round(p.home.value * 0.95);
-    c.h.money(sale);
-    parts.push(c.t(`You sold your old place for ${c.h.fmt(sale)}.`, `Eski evini ${c.h.fmt(sale)} karşılığında sattın.`));
+    const owed = p.home.loan?.balance ?? 0;
+    c.h.money(sale - owed);
+    parts.push(
+      owed > 0
+        ? c.t(`You sold your old place for ${c.h.fmt(sale)} and paid off the ${c.h.fmt(owed)} left on its mortgage.`, `Eski evini ${c.h.fmt(sale)} karşılığında sattın; kalan ${c.h.fmt(owed)} kredi borcunu da kapattın.`)
+        : c.t(`You sold your old place for ${c.h.fmt(sale)}.`, `Eski evini ${c.h.fmt(sale)} karşılığında sattın.`),
+    );
   }
   let price = 0;
+  let mortgage: Mortgage | undefined;
   if (mode === 'buy') {
     price = tierPrice(c, def);
-    const loan = Math.max(0, price - Math.max(0, p.money));
-    const interest = Math.round(loan * 0.25);
-    c.h.money(-(price + interest));
+    // savings go in first; the bank lends the rest as a real loan, paid in yearly instalments (review 5 §3.7)
+    const down = Math.max(0, Math.min(p.money, price));
+    const loan = price - down;
+    c.h.money(-down);
+    if (loan > 0) mortgage = newMortgage(loan, c.age);
     c.h.achieve('homeowner');
   }
   const furniture = def.garden ? p.home.furniture : p.home.furniture.filter((f) => !FURNITURE.some((x) => x.id === f && x.slot === 'garden'));
   p.home = { name: homeTitle(tier, p.city, c.lang), value: price, owned: mode === 'buy', furniture };
+  if (mortgage) p.home.loan = mortgage;
   const st = houseState(p);
   st.tier = tier;
   st.movedYear = c.s.year;
@@ -134,15 +143,18 @@ export function moveTo(c: Ctx, tier: HomeTier, mode: 'rent' | 'buy'): string {
   const where = tierWord(c, tier);
   const main =
     mode === 'buy'
-      ? price > 0 && p.money < 0
-        ? c.t(`You bought the ${where} with a mortgage. The keys are yours; the bank keeps a spare.`, `${cap1(TIER_ACC[tier])} krediyle satın aldın. Anahtarlar sende, yedeği bankada.`)
+      ? mortgage
+        ? c.t(
+            `You bought the ${where} with a mortgage: ${c.h.fmt(mortgage.payment)} a year for ${mortgage.term} years. The keys are yours; the bank keeps a spare.`,
+            `${cap1(TIER_ACC[tier])} krediyle satın aldın: ${mortgage.term} yıl boyunca yılda ${c.h.fmt(mortgage.payment)} taksit. Anahtarlar sende, yedeği bankada.`,
+          )
         : c.t(`You bought the ${where} outright for ${c.h.fmt(price)}. No landlord, ever again.`, `${cap1(TIER_ACC[tier])} peşin parayla aldın, tam ${c.h.fmt(price)}. Artık ev sahibi derdi yok.`)
       : rentLine(c, where);
   return [...parts, main].join(' ');
 }
 
 const RENT_LINES: [string, string][] = [
-  ["You signed the lease on the {w}. Two months' deposit and a landlord called {L}.", '{W} için kira sözleşmesini imzaladın. İki kiralık depozito ve {L} adında bir ev sahibi.'],
+  ["You signed the lease on the {w}. Two months' deposit and a landlord called {L}.", '{W} için kira sözleşmesini imzaladın. İki kira tutarında depozito ve {L} adında bir ev sahibi.'],
   ['You rented the {w}. The previous tenant left a fern and a note: "water it or else".', '{W} kiraladın. Önceki kiracı bir eğrelti otu ve bir not bırakmış: "Sula, yoksa..."'],
   ['You got the keys to the {w}. Three keys, two doors, nobody knows what the third one opens.', '{W} anahtarlarını aldın. Üç anahtar, iki kapı; üçüncüsünün neyi açtığını kimse bilmiyor.'],
   ['You moved into the {w}. The landlord lives next door and already knows your schedule.', '{W} taşındın. Ev sahibi hemen yan tarafta oturuyor ve programını şimdiden ezberledi.'],
@@ -208,31 +220,61 @@ const cap1 = (s: string) => (s ? (s[0] === 'i' ? 'İ' : s[0].toLocaleUpperCase('
 
 // ---------------------------------------------------------------- yearly
 
+/**
+ * A pet's death, by kind. Picked through the dynasty's line memory (pickIndex), so no line comes back in one life
+ * or the next while another is left (review 5 §3.8: Mango and Mango II died with the same sentence).
+ * {n} the name, {a} the age in years (never followed by a suffix).
+ */
 const DEATH_LINES: Record<PetKind, [string, string][]> = {
   dog: [
     ['{n} fell asleep by the door, waiting for you as always, and did not wake up. The lead still hangs on its hook.', '{n} her zamanki gibi kapının önünde seni beklerken uyudu ve bir daha uyanmadı. Tasması hâlâ askıda duruyor.'],
     ['{n} died at {a}, an old dog with a grey muzzle and a full heart. The house is too quiet now.', '{n}, ağarmış burnu ve kocaman kalbiyle {a} yaşında öldü. Ev şimdi fazla sessiz.'],
+    ['{n} went for one last slow walk around the block, came home, lay down on the rug and was gone by morning.', '{n} mahallede son bir ağır yürüyüş yaptı, eve döndü, halının üstüne uzandı. Sabaha gitmişti.'],
+    ['{n} died in the night. In the morning you still put the bowl down before you remembered.', '{n} gece öldü. Sabah, hatırlamadan önce mama kabını yine yere koydun.'],
+    ['The vet said {n} was simply tired, after {a} years of guarding the house from the postman. You buried the favourite ball too.', 'Veteriner, {n} için "Sadece yoruldu" dedi; {a} yıl boyunca evi postacıya karşı korumuştu. En sevdiği topu da yanına gömdün.'],
   ],
   cat: [
     ['{n} passed away in the sun spot on the windowsill. {a} years of ignoring you lovingly.', '{n} pencere kenarındaki güneşli köşesinde gözlerini yumdu. Tam {a} yıl boyunca seni sevgiyle görmezden geldi.'],
     ['{n} curled up on your coat one last time and slipped away. You have not moved the coat.', '{n} son bir kez montunun üstüne kıvrıldı ve sessizce gitti. Montu hâlâ yerinden kaldırmadın.'],
+    ['{n} died the way cats do everything: quietly, on the best chair, without asking anyone.', '{n} kedilerin her şeyi yaptığı gibi öldü: sessizce, evin en iyi koltuğunda ve kimseye sormadan.'],
+    ['{n} stopped coming to the kitchen at dinner time, and then one night was gone. The house still listens for the bell on the collar.', '{n} akşam yemeğinde mutfağa gelmez oldu, sonra bir gece gitti. Ev hâlâ tasmadaki zilin sesini bekliyor.'],
+    ['{n} died at {a}, purring, with a paw on your hand. You sat there until the tea went cold.', '{n}, patisi elinin üstünde, mırlayarak {a} yaşında öldü. Çay soğuyana kadar orada oturdun.'],
   ],
   bird: [
     ['{n} sang one last song this morning, then went quiet. You leave the cage door open out of habit.', '{n} bu sabah son bir şarkı söyledi, sonra sustu. Kafesin kapısını alışkanlıktan açık bırakıyorsun.'],
+    ['{n} was found at the bottom of the cage, feathers neat, as if ready to go somewhere. The kitchen is too quiet now.', '{n} kafesin dibinde bulundu; tüyleri derli topluydu, bir yere gitmeye hazırlanmış gibi. Mutfak artık fazla sessiz.'],
+    ['{n} died at {a}. You still whistle the tune it learned, and nobody whistles back.', '{n}, {a} yaşında öldü. Ona öğrettiğin melodiyi hâlâ ıslıkla çalıyorsun ama artık karşılık veren yok.'],
   ],
   fish: [
-    ['{n} the goldfish was found floating peacefully. {a} years is a long life in a bowl.', 'Japon balığın {n} bir sabah fanusunda kıpırtısız bulundu. Bir fanus için {a} yıl uzun bir ömür.'],
+    ['{n} the goldfish was found floating peacefully. {a} years is a long life in a bowl.', 'Japon balığın {n} bir sabah fanusunda kıpırtısız bulundu. Fanusta {a} yıl, bir Japon balığı için uzun bir ömür.'],
+    ['{n} stopped swimming one quiet afternoon. You gave the little castle away; it looked too empty.', '{n} sakin bir öğleden sonra yüzmeyi bıraktı. Fanustaki minik şatoyu başkasına verdin; fazla boş görünüyordu.'],
+    ['{n} the goldfish died at {a}. The funeral was short and sincere, and held over the bathroom.', 'Japon balığın {n}, {a} yaşında öldü. Cenaze kısa ama içtendi ve banyoda yapıldı.'],
   ],
   rabbit: [
     ['{n} curled up in the hay one night and hopped off this world. Someone left a carrot by the hutch.', '{n} bir gece samanların arasında kıvrıldı ve sessizce bu dünyadan göçtü. Biri kafesin yanına bir havuç bırakmış.'],
+    ['{n} died at {a}, after a long life of chewing things that were not food. You left the last chewed cable where it was.', '{n}, yemek olmayan her şeyi kemirerek geçen uzun bir ömrün ardından {a} yaşında öldü. Son kemirdiği kabloyu yerinde bıraktın.'],
+    ['{n} lay stretched out in the garden sun one afternoon and did not get up again. The grass there grows thicker now.', '{n} bir öğleden sonra bahçedeki güneşte boylu boyunca uzandı ve bir daha kalkmadı. Orada çimen artık daha gür bitiyor.'],
+    ['{n} was gone one morning, ears folded, nose still. You kept the little bowl on the shelf.', '{n} bir sabah gitmişti; kulakları katlanmış, burnu kıpırtısız. Küçük kabını rafta saklıyorsun.'],
   ],
   turtle: [
     ['{n} the tortoise died at {a}. It outlived two sofas, three neighbors and most of your opinions.', 'Kaplumbağan {n}, {a} yaşında öldü. İki kanepe, üç komşu ve senin birçok fikrin eskidi; o hep yerindeydi.'],
+    ['{n} went into the shell one autumn evening and did not come out in spring. It had been with the family {a} years.', '{n} bir sonbahar akşamı kabuğuna çekildi ve baharda çıkmadı. Tam {a} yıl ailenin bir parçasıydı.'],
+    ['{n} the tortoise died slowly and with great dignity, as it had done everything else.', 'Kaplumbağan {n}, her şeyi yaptığı gibi öldü: yavaşça ve büyük bir ağırbaşlılıkla.'],
   ],
   horse: [
     ['{n} lay down in the field at sunset and did not get up. You stayed until dark.', '{n} gün batımında tarlaya uzandı ve bir daha kalkmadı. Hava kararana kadar yanından ayrılmadın.'],
+    ['{n} died in the stable at {a}, with the door open to the field. The whole yard came to say goodbye.', '{n}, kapısı tarlaya açık ahırda {a} yaşında öldü. Bütün çiftlik vedaya geldi.'],
+    ['{n} went out to the far fence one last time, looked at the hills for a long while, then lay down for good.', '{n} son bir kez uzaktaki çite kadar yürüdü, tepelere uzun uzun baktı, sonra bir daha kalkmamak üzere uzandı.'],
   ],
 };
+
+/** A pet that drifted away from you (neglect). One of these per sulk, through the line memory. {n} the name. */
+const SULK_LINES: [string, string][] = [
+  ['{n} barely looks up when you come home these days.', '{n} bu aralar eve geldiğinde başını bile kaldırmıyor.'],
+  ['{n} seems to have forgotten who does the feeding around here.', '{n}, bu evde kimin mama verdiğini unutmuş gibi.'],
+  ['You and {n} live like two strangers who happen to share a flat.', '{n} ile aynı evi paylaşan iki yabancı gibisiniz.'],
+  ['{n} looks at you the way you look at an old acquaintance whose name you have forgotten.', '{n} sana, adını unuttuğun eski bir tanıdığa bakar gibi bakıyor.'],
+];
 
 function petsOnYear(c: Ctx): void {
   const { p, s } = c;
@@ -243,7 +285,7 @@ function petsOnYear(c: Ctx): void {
     const age = petAge(pet, s.year);
     if (age >= pet.lifespan) {
       const lines = DEATH_LINES[pet.kind];
-      const [en, tr] = lines[c.rng.int(0, lines.length - 1)];
+      const [en, tr] = lines[pickIndex(c, `pet_death.${pet.kind}`, lines.length, lines.length - 1)];
       const older = pet.birthYear < p.birthYear;
       petDies(p, pet, s.year, 'age');
       c.h.stat('happiness', -(4 + Math.round(pet.closeness / 10)));
@@ -264,7 +306,13 @@ function petsOnYear(c: Ctx): void {
       pet.sulked = true;
       const n = displayName(pet, 'en');
       const nt = displayName(pet, 'tr');
-      c.h.log(c.t(`${n} barely looks up when you come home these days.`, `${nt} bu aralar eve geldiğinde başını bile kaldırmıyor.`), 'bad');
+      // said at most once every eight years (review 5 §3.8: the same line five times in one Daily life)
+      const last = p.flags.pet_sulk;
+      if (last === undefined || s.year - last >= 8) {
+        p.flags.pet_sulk = s.year;
+        const [en, tr] = SULK_LINES[pickIndex(c, 'pet_sulk', SULK_LINES.length, SULK_LINES.length - 1)];
+        c.h.log(c.t(en.split('{n}').join(n), tr.split('{n}').join(nt)), 'bad');
+      }
     }
   }
 }
@@ -527,14 +575,16 @@ const TRICK_FAIL: [string, string][] = [
 export function listingOptions(c: Ctx): { tier: HomeTier; mode: 'rent' | 'buy'; loan: boolean }[] {
   const p = c.p;
   const now = currentTier(p);
-  const equity = p.home.owned ? Math.round(p.home.value * 0.95) : 0;
+  const equity = p.home.owned ? Math.round(p.home.value * 0.95) - (p.home.loan?.balance ?? 0) : 0;
   const funds = p.money + equity;
   const income = yearlyIncome(p, salary(c));
   const out: { tier: HomeTier; mode: 'rent' | 'buy'; loan: boolean }[] = [];
   for (const t of ['room', 'studio', 'flat', 'farm', 'house', 'villa'] as HomeTier[]) {
     const def = homeTier(t)!;
     const rent = tierRent(c, def);
-    if ((t !== now || p.home.owned) && (def.rent <= 0 || income >= rent * 1.6 || p.money >= rent * 3)) out.push({ tier: t, mode: 'rent', loan: false });
+    // an owner is not offered a rental here: renting would sell the home behind the player's back (review 5 §3.7);
+    // "Sell your home" asks first
+    if (!p.home.owned && t !== now && (def.rent <= 0 || income >= rent * 1.6 || p.money >= rent * 3)) out.push({ tier: t, mode: 'rent', loan: false });
     if (def.price != null && !(p.home.owned && t === now)) {
       const price = tierPrice(c, def);
       if (funds >= price) out.push({ tier: t, mode: 'buy', loan: false });

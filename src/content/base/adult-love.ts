@@ -397,7 +397,7 @@ export const loveEvents: EventDef[] = [
       ch('help', 'Hire help and keep working', 'Yardımcı tut, çalışmaya devam et', (c) => {
         c.h.money(-wage(c, 3000));
         c.h.closeness(pid(c), 4);
-        return c.t(`A kind nurse came every day. ${nmv(c)} recovered, and sometimes mentions the nurse more fondly than you would like.`, `Her gün nazik bir hemşire geldi. ${nmv(c)} iyileşti ve bazen hemşireden senin istediğinden daha sevgiyle bahsediyor.`);
+        return c.t(`A kind nurse came every day. ${nmv(c)} recovered, and sometimes mentions the nurse more fondly than you would like.`, `Her gün nazik bir hemşire geldi. ${nmv(c)} iyileşti ve hemşireden bazen senin hoşuna gitmeyecek kadar sevgiyle bahsediyor.`);
       }),
       ch('family', 'Rally the whole family', 'Bütün aileyi seferber et', (c) => {
         c.h.closeness(pid(c), 8);
@@ -751,11 +751,11 @@ export const loveEvents: EventDef[] = [
       ch('honest', 'Tell the honest truth', 'Dürüstçe anlat', (c) => {
         c.h.closeness(pid(c), 6);
         c.h.stat('happiness', 4);
-        return c.t('"We kept choosing each other, even on the bad days. Especially on those." The quote was framed by three couples in town.', '"Kötü günlerde bile birbirimizi seçmeye devam ettik. Özellikle o günlerde." Bu cümleyi kasabada üç çift çerçeveletti.');
+        return c.t('"We kept choosing each other, even on the bad days. Especially on those." The quote was framed by three couples in the neighbourhood.', '"Kötü günlerde bile birbirimizi seçmeye devam ettik. Özellikle o günlerde." Bu cümleyi mahallede üç çift çerçeveletti.');
       }, { tone: 'good' }),
       ch('joke', 'Make a joke of it', 'Şakaya vur', (c) => {
         c.h.stat('happiness', 3);
-        return c.t('"Separate blankets and one remote control." It was the headline. Everyone in town quoted it for a year.', '"Ayrı battaniye, tek kumanda." Manşet bu oldu. Bütün kasaba bir yıl boyunca bunu tekrarladı.');
+        return c.t('"Separate blankets and one remote control." It was the headline. The whole neighbourhood quoted it for a year.', '"Ayrı battaniye, tek kumanda." Manşet bu oldu. Bütün mahalle bir yıl boyunca bunu tekrarladı.');
       }),
       ch('let', `Let your partner answer`, 'Cevabı eşine bırak', (c) => {
         c.h.closeness(pid(c), 8);

@@ -6,6 +6,7 @@ import { Avatar } from './Avatar';
 import { Icon } from './icons';
 import { fmtShort } from './money';
 import { T, Tn } from '../i18n/ui';
+import { skinTone } from '../engine/skin';
 
 export type HeirKind = 'child' | 'grandchild' | 'nibling';
 
@@ -74,7 +75,7 @@ export function HeirCardView({ v, s, lang, onPick, selected, cta, label }: { v: 
   const work = v.job ?? (v.age < 6 ? T('Little one') : v.student ? T('In school') : T('No job yet'));
   return (
     <button type="button" class={`heir${selected ? ' on' : ''}${cta ? ' cta' : ''}`} aria-pressed={cta ? undefined : !!selected} aria-label={label} onClick={onPick}>
-      <Avatar id={p.id + p.firstName} gender={p.gender} age={v.age} size={54} label={p.firstName} />
+      <Avatar id={p.id + p.firstName} gender={p.gender} age={v.age} size={54} label={p.firstName} tone={skinTone(s, p)} />
       <div class="heir-body">
         <div class="heir-head">
           <span class="heir-name">{p.firstName}</span>
@@ -97,14 +98,14 @@ export function HeirCardView({ v, s, lang, onPick, selected, cta, label }: { v: 
           )}
           {v.home && (
             <span class="fact" title={T('Home')}>
-              <Icon name="home" size={13} /> {v.homeValue ? <span class="num">{fmtShort(v.homeValue, s.player.countryId, lang)}</span> : T('Home')}
+              <Icon name="home" size={13} /> {v.homeValue ? <span class="num">{T('Home {amount}', { amount: fmtShort(v.homeValue, s.player.countryId, lang) })}</span> : T('Home')}
             </span>
           )}
           {/* the home counts towards the heir's part: when it is worth more than their share there is no cash on top,
               so a bare "$0" next to a valuable home is left out rather than shown as if they inherit nothing */}
           {v.money !== undefined && (v.money > 0 || !v.home) && (
             <span class="fact num" title={T('Cash')}>
-              {v.home ? T('+{amount} cash', { amount: fmtShort(v.money, s.player.countryId, lang) }) : fmtShort(v.money, s.player.countryId, lang)}
+              {v.home ? T('+{amount} cash', { amount: fmtShort(v.money, s.player.countryId, lang) }) : T('{amount} cash', { amount: fmtShort(v.money, s.player.countryId, lang) })}
             </span>
           )}
           {v.heirlooms > 0 && (

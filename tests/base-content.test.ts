@@ -286,7 +286,7 @@ import { employee, officeJob, ownsWork, workKind } from '../src/content/base/uti
 import { workPool } from '../src/content/base/work-lines';
 import { entries as hlEntries, history as hlHistory, nextVariant, parseStory, ringWeddingLine } from '../src/content/base/heirloom-words';
 import { HEIRLOOM_SCENARIOS } from '../src/content/base/events-heirloom';
-import { BASE_JOBS } from '../src/engine/careers';
+import { BASE_JOBS, levelMultiplier } from '../src/engine/careers';
 import { interact } from '../src/engine/interactions';
 import { ADVICE } from '../src/content/base/people-lines';
 
@@ -382,7 +382,7 @@ describe('work fits the job (playtest 3, problem 1)', () => {
           hh.setup!(cc);
           const offered = BASE_JOBS.find((j) => j.id === cc.vars.job)!;
           expect(offered.field, `${job.id} -> ${offered.id}`).toBe(job.field);
-          expect(offered.baseSalary * 1.32, `${job.id} L${level} -> ${offered.id}`).toBeGreaterThanOrEqual(job.baseSalary * (1 + 0.32 * level) * 1.1);
+          expect(offered.baseSalary * levelMultiplier(1), `${job.id} L${level} -> ${offered.id}`).toBeGreaterThanOrEqual(job.baseSalary * levelMultiplier(level) * 1.1 - 1); // round 5 pay steps
         }
       }
     }

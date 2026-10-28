@@ -39,7 +39,7 @@ export const elderMoreEvents: EventDef[] = [
       c.vars.pid = c.rng.pick(kidsAged(c, 30, 80)).person.id;
     },
     title: (c) => c.t(`${nmv(c)} thinks it is time you stopped driving.`, `${nmv(c)} artık araba kullanmayı bırakman gerektiğini düşünüyor.`),
-    text: T('There was a small incident with a bollard. The bollard is fine. Mostly.', 'Bir babayla küçük bir olay yaşandı. Babanın bir şeyi yok. Neredeyse.'),
+    text: T('There was a small incident with a bollard. The bollard is fine. Mostly.', 'Bir bariyer direğine sürttün. Direğin bir şeyi yok. Neredeyse.'),
     choices: [
       ch('keys', 'Hand over the keys', 'Anahtarları teslim et', (c) => {
         c.h.closeness(String(c.vars.pid), 6);

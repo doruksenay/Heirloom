@@ -88,7 +88,7 @@ export const PET_KINDS: PetKindDef[] = [
   {
     kind: 'fish',
     name: 'goldfish',
-    nameTr: 'japon balığı',
+    nameTr: 'Japon balığı',
     life: [2, 5],
     fx: { happiness: 1 },
     price: 50,

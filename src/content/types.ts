@@ -142,6 +142,14 @@ export interface ContentPack {
   jobs?: JobDef[];
   /** Runs once per year for every enabled pack, after salaries and before random events. */
   onYear?: (c: Ctx) => void;
+  /**
+   * The pack's own life-stage moment this year (Türkiye: LGS, YKS and the tercih, askerlik, the wedding), opened
+   * like the engine's scheduled events, so it is guaranteed rather than left to the random draw. Gets what the
+   * engine has scheduled so far (e.g. 'base.after_highschool') and returns the id to open: the same one to keep it,
+   * another to replace it. Runs after school and before deferred events, court dates and nudges.
+   * No rng calls that depend on the language.
+   */
+  schedule?: (c: Ctx, current: string | null) => string | null;
   /** Extra stat tiles on the Life screen (e.g. fans and fame). */
   lifeTiles?: (s: GameState) => { label: string; value: string }[];
   /** End-of-life ribbons added by this pack; checked before the base ribbons. */

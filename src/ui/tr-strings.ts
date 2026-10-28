@@ -52,4 +52,15 @@ export const TR_UI4: Record<string, string> = {
   Cash: 'Nakit',
   '+{amount} cash': '+{amount} nakit',
   Buy: 'Satın al',
+  // round 5 (consistency): heir card labels, family tab kinship, mortgage, activities
+  'Home {amount}': 'Ev {amount}',
+  '{amount} cash': '{amount} nakit',
+  Mortgage: 'Konut kredisi',
+  '{n} year to go': '{n} yıl kaldı',
+  '{n} years to go': '{n} yıl kaldı',
+  'Paid off': 'Ödenen',
+  'Left to pay': 'Kalan borç',
+  'Yearly payment': 'Yıllık taksit',
+  'Bonus: a short ad gives you 2 more activities this year.': 'Bonus: kısa bir reklam izlersen bu yıl 2 aktivite hakkı daha kazanırsın.',
+  Watch: 'İzle',
 };

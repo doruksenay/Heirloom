@@ -57,27 +57,6 @@ export function Activities({ app }: { app: AppApi }) {
           ))}
         </section>
       )}
-      {!s.player.bonusActions && !hasPlus(s) && !s.pending && (
-        <button
-          type="button"
-          class="item"
-          style={{ border: '1px dashed var(--accent)' }}
-          onClick={async () => {
-            if (await app.watchAd('extra_activities')) {
-              app.act((g) => grantBonusActions(g, AD_REWARDS.extra_activities.amount));
-              app.toast(T('2 extra activities unlocked for this year.'));
-            }
-          }}
-        >
-          <div class="icon-box">
-            <Icon name="bolt" />
-          </div>
-          <div class="grow">
-            <div class="item-title">{T('Watch an ad')}</div>
-            <div class="item-sub">{app.lang === 'tr' ? AD_REWARDS.extra_activities.labelTr : AD_REWARDS.extra_activities.label}</div>
-          </div>
-        </button>
-      )}
       {s.player.jailYears > 0 && <div class="banner">{T('You are in prison. Most activities are off-limits.')}</div>}
       <GroupedList
         groups={GROUPS.map((g) => ({
@@ -100,6 +79,24 @@ export function Activities({ app }: { app: AppApi }) {
           </button>
         )}
       />
+      {/* an optional bonus under the list, never a gate above it (review 5 §3.11) */}
+      {!s.player.bonusActions && !hasPlus(s) && !s.pending && s.player.jailYears === 0 && (
+        <div class="row between muted" style={{ fontSize: '13px', gap: '10px', padding: '2px 4px' }}>
+          <span class="grow">{T('Bonus: a short ad gives you 2 more activities this year.')}</span>
+          <button
+            type="button"
+            class="btn small ghost"
+            onClick={async () => {
+              if (await app.watchAd('extra_activities')) {
+                app.act((g) => grantBonusActions(g, AD_REWARDS.extra_activities.amount));
+                app.toast(T('2 extra activities unlocked for this year.'));
+              }
+            }}
+          >
+            <Icon name="bolt" size={14} /> {T('Watch')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

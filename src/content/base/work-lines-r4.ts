@@ -28,7 +28,7 @@ export const PART_TIME: Pair[] = [
   ['Your manager trusted you with the keys for a day. You checked the locks four times.', 'Müdürün bir günlüğüne anahtarları sana emanet etti. Kilitleri dört kez kontrol ettin.'],
   ['You saved every coin this month. You are saving for something big and you are telling no one what.', 'Bu ay her kuruşu biriktirdin. Büyük bir şey için biriktiriyorsun ve ne olduğunu kimseye söylemiyorsun.'],
   ['You fell asleep in first period after a late shift. The teacher let you, this once.', 'Geç bir vardiyadan sonra ilk derste uyuyakaldın. Öğretmen bu seferlik göz yumdu.'],
-  ['Your parents asked how work was. You said "fine" and then talked for forty minutes.', 'Annenle baban işin nasıl gittiğini sordu. "İyi" dedin, sonra kırk dakika anlattın.'],
+  ['Someone at dinner asked how work was. You said "fine" and then talked for forty minutes.', 'Akşam yemeğinde biri işin nasıl gittiğini sordu. "İyi" dedin, sonra kırk dakika anlattın.'],
   ['You bought your little cousin a present with your own money. You have never felt so grown up.', 'Kendi paranla küçük kuzenine bir hediye aldın. Kendini hiç bu kadar büyümüş hissetmemiştin.'],
   ['An older colleague showed you a trick that saves ten minutes a shift. You will use it for the rest of your life.', 'Kıdemli bir çalışan sana vardiya başına on dakika kazandıran bir püf noktası gösterdi. Ömür boyu kullanacaksın.'],
   ['You worked the busiest Saturday of the year and nobody shouted at you once. A small miracle.', 'Yılın en yoğun cumartesisinde çalıştın ve kimse sana bir kez bile bağırmadı. Küçük bir mucize.'],
@@ -150,7 +150,7 @@ export const JOB_R4: Record<string, Pair[]> = {
     ['You found a guest\'s lost passport in a flowerpot an hour before their flight.', 'Bir misafirin kayıp pasaportunu uçuşuna bir saat kala bir saksıda buldun.'],
   ],
   call_center: [
-    ['You said "Is there anything else I can help you with?" four hundred times this week. You said it to your mother on Sunday.', 'Bu hafta dört yüz kez "Size yardımcı olabileceğim başka bir konu var mı?" dedin. Pazar günü annene de söyledin.'],
+    ['You said "Is there anything else I can help you with?" four hundred times this week. On Sunday you said it to the man at the corner shop.', 'Bu hafta dört yüz kez "Size yardımcı olabileceğim başka bir konu var mı?" dedin. Pazar günü bakkala da söyledin.'],
     ['A caller thanked you so warmly that you took your headset off and sat for a minute.', 'Bir arayan öyle içten teşekkür etti ki kulaklığı çıkarıp bir dakika öylece oturdun.'],
   ],
   secretary: [

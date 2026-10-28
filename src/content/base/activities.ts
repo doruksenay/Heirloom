@@ -5,6 +5,7 @@ import { cityName, isCoastal } from '../../engine/places';
 import { MAX_HIRE_AGE, abl, acc, cap, dat, gen, kin, loc, single, wage, wth } from './util';
 import { workKey, workPool } from './work-lines';
 import { JOB_BOARD_EVENT } from './job-board';
+import { addPerformance } from '../../engine/context';
 import { inPrison, say, sayWith, type Pair } from './lines';
 import { ABROAD_CITIES, aNum, isAbroad } from './events-flavour';
 import { gkAge, grandkids } from './events-elder';
@@ -219,7 +220,7 @@ const LIB_GEN: Pair[] = [
   ['You read a poem so good that you copied it out by hand and put it in your wallet.', 'Öyle güzel bir şiir okudun ki elle kopyalayıp cüzdanına koydun.'],
   ['You picked a book purely for its cover. It was terrible. The cover was excellent.', 'Bir kitabı sırf kapağı için seçtin. Berbattı. Kapak harikaydı.'],
   ['You read a book about a long sea voyage and felt seasick in a very stable chair.', 'Uzun bir deniz yolculuğunu anlatan bir kitap okudun ve kıpırdamayan bir sandalyede deniz tuttu.'],
-  ['You joined a book club and were the only one who read past chapter three. You were gracious about it. Mostly.', 'Bir kitap kulübüne katıldın; üçüncü bölümü geçen tek kişi sendin. Bunu büyüklükle karşıladın. Çoğunlukla.'],
+  ['You joined a book club and were the only one who read past chapter three. You were gracious about it. Mostly.', 'Bir kitap kulübüne katıldın; üçüncü bölümü geçen tek kişi sendin. Bunu büyüklükle karşıladın. Sayılır.'],
 ];
 
 /** 65+. */
@@ -318,7 +319,7 @@ const DOC_LITTLE: Pair[] = [
 /** 6–17. */
 const DOC_KID: Pair[] = [
   ['The school doctor said your backpack is far too heavy. It is mostly snacks.', 'Okul doktoru sırt çantanın çok ağır olduğunu söyledi. Çoğu atıştırmalık.'],
-  ['You needed a filling at the dentist. You were brave. Mostly. Then ice cream.', 'Dişçide dolgu yaptırman gerekti. Cesurdun. Çoğunlukla. Sonra dondurma.'],
+  ['You needed a filling at the dentist. You were brave. Mostly. Then ice cream.', 'Dişçide dolgu yaptırman gerekti. Cesurdun. Sayılır. Sonra dondurma.'],
   ['A sports check-up: heart fine, lungs fine, knees "a bit dramatic".', 'Spor muayenesi: kalp sağlam, ciğerler sağlam, dizler "biraz dramatik".'],
   ['The doctor said your bones are tired from growing so fast. That explains the naps.', 'Doktor, kemiklerinin hızlı büyümekten yorulduğunu söyledi. Öğle uykuları bundanmış.'],
   ['You got a booster shot and pretended it did not hurt. Your arm disagreed all day.', 'Rapel aşısı oldun ve acımamış gibi yaptın. Kolun bütün gün aksini söyledi.'],
@@ -459,7 +460,7 @@ const PARTNER_MARRIED: ((x: PartnerX) => Pair)[] = [
 const PARTNER_LONG: ((x: PartnerX) => Pair)[] = [
   ({ n }) => [`You and ${n} did the crossword together. You each pretended the other one got the hard clue.`, `${wth(n)} bulmacayı birlikte çözdünüz. Zor soruyu ikiniz de ötekinin bildiğini iddia ettiniz.`],
   ({ n }) => [`You and ${n} finished each other's sentences all day. Some of them wrongly, on purpose.`, `${wth(n)} bütün gün birbirinizin cümlelerini tamamladınız. Bazılarını bilerek yanlış.`],
-  ({ n }) => [`You and ${n} looked through the wedding album and agreed the hairstyles were a mistake.`, `${wth(n)} düğün albümüne baktınız ve saç modellerinin hata olduğunda anlaştınız.`],
+  ({ n }) => [`You and ${n} looked through the wedding album and agreed the hairstyles were a mistake.`, `${wth(n)} düğün albümüne baktınız ve saç modellerinin tam bir hata olduğu konusunda anlaştınız.`],
   ({ n }) => [`${n} still makes your tea exactly the way you like it. You said thank you and meant every word.`, `${n} çayını hâlâ tam sevdiğin gibi demliyor. Teşekkür ettin; her kelimesini içten söyleyerek.`],
   ({ n }) => [`You and ${n} had the same argument you have been having for decades. It was almost comforting.`, `${wth(n)} yıllardır ettiğiniz tartışmayı yine ettiniz. Neredeyse insanın içini rahatlatıyor.`],
   ({ n }) => [`You and ${n} held hands on a bench and commented on everyone who walked past. A perfect afternoon.`, `${wth(n)} bir bankta el ele oturup önünüzden geçen herkes hakkında yorum yaptınız. Mükemmel bir öğleden sonra.`],
@@ -474,7 +475,7 @@ const PARTNER_LONG: ((x: PartnerX) => Pair)[] = [
   ({ n }) => [`You and ${n} argued about which year you visited that little town. You were both wrong.`, `${wth(n)} o küçük kasabaya hangi yıl gittiğinizi tartıştınız. İkiniz de yanılıyordunuz.`],
   ({ n }) => [`You read the newspaper to ${n} over breakfast. ${n} corrected your pronunciation twice, lovingly.`, `Kahvaltıda ${dat(n)} gazete okudun. ${n} telaffuzunu iki kez, sevgiyle düzeltti.`],
   ({ n }) => [`You and ${n} finished each other's sentences all day, mostly wrongly, which made it funnier.`, `${wth(n)} bütün gün birbirinizin cümlelerini tamamladınız; çoğunu yanlış, bu da daha komikti.`],
-  ({ n }) => [`You and ${n} looked through your wedding photos. You both agreed you have aged better than the guests.`, `${wth(n)} düğün fotoğraflarınıza baktınız. Misafirlerden daha iyi yaşlandığınızda anlaştınız.`],
+  ({ n }) => [`You and ${n} looked through your wedding photos. You both agreed you have aged better than the guests.`, `${wth(n)} düğün fotoğraflarınıza baktınız. Misafirlerden daha iyi yaşlandığınız konusunda anlaştınız.`],
   ({ n }) => [`You and ${n} held hands on a walk without noticing, the way you do now.`, `${wth(n)} yürürken fark etmeden el ele tutuştunuz; artık hep böyle oluyor.`],
   ({ n }) => [`You and ${n} argued gently about which year something happened. Neither of you was right. It was lovely.`, `${wth(n)} bir şeyin hangi yıl olduğunu tatlı tatlı tartıştınız. İkiniz de haklı değildiniz. Çok güzeldi.`],
 ];
@@ -507,7 +508,7 @@ const PARENTS_ADULT: ((x: ParentX) => Pair)[] = [
   ({ k, accK, n }) => [`You called your ${k}. ${n} asked if you are eating properly. Three times.`, `${cap(accK)} aradın. ${n} düzgün yemek yiyip yemediğini üç kere sordu.`],
   ({ k, accK, n }) => [`You called your ${k} just to say hi. ${n} assumed something was wrong.`, `${cap(accK)} sadece selam vermek için aradın. ${n} kötü bir şey olduğunu sandı.`],
   ({ k, accK, n }) => [`A video call with your ${k}. You saw a lot of ${n}'s forehead.`, `${cap(accK)} görüntülü aradın. Ekranda çoğunlukla ${gen(n)} alnını gördün.`],
-  ({ k, accK, n }) => [`You called your ${k}. ${n} gave you a full report on a cousin you have never met.`, `${cap(accK)} aradın. ${n} hiç tanımadığın bir kuzenin hakkında ayrıntılı bir rapor verdi.`],
+  ({ k, accK, n }) => [`You called your ${k}. ${n} gave you a full report on a cousin you have never met.`, `${cap(accK)} aradın. ${n} hiç tanımadığın bir kuzen hakkında ayrıntılı bir rapor verdi.`],
   ({ k, accK }) => [`You called your ${k} for a recipe. You got the recipe, a story and a gentle question about your life choices.`, `Bir tarif için ${accK} aradın. Tarifi aldın; yanında bir hikâye ve hayat tercihlerine dair nazik bir soru da.`],
   ({ k, accK, n }) => [`You called your ${k}. ${n} put you on speaker so the whole kitchen could hear you.`, `${cap(accK)} aradın. ${n} bütün mutfak duysun diye seni hoparlöre aldı.`],
   ({ k, accK }) => [`You called your ${k} on the way home. Twenty minutes went by like two.`, `Eve dönerken ${accK} aradın. Yirmi dakika iki dakika gibi geçti.`],
@@ -684,7 +685,7 @@ const KIDS_GRAND: ((x: KidX) => Pair)[] = [
   ({ n }) => [`Sunday lunch with ${n} and the grandkids: three conversations at once, one gravy boat, total chaos. Perfect.`, `${n} ve torunlarla pazar yemeği: aynı anda üç sohbet, bir sos kabı, tam bir kaos. Mükemmel.`],
   ({ n, g }) => [`You told ${g} a story about ${n} as a child. ${n} begged you to stop. ${g} begged for more.`, `${dat(g)} ${gen(n)} çocukluğundan bir hikâye anlattın. ${n} susman için yalvardı, ${g} devamı için.`],
   ({ n }) => [`${n} asked how you ever managed with small kids. You laughed for a long time.`, `${n} küçük çocuklarla nasıl başa çıktığını sordu. Uzun süre güldün.`],
-  ({ n, g }) => [`You and ${n} watched ${g} play and said nothing for a while. Some moments do not need words.`, `${wth(n)} oynayan ${acc(g)} izlediniz ve bir süre hiçbir şey demediniz. Bazı anların söze ihtiyacı yok.`],
+  ({ n, g }) => [`You and ${n} watched ${g} play and said nothing for a while. Some moments do not need words.`, `${wth(n)} birlikte, oyun oynayan ${acc(g)} izlediniz ve bir süre hiçbir şey demediniz. Bazı anların söze ihtiyacı yok.`],
   ({ g }) => [`${g} drew a picture of the whole family. You are the tallest. It is on your fridge.`, `${g} bütün ailenin resmini çizdi. En uzun sensin. Resim buzdolabının üstünde.`],
   ({ n, g }) => [`${n} rang to say ${g} has your stubborn streak. You took it as a compliment.`, `${n} arayıp ${gen(g)} senin inatçılığını aldığını söyledi. İltifat olarak kabul ettin.`],
   ({ n, g }) => [`You taught ${g} a card game ${n} used to love. Now three generations cheat at it.`, `${dat(g)} vaktiyle ${gen(n)} çok sevdiği bir kâğıt oyununu öğrettin. Artık üç kuşak birden hile yapıyor.`],
@@ -727,7 +728,7 @@ const LOTTERY_LOSE: Pair[] = [
   ['You let a child pick the numbers for luck. The child has no luck.', 'Şans getirsin diye numaraları bir çocuğa seçtirdin. Çocuğun hiç şansı yokmuş.'],
   ['You lost. You had already promised half of it to a cousin, so that conversation will be awkward.', 'Kaybettin. Yarısını bir kuzenine çoktan söz vermiştin; o konuşma tuhaf olacak.'],
   ['Nothing. You wrote a shopping list on the back of the ticket. Small win.', 'Hiçbir şey çıkmadı. Biletin arkasına alışveriş listesi yazdın. Küçük bir zafer.'],
-  ['You lost. Somewhere a stranger won, and you are genuinely happy for them. Mostly.', 'Kaybettin. Bir yerlerde bir yabancı kazandı; onun adına içtenlikle sevindin. Çoğunlukla.'],
+  ['You lost. Somewhere a stranger won, and you are genuinely happy for them. Mostly.', 'Kaybettin. Bir yerlerde bir yabancı kazandı; onun adına içtenlikle sevindin. Eh, aşağı yukarı.'],
 ];
 
 const BABY_NOT_YET: ((n: string) => Pair)[] = [
@@ -1106,8 +1107,9 @@ export const baseActivities: ActivityDef[] = [
       // the parent on the line alternates by year (no rng)
       const r = ps[c.s.year % ps.length];
       const x: ParentX = {
-        k: kin(c, r.person, r.rel.kind),
-        accK: r.rel.kind === 'mother' ? 'anneni' : 'babanı',
+        // a step-parent is named as one (review 5: "Anneni aradın" for a stepmother after the mother died)
+        k: r.rel.step ? c.t(r.rel.kind === 'mother' ? 'stepmom' : 'stepdad', r.rel.kind === 'mother' ? 'üvey annen' : 'üvey baban') : kin(c, r.person, r.rel.kind),
+        accK: (r.rel.step ? 'üvey ' : '') + (r.rel.kind === 'mother' ? 'anneni' : 'babanı'),
         n: r.person.firstName,
         obj: him(r.person),
         age: c.age,
@@ -1202,10 +1204,12 @@ export const baseActivities: ActivityDef[] = [
     available: (c) => !!c.p.jobId,
     run: (c) => {
       c.h.stat('health', -2);
+      // round 5: hard work lifts job performance, which drives the yearly promotion odds (careers.promotionOdds)
+      addPerformance(c.p, 12);
       // hard work earns at most one promotion every four years, and only after two years in the job
       const last = c.p.flags[WORK_HARD_PROMO];
       const ready = c.p.jobYears >= 2 && (last === undefined || c.s.year - last >= 4);
-      if (c.rng.chance(0.12 + c.p.stats.smarts / 600) && ready && c.h.promote()) {
+      if (c.rng.chance(0.06 + c.p.stats.smarts / 1000) && ready && c.h.promote()) {
         c.h.flag(WORK_HARD_PROMO);
         c.h.stat('happiness', 6);
         return c.t(
@@ -1226,6 +1230,8 @@ export const baseActivities: ActivityDef[] = [
     // a professional footballer trains full time: no full-time degree alongside it
     available: (c) => c.p.education === 'highschool' && c.p.school === null && c.p.jailYears === 0 && c.p.jobId !== 'athlete',
     run: (c) => {
+      // in Türkiye university goes through the YKS and the tercih (culture-tr/milestones.ts)
+      if (c.p.countryId === 'tr' && c.s.enabledPacks.includes('culture_tr')) return { event: 'tr.tercih' };
       c.p.school = 'university';
       c.p.schoolYears = 0;
       if (c.p.stats.smarts >= 80) {

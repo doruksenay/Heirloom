@@ -311,7 +311,7 @@ const JOB: Record<string, Pair[]> = {
   artist: [
     ['You painted until the light went, then by lamplight, then by stubbornness.', 'Işık gidene kadar boyadın, sonra lamba ışığında, sonra da inadına.'],
     ['You scraped a whole canvas back to white and started again. It was the right decision. It felt terrible.', 'Koca bir tuvali kazıyıp bembeyaz yaptın ve baştan başladın. Doğru karardı. Berbat hissettirdi.'],
-    ['You found paint in your hair at a family dinner. Blue, this time. Your mother said it suits you.', 'Bir aile yemeğinde saçında boya buldun. Bu sefer mavi. Annen yakıştığını söyledi.'],
+    ['You found paint in your hair at a family dinner. Blue, this time. Everyone at the table said it suits you.', 'Bir aile yemeğinde saçında boya buldun. Bu sefer mavi. Masadaki herkes yakıştığını söyledi.'],
   ],
   athlete: [
     ['You trained twice a day all month. Stairs have become your enemy and your friend.', 'Bütün ay günde iki antrenman yaptın. Merdivenler hem düşmanın hem dostun oldu.'],

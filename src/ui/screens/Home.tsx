@@ -9,6 +9,8 @@ import { fmtMoney } from '../../engine/context';
 import { Icon } from '../icons';
 import { FurnitureArt } from '../FurnitureArt';
 import { T, Tn } from '../../i18n/ui';
+import { capsName } from '../caps';
+import { cityName } from '../../engine/places';
 
 // ---------------------------------------------------------------- pets, drawn around their feet at (0, 0)
 
@@ -779,7 +781,7 @@ export function Home({ app }: { app: AppApi }) {
       <div class="row between" style={{ alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <div class="eyebrow">
-            {p.city}
+            {capsName(cityName(p.city, app.lang), app.lang)}
             {tierId !== 'parents' && ` · ${p.home.owned ? T('Homeowner') : T('Renting')}`}
           </div>
           <h1 class="title-xl">{title}</h1>
@@ -793,6 +795,8 @@ export function Home({ app }: { app: AppApi }) {
           </div>
         )}
       </div>
+
+      {p.home.owned && p.home.loan && <MortgageCard app={app} />}
 
       <Room items={p.home.furniture} heirlooms={s.dynasty.heirlooms.map((h) => h.defId)} pets={pets} garden={garden} />
 
@@ -881,5 +885,38 @@ export function Home({ app }: { app: AppApi }) {
         ))}
       </section>
     </div>
+  );
+}
+
+/** The home loan: what is left, the yearly instalment and the years to go (review 5 §3.7). */
+function MortgageCard({ app }: { app: AppApi }) {
+  const p = app.game!.player;
+  const loan = p.home.loan!;
+  const total = loan.payment * loan.term;
+  const paid = Math.max(0, Math.min(100, Math.round(100 * (1 - loan.balance / Math.max(1, total)))));
+  const money = (n: number) => fmtMoney(n, p.countryId, app.lang);
+  return (
+    <section class="card tight" aria-label={T('Mortgage')} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div class="row between">
+        <div class="row" style={{ gap: '8px' }}>
+          <Icon name="home" size={18} />
+          <span class="item-title">{T('Mortgage')}</span>
+        </div>
+        <span class="muted num" style={{ fontSize: '13px' }}>
+          {Tn(loan.yearsLeft, '{n} year to go', '{n} years to go')}
+        </span>
+      </div>
+      <div class="bar" role="meter" aria-label={T('Paid off')} aria-valuenow={paid} aria-valuemin={0} aria-valuemax={100}>
+        <div style={{ width: `${paid}%`, background: 'var(--accent)' }} />
+      </div>
+      <div class="row between" style={{ fontSize: '13px' }}>
+        <span class="muted">
+          {T('Left to pay')} <b class="num">{money(loan.balance)}</b>
+        </span>
+        <span class="muted">
+          {T('Yearly payment')} <b class="num">{money(loan.payment)}</b>
+        </span>
+      </div>
+    </section>
   );
 }

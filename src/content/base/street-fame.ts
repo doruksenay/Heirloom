@@ -1,6 +1,6 @@
 import type { ActivityDef, ChoiceDef, Ctx, EventDef } from '../types';
 import type { GameState } from '../../engine/types';
-import { wage } from './util';
+import { wage, wth } from './util';
 import { pickIndex, say, sayWith, type Pair } from './lines';
 import { inTr } from './events-flavour';
 import { bandNames, compact as compactN, fameLevel, fameState, fameTitle, gainFans, loseFans, peekFame, type FameState } from './fame-state';
@@ -200,13 +200,17 @@ const bandChoice = (i: number): ChoiceDef => ({
   label: (c) => String(c.vars[`name${i}`]),
   resolve: (c) => {
     const f = fameState(c.p);
-    const members = [0, 1, 2].map(() => c.h.newPerson({ age: Math.max(14, c.age + c.rng.int(-3, 3)) }));
-    members.forEach((m) => c.h.addRelation(m, 'friend', c.rng.int(55, 80)));
+    // one at a time, so each new member is already a friend when the next name is drawn (no "Ceren, Ceren and Batuhan")
+    const members = [0, 1, 2].map(() => {
+      const m = c.h.newPerson({ age: Math.max(14, c.age + c.rng.int(-3, 3)) });
+      c.h.addRelation(m, 'friend', c.rng.int(55, 80));
+      return m;
+    });
     f.band = { name: String(c.vars[`name${i}`]), members: members.map((m) => m.id) };
-    const names = members.map((m) => m.firstName).join(', ');
+    const [a, b, d] = members.map((m) => m.firstName);
     return c.t(
-      `You formed a band called ${f.band.name} with ${names}. First rehearsal is in a garage that smells like oil.`,
-      `${names} ile ${f.band.name} adında bir grup kurdun. İlk prova, motor yağı kokan bir garajda.`,
+      `You formed a band called ${f.band.name} with ${a}, ${b} and ${d}. First rehearsal is in a garage that smells like oil.`,
+      `${a}, ${b} ve ${wth(d)} ${f.band.name} adında bir grup kurdun. İlk prova, motor yağı kokan bir garajda.`,
     );
   },
   tone: 'big',
@@ -423,7 +427,7 @@ export function streetFameOnYear(c: Ctx): void {
 export function streetFameTiles(s: GameState): { label: string; value: string }[] {
   if (famePackOn(s)) return [];
   const f = peekFame(s.player);
-  if (!f || (!f.path && f.fans === 0)) return [];
+  if (!f || (f.fans < 1 && (!f.path || s.year - (f.lastActiveYear ?? 0) >= 2))) return [];
   const tr = s.lang === 'tr';
   const out = [{ label: tr ? (f.path === 'social' ? 'Takipçi' : 'Hayran') : f.path === 'social' ? 'Followers' : 'Fans', value: compactN(f.fans, s.lang ?? 'en') }];
   if (f.path) out.push({ label: tr ? 'Durum' : 'Status', value: fameTitle(f, s.lang) });

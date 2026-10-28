@@ -88,7 +88,7 @@ export function Summary({ app }: { app: AppApi }) {
         <div class="eyebrow" style={{ color: 'var(--accent)', letterSpacing: '0.14em' }}>
           {handed ? T('Passing the torch') : r.age >= 70 ? T('A life well lived') : T('Gone too soon')}
         </div>
-        <Avatar id={r.personId + r.name.split(' ')[0]} gender={r.gender} age={r.age} size={92} label={r.name} />
+        <Avatar id={r.personId + r.name.split(' ')[0]} gender={r.gender} age={r.age} size={92} label={r.name} tone={s.people[r.personId]?.skin} />
         <div>
           <h1 class="title-xl">{r.name}</h1>
           <div class="muted num" style={{ marginTop: '4px' }}>

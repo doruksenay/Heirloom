@@ -895,7 +895,9 @@ export const famePack: ContentPack = {
   onInherit,
   lifeTiles: (s) => {
     const f = peekFame(s.player);
-    if (!f || (!f.path && f.fans === 0)) return [];
+    // no fans and no recent work on a fame path: the tiles stay off (review 5 §3.15: "Fans 0 · Bedroom Musician"
+    // on a police chief's dashboard for decades)
+    if (!f || (f.fans < 1 && (!f.path || s.year - (f.lastActiveYear ?? 0) >= 2))) return [];
     const tr = s.lang === 'tr';
     return [
       { label: tr ? 'Hayran' : 'Fans', value: compact(s, f.fans) },

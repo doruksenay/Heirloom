@@ -56,7 +56,126 @@ const SPOUSE_TITLES: [string, string][] = [
   ['There is one chair too many at the table.', 'Sofrada bir sandalye fazla.'],
 ];
 
+/** Things found when clearing a parent's home: [English, Turkish accusative]. */
+const PARENT_FINDS: [string, string][] = [
+  ['every school report you ever brought home, in a shoebox, in order', 'eve getirdiğin bütün karneleri, sırasıyla bir ayakkabı kutusunda'],
+  ['a drawer of birthday cards, yours on top', 'bir çekmece dolusu doğum günü kartını; seninkiler en üstte'],
+  ['a recipe card with a note in the margin: "less salt than this"', 'kenarına "bundan az tuz" yazılmış bir tarif kartını'],
+  ['the first drawing you ever made, framed, behind the wardrobe', 'ilk yaptığın resmi; çerçevelenmiş, dolabın arkasında'],
+  ['a tin of buttons from coats nobody has worn in forty years', 'kırk yıldır kimsenin giymediği paltoların düğmeleriyle dolu bir teneke kutuyu'],
+];
+
+/** "your mother" / "annen" and friends for the parent in vars.pid. */
+const parentWords = (c: Ctx) => {
+  const f = lost(c).gender === 'female';
+  return { en: f ? 'mother' : 'father', tr: f ? 'annen' : 'baban', Tr: f ? 'Annen' : 'Baban', acc: f ? 'anneni' : 'babanı' };
+};
+
 export const griefEvents: EventDef[] = [
+  {
+    // a parent who dies when the player is an adult (review 5 §3.8: "Annen Emily, 50 yaşında…" was a single line
+    // between a driving test and a new job). The young version is base.grief_parent in events-more.ts.
+    id: 'base.grief_parent_adult',
+    category: 'family',
+    scheduled: true,
+    setup: (c) => {
+      c.vars.pid = lostId(c, ['mother', 'father']) ?? '';
+      c.vars.find = c.rng.int(0, PARENT_FINDS.length - 1);
+      if (c.vars.pid) c.h.flag(`lost_parent:${c.vars.pid}`);
+    },
+    when: (c) => !!lostId(c, ['mother', 'father']),
+    title: (c) => {
+      const w = parentWords(c);
+      const n = lost(c).firstName;
+      return c.t(`You buried your ${w.en}, ${n}.`, `${w.Tr} ${acc(n)} toprağa verdin.`);
+    },
+    text: (c) => {
+      const k = lost(c);
+      const a = ageAtDeath(k);
+      const other = c.h.relatives(['mother', 'father']).find((r) => !r.rel.step)?.person;
+      const base =
+        a < 65
+          ? c.t(`${a} is no age. Everyone at the funeral said so, as if saying it would change something.`, `${a} yaş, gidilecek yaş değil. Cenazede herkes bunu söyledi; söyleyince bir şey değişecekmiş gibi.`)
+          : c.t(`A long life, everyone says. To you it feels as if ${k.gender === 'female' ? 'she' : 'he'} was still in the middle of it.`, '"Uzun bir ömür" diyor herkes. Sana ise hâlâ hayatının tam ortasındaymış gibi geliyor.');
+      return other
+        ? `${base} ${c.t(`${other.firstName} stood by the grave long after everyone else had gone.`, `Herkes gittikten sonra ${other.firstName} mezarın başında uzun süre kaldı.`)}`
+        : base;
+    },
+    choices: [
+      {
+        id: 'clear',
+        label: (c) => c.t('Clear the house yourself', 'Evini kendin topla'),
+        resolve: (c) => {
+          const i = Number(c.vars.find ?? 0) % PARENT_FINDS.length;
+          c.h.stat('happiness', 1);
+          return c.t(
+            `It took a month. At the back of a cupboard you found ${PARENT_FINDS[i][0]}. You sat on the floor for a long time.`,
+            `Bir ay sürdü. Bir dolabın en arkasında ${PARENT_FINDS[i][1]} buldun. Uzun süre yerde oturdun.`,
+          );
+        },
+      },
+      {
+        id: 'other',
+        label: (c) => {
+          const o = c.h.relatives(['mother', 'father']).find((r) => !r.rel.step)?.person;
+          return o ? c.t(`Look after ${o.firstName}`, `${dat(o.firstName)} göz kulak ol`) : c.t('Look after the family', 'Aileye göz kulak ol');
+        },
+        hidden: (c) => !c.h.relatives(['mother', 'father']).some((r) => !r.rel.step),
+        resolve: (c) => {
+          const o = c.h.relatives(['mother', 'father']).find((r) => !r.rel.step)!.person;
+          c.h.closeness(o.id, 10);
+          c.h.stat('happiness', -1);
+          return c.t(
+            `You called ${o.firstName} every evening that year, and every evening ${o.gender === 'female' ? 'she' : 'he'} said "I am fine". You came round anyway.`,
+            `O yıl her akşam ${acc(o.firstName)} aradın; her akşam "İyiyim" dedi. Sen yine de kalkıp gittin.`,
+          );
+        },
+        tone: 'good',
+      },
+      {
+        id: 'siblings',
+        label: (c) => c.t('Grieve with your brothers and sisters', 'Kardeşlerinle birlikte yas tut'),
+        hidden: (c) => c.h.relatives('sibling').length === 0,
+        resolve: (c) => {
+          const sibs = c.h.relatives('sibling');
+          for (const r of sibs) c.h.closeness(r.person.id, 8);
+          c.h.stat('happiness', 2);
+          const n = sibs[0].person.firstName;
+          return sibs.length > 1
+            ? c.t('You all slept in the old house one last time, in your old rooms, and talked through the wall like children.', 'Son bir kez hepiniz eski evde, eski odalarınızda yattınız ve çocukken yaptığınız gibi duvarın arkasından konuştunuz.')
+            : c.t(`You and ${n} stayed up until dawn with the old photo albums. Neither of you remembered the same version of anything.`, `${wth(n)} eski albümlerle sabaha kadar oturdunuz. Hiçbir şeyi ikiniz aynı hatırlamıyordunuz.`);
+        },
+      },
+      {
+        id: 'kids',
+        label: (c) => c.t('Tell your children about them', 'Çocuklarına ondan bahset'),
+        hidden: (c) => !c.h.relatives('child').some((k) => c.h.ageOf(k.person) >= 4),
+        resolve: (c) => {
+          const kids = c.h.relatives('child').filter((k) => c.h.ageOf(k.person) >= 4);
+          for (const k of kids) c.h.closeness(k.person.id, 5);
+          c.h.stat('happiness', 2);
+          const w = parentWords(c);
+          const n = lost(c).firstName;
+          return c.t(
+            `You told the children stories about your ${w.en} ${n} at dinner. The one about the wedding cake got requested again the next night.`,
+            `Akşam yemeğinde çocuklara ${w.tr} ${gen(n)} hikâyelerini anlattın. Düğün pastası hikâyesini ertesi akşam yine istediler.`,
+          );
+        },
+        tone: 'good',
+      },
+      {
+        id: 'work',
+        label: (c) => c.t('Go straight back to normal', 'Hemen eski düzenine dön'),
+        resolve: (c) => {
+          c.h.stat('happiness', -3);
+          return c.p.jobId && !c.p.retired
+            ? c.t('You were back at work on Monday. On Thursday you cried in the stairwell, and that was that for a while.', 'Pazartesi işe döndün. Perşembe günü merdiven boşluğunda ağladın; bir süre o kadarıyla idare ettin.')
+            : c.t('You kept to your routine: shopping, cooking, the evening news. The phone did not ring at seven anymore.', 'Düzenini bozmadın: alışveriş, yemek, akşam haberleri. Telefon artık saat yedide çalmıyordu.');
+        },
+      },
+    ],
+  },
+
   {
     id: 'base.grief_child',
     category: 'family',

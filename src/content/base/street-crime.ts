@@ -46,7 +46,7 @@ function caughtKid(c: Ctx): string {
 const KID_CAUGHT: Pair[] = [
   ['A police officer drove you home and had a long, quiet talk with your parents in the kitchen. You heard every word.', 'Bir polis memuru seni eve bıraktı ve mutfakta ailenle uzun, alçak sesli bir konuşma yaptı. Her kelimesini duydun.'],
   ['You were caught and your parents were called. You are grounded until roughly the next century.', 'Yakalandın, ailen arandı. Aşağı yukarı gelecek yüzyıla kadar evden çıkmak yasak.'],
-  ['The shopkeeper knew your mother. That was worse than any police station.', 'Dükkân sahibi anneni tanıyordu. Bu, herhangi bir karakoldan daha kötüydü.'],
+  ['The shopkeeper knew your whole family. That was worse than any police station.', 'Dükkân sahibi bütün aileni tanıyordu. Bu, herhangi bir karakoldan daha kötüydü.'],
   ['You spent an afternoon at the police station drinking juice from a carton while your parents signed papers.', 'Ailen kâğıtları imzalarken bir öğleden sonrayı karakolda kutu meyve suyu içerek geçirdin.'],
 ];
 
@@ -595,7 +595,7 @@ export const streetCrimeEvents: EventDef[] = [
         resolve: (c) => {
           if (c.rng.chance(0.55)) {
             c.h.stat('happiness', 6);
-            return c.t('You gave the mayor a magnificent moustache. Half the town agreed it was an improvement.', 'Belediye başkanına muhteşem bir bıyık çizdin. Şehrin yarısı, böylesinin daha iyi olduğunda hemfikir.');
+            return c.t('You gave the mayor a magnificent moustache. Half the town agreed it was an improvement.', 'Belediye başkanına muhteşem bir bıyık çizdin. Şehrin yarısı, böylesinin daha iyi olduğu konusunda hemfikir.');
           }
           if (c.age < 18) return caughtKid(c);
           return c.t("A campaign volunteer filmed you mid-moustache. ", 'Bir seçim gönüllüsü seni tam bıyığın ortasındayken kameraya aldı. ') + cite(c, 'vandalism');

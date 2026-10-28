@@ -1,6 +1,8 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef } from '../types';
+import { ifKin } from '../base/kin';
 import type { JobDef } from '../../engine/careers';
-import { isCareerUpgrade, titleFor } from '../../engine/careers';
+import { majorChoices } from '../base/events-careers-majors';
+import { isCareerUpgrade, majorOf, titleFor } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
 import { isCoastal } from '../../engine/places';
@@ -86,38 +88,8 @@ const inTR = (c: Ctx) => c.p.countryId === 'tr';
 const classmate = (c: Ctx, gender?: 'female' | 'male') => c.h.newPerson({ gender, age: Math.max(17, c.age + c.rng.int(-2, 2)) });
 
 // ------------------------------------------------------------------ major
-const MAJOR_LINES: Record<Major, [string, string]> = {
-  engineering: ['You chose Engineering. You now own a calculator that costs more than your phone.', 'Mühendislik seçtin. Artık telefonundan pahalı bir hesap makinen var.'],
-  medicine: ['You chose Medicine. Your relatives already ask you about their knee pain.', 'Tıp seçtin. Akrabalar şimdiden diz ağrılarını sana danışmaya başladı.'],
-  law: ['You chose Law. You started winning every family argument.', 'Hukuk seçtin. Aile içi tartışmaların hepsini kazanmaya başladın.'],
-  business: ['You chose Business. By week two you said "synergy" without irony.', 'İşletme seçtin. İkinci haftada "sinerji" kelimesini ciddi ciddi kullanmaya başladın.'],
-  arts: ['You chose Fine Arts. Your parents asked, very calmly, what the plan is.', 'Güzel Sanatlar seçtin. Annenle baban çok sakin bir sesle "Peki plan ne?" diye sordu.'],
-  education: ['You chose Education. You already have the teacher voice.', 'Öğretmenlik seçtin. Daha ilk dönemden o meşhur öğretmen ses tonunu kaptın.'],
-};
-const MAJOR_REQ: Partial<Record<Major, number>> = { medicine: 60, engineering: 50, law: 50 };
-
-function majorChoice(m: Major): ChoiceDef {
-  const req = MAJOR_REQ[m];
-  return {
-    id: m,
-    label: (c) => c.t(MAJORS[m].en, MAJORS[m].tr),
-    requires: req ? (c) => c.p.stats.smarts >= req : undefined,
-    requiresLabel: req ? `Needs Smarts ${req}+` : undefined,
-    resolve: (c) => {
-      const st = ensureEnrolled(c);
-      st.major = m;
-      c.h.flag(`major:${m}`);
-      c.h.stat('happiness', 3);
-      // the Fine Arts line asks "your parents"; without a living parent the relatives ask instead
-      const [en, tr] =
-        m === 'arts' && c.h.relatives(['mother', 'father']).length === 0
-          ? (['You chose Fine Arts. Your relatives asked, very calmly, what the plan is.', 'Güzel Sanatlar seçtin. Akrabaların çok sakin bir sesle "Peki plan ne?" diye sordu.'] as const)
-          : MAJOR_LINES[m];
-      return c.t(en, tr);
-    },
-    tone: 'big',
-  };
-}
+// the choices are the base game's (all twelve majors, events-careers-majors.ts); Campus starts the GPA on a pick
+const campusMajorChoices = () => majorChoices((c) => void ensureEnrolled(c));
 
 // ------------------------------------------------------------------ clubs
 const CLUB_EFFECT: Record<Club, (c: Ctx) => [string, string]> = {
@@ -351,7 +323,7 @@ const events: EventDef[] = [
     minAge: 16,
     once: true,
     weight: 1000,
-    when: (c) => enrolled(c) && !peekCampus(c.p)?.major,
+    when: (c) => enrolled(c) && !peekCampus(c.p)?.major && !majorOf(c.p),
     title: (c) => c.t('Time to declare your major.', 'Bölümünü seçme vakti.'),
     text: (c) =>
       c.h.relatives('mother').length && c.h.relatives('father').length
@@ -363,7 +335,7 @@ const events: EventDef[] = [
             'Your aunt says doctor. Your uncle says engineer. A neighbor says "civil servant, it is safe". The registrar wants an answer by Friday.',
             'Teyzen "doktor ol" diyor, amcan "mühendis". Komşunuz "memur ol, garantisi var" diyor. Öğrenci işleri ise cumaya kadar cevap bekliyor.',
           ),
-    choices: (['engineering', 'medicine', 'law', 'business', 'arts', 'education'] as Major[]).map(majorChoice),
+    choices: campusMajorChoices(),
   },
   {
     id: 'campus.roommate',
@@ -1164,7 +1136,7 @@ const activities: ActivityDef[] = [
     description: (c) => c.t('Engineering, Medicine, Law, Business, Arts or Education', 'Mühendislik, Tıp, Hukuk, İşletme, Sanat ya da Öğretmenlik'),
     group: 'Campus',
     minAge: 16,
-    available: (c) => enrolled(c) && !peekCampus(c.p)?.major,
+    available: (c) => enrolled(c) && !peekCampus(c.p)?.major && !majorOf(c.p),
     run: () => ({ event: 'campus.choose_major' }),
   },
   {
@@ -1367,7 +1339,7 @@ const activities: ActivityDef[] = [
         c.h.stat('happiness', 6);
         return c.t(`Your paper was cited everywhere. You were promoted to ${c.h.jobTitle()}.`, `Makalen her yerde atıf aldı. ${c.h.jobTitle()} oldun.`);
       }
-      return c.t(`Your paper came out. Total papers: ${st.papers}. Your mother read the abstract twice.`, `Makalen yayımlandı. Toplam makale sayın: ${st.papers}. Annen özeti iki kez okudu.`);
+      return c.t(`Your paper came out. Total papers: ${st.papers}.`, `Makalen yayımlandı. Toplam makale sayın: ${st.papers}.`) + ' ' + ifKin(c, 'mother', ['Your mother read the abstract twice.', 'Annen özeti iki kez okudu.'], ['Someone in another country cited it within a week.', 'Bir hafta içinde başka bir ülkeden biri atıf yaptı.']);
     },
   },
 ];
@@ -1379,7 +1351,8 @@ export const DEFAULT_MAJOR: Major = 'business';
 function graduate(c: Ctx) {
   const st = cs(c);
   st.gradYear = c.s.year;
-  if (!st.major) st.major = DEFAULT_MAJOR;
+  if (!st.major) st.major = (MAJORS[c.p.major as Major] ? (c.p.major as Major) : DEFAULT_MAJOR);
+  if (c.p.major !== st.major) c.p.major = st.major;
   st.grad = null;
   const g = st.gpa;
   const honors: Honors | null = g >= HONORS.summa.min ? 'summa' : g >= HONORS.magna.min ? 'magna' : g >= HONORS.cum.min ? 'cum' : null;

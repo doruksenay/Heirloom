@@ -6,6 +6,7 @@ import { COUNTRIES, firstNames, getCountry } from './world';
 import { createRng } from './rng';
 import { petsOf } from './pets';
 import { packNetWorth } from '../content/registry';
+import { homeEquity } from './economy';
 
 export type Medal = 0 | 1 | 2 | 3;
 
@@ -32,7 +33,7 @@ const peak = (s: GameState, key: string) => s.daily?.peak[key] ?? 0;
 /** Net worth in US-baseline dollars, comparable across countries. */
 function worth(s: GameState): number {
   const p = s.player;
-  return (p.money + (p.home.owned ? p.home.value : 0) + packNetWorth(s)) / wageFactor(s);
+  return (p.money + homeEquity(p.home) + packNetWorth(s)) / wageFactor(s);
 }
 
 const descendants = (s: GameState) => {

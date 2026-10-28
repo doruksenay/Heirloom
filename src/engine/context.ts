@@ -124,14 +124,36 @@ interface PeopleExt {
   levelYear?: number;
   /** Calendar year of the last hire: a new employer may take you on one rung up that same year. */
   hiredYear?: number;
+  /** Round 5: job performance, 0–100 (50 = solid). Work-hard, smarts and health push it; promotions follow it. */
+  perf?: number;
+  /** Round 5: the last job held and its rung, kept after quitting or retiring (career summary, re-localised titles). */
+  lastJob?: { id: string; level: number };
+  /** Round 5: the age at which the player last left a job without retiring (quit, fired). */
+  leftAge?: number;
 }
 
 /**
  * Minimum years at the current level before an ordinary promotion (playtest 2: careers climbed from the
  * entry title to the top in about five years). Ranked jobs (soldier, officer) climb by years of service
  * in their own logic; `promoteAnyway` skips this for structural jumps.
+ * Round 5: this is the wait on the bottom rung; it grows with the rung (minYearsAtLevel), to 6 before the top.
  */
 export const MIN_YEARS_PER_LEVEL = 3;
+/** Youngest age for an ordinary promotion to the top rung of a ladder of 4+ titles (structural jumps excepted). */
+export const TOP_RUNG_MIN_AGE = 42;
+/** The wait before the last step to the top of a ladder. */
+export const MAX_YEARS_PER_LEVEL = 6;
+
+/**
+ * Years at `level` before an ordinary promotion to the next rung, on a ladder of `rungs` titles: 3 on the bottom
+ * rung, rising evenly to 6 before the top (review 5 §3.2: Police Officer at 19, Police Chief at 31).
+ */
+export function minYearsAtLevel(level: number, rungs: number): number {
+  const steps = rungs - 1;
+  if (steps <= 1) return MIN_YEARS_PER_LEVEL;
+  const frac = Math.min(1, level / (steps - 1));
+  return MIN_YEARS_PER_LEVEL + Math.round((MAX_YEARS_PER_LEVEL - MIN_YEARS_PER_LEVEL) * frac);
+}
 
 /** Years the player has held the current job level. Old saves without the record fall back to years in the job. */
 export function yearsAtLevel(s: GameState): number {
@@ -139,6 +161,72 @@ export function yearsAtLevel(s: GameState): number {
   return ext?.levelYear !== undefined ? s.year - ext.levelYear : s.player.jobYears;
 }
 const extOf = (p: GameState['player']) => (p.ext ??= {}) as PeopleExt;
+
+/** Job performance, 0–100 (50 without a record). */
+export const performanceOf = (p: GameState['player']): number => (p.ext as PeopleExt | undefined)?.perf ?? 50;
+
+/** Moves job performance by `d` (work hard +, slacking −). No RNG. */
+export function addPerformance(p: GameState['player'], d: number): void {
+  const ext = extOf(p);
+  ext.perf = clamp((ext.perf ?? 50) + d);
+}
+
+/**
+ * The yearly drift of job performance toward what smarts, health and mood sustain (a third of the way each year).
+ * Called once a year for a working player. No RNG.
+ */
+export function driftPerformance(p: GameState['player']): number {
+  const ext = extOf(p);
+  const target = 25 + p.stats.smarts * 0.3 + p.stats.health * 0.15 + p.stats.happiness * 0.1;
+  ext.perf = clamp((ext.perf ?? 50) + (target - (ext.perf ?? 50)) / 3);
+  return ext.perf;
+}
+
+/** The last job held and its rung (also after quitting or retiring); undefined in old saves until the next job change. */
+export const lastJobOf = (p: GameState['player']) => (p.ext as PeopleExt | undefined)?.lastJob;
+
+/** The age at which the player last left a job without retiring (undefined if never, or in old saves). */
+export const leftWorkAge = (p: GameState['player']) => (p.ext as PeopleExt | undefined)?.leftAge;
+
+const PREFIX = /^(Retired |Former |Emekli |Eski )/;
+
+/**
+ * A stored job title in the current story language: titles are kept as strings on the player, relatives and
+ * past lives, so after a language switch "Baş Antrenör" showed in an English game (review 5 §3.12).
+ * Finds the title in any job's ladder (both languages; `hintId` breaks ties) and keeps a Retired/Former prefix.
+ * Unknown titles come back unchanged. No RNG.
+ */
+export function localTitle(s: GameState, title: string | undefined, hintId?: string | null): string | undefined {
+  if (!title) return title;
+  const lang = s.lang ?? 'en';
+  const m = PREFIX.exec(title);
+  const bare = m ? title.slice(m[0].length) : title;
+  const jobs = allJobs(s.enabledPacks);
+  const ordered = hintId ? [...jobs.filter((j) => j.id === hintId), ...jobs.filter((j) => j.id !== hintId)] : jobs;
+  for (const j of ordered) {
+    let lvl = j.titles.indexOf(bare);
+    if (lvl < 0 && j.titlesTr) lvl = j.titlesTr.indexOf(bare);
+    if (lvl < 0) continue;
+    const t = titleFor(j, lvl, lang);
+    if (!m) return t;
+    const retired = /Retired|Emekli/.test(m[0]);
+    return lang === 'tr' ? `${retired ? 'Emekli' : 'Eski'} ${t}` : `${retired ? 'Retired' : 'Former'} ${t}`;
+  }
+  return title;
+}
+
+/**
+ * Re-renders every stored job title in the current language: the player's, every relative's and each past
+ * life's career line. Call after the story language changes (refreshPacks does). No RNG.
+ */
+export function relocaliseJobs(s: GameState): void {
+  const p = s.player;
+  const cur = p.jobId ? allJobs(s.enabledPacks).find((j) => j.id === p.jobId) : undefined;
+  if (cur) p.jobTitle = titleFor(cur, p.jobLevel, s.lang ?? 'en');
+  else if (p.jobTitle) p.jobTitle = localTitle(s, p.jobTitle, lastJobOf(p)?.id);
+  for (const q of Object.values(s.people)) if (q.jobTitle) q.jobTitle = localTitle(s, q.jobTitle, q.jobId);
+  for (const life of s.dynasty.lives) if (life.career) life.career = localTitle(s, life.career) ?? life.career;
+}
 
 export function makeCtx(s: GameState, vars: Record<string, string | number> = {}): Ctx {
   const p = s.player;
@@ -226,6 +314,8 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       return j ? titleFor(j, p.jobLevel, s.lang ?? 'en') : undefined;
     },
     setJob(jobId) {
+      if (jobId) extOf(p).lastJob = { id: jobId, level: 0 };
+      else if (p.jobId) extOf(p).leftAge = age;
       p.jobId = jobId;
       p.jobLevel = 0;
       p.jobYears = 0;
@@ -245,11 +335,14 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       if (ext.promotedYear === s.year) return false;
       // a few years at each level first; the year of a hire may still start you one rung up
       const hireStep = ext.hiredYear === s.year && p.jobLevel === 0;
-      if (!j.ranked && !hireStep && yearsAtLevel(s) < MIN_YEARS_PER_LEVEL) return false;
+      if (!j.ranked && !hireStep && yearsAtLevel(s) < minYearsAtLevel(p.jobLevel, j.titles.length)) return false;
+      // the top of a real ladder is not an ordinary promotion before 42 (review 5 §3.2: Police Chief at 31)
+      if (!j.ranked && p.jobLevel + 1 === j.titles.length - 1 && j.titles.length >= CAREER_TOP_MIN_LEVELS && age < TOP_RUNG_MIN_AGE && !structural) return false;
       ext.promotedYear = s.year;
       ext.levelYear = s.year;
       p.jobLevel++;
       p.jobTitle = h.jobTitle();
+      ext.lastJob = { id: j.id, level: p.jobLevel };
       // the "career top" goal and ribbon need a real ladder: a three-step job (barista, nurse) tops out by 24 (playtest 3)
       if (p.jobLevel === j.titles.length - 1 && j.titles.length >= CAREER_TOP_MIN_LEVELS) h.achieve('top_job');
       return true;
@@ -285,15 +378,20 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
  * Promotes even if the player was already promoted this year. Only for structural jumps that are not a
  * "promotion" in the ladder sense (opening your own clinic, a general's star, a masterpiece that makes you
  * a famous artist). Ordinary promotions use c.h.promote(), which allows one per calendar year and only after
- * MIN_YEARS_PER_LEVEL years at the current level.
+ * minYearsAtLevel years at the current level.
  */
+/** Set while promoteAnyway runs: structural jumps skip the top-rung age floor too. */
+let structural = false;
+
 export function promoteAnyway(c: Ctx): boolean {
   const ext = extOf(c.p);
   delete ext.promotedYear;
   // skips the minimum time at the level too: these jumps are not ladder promotions
   const since = ext.levelYear;
-  ext.levelYear = c.s.year - MIN_YEARS_PER_LEVEL;
+  ext.levelYear = c.s.year - MAX_YEARS_PER_LEVEL;
+  structural = true;
   const ok = c.h.promote();
+  structural = false;
   if (!ok) {
     if (since === undefined) delete ext.levelYear;
     else ext.levelYear = since;

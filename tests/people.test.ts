@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { activityUsesLeft, ageUp, choose, continueAsChild, doActivity, heirs, newGame } from '../src/engine/game';
 import { activitiesFor } from '../src/content/registry';
-import { familyFirstNames, freshFirstNames, makeCtx } from '../src/engine/context';
+import { familyFirstNames, freshFirstNames, makeCtx, minYearsAtLevel } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { COUNTRIES, getCountry } from '../src/engine/world';
 import { INTERACTIONS, interact, interactionsFor, stageOf } from '../src/engine/interactions';
@@ -313,7 +313,7 @@ describe('promotions', () => {
     // and only after a few years at the new level (see MIN_YEARS_PER_LEVEL)
     s.year++;
     expect(makeCtx(s).h.promote()).toBe(false);
-    s.year += 2;
+    s.year += minYearsAtLevel(1, 4) - 1; // round 5: the wait grows with the rung
     expect(makeCtx(s).h.promote()).toBe(true);
     expect(makeCtx(s).h.promote()).toBe(false);
     expect(s.player.jobLevel).toBe(2);

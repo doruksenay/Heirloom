@@ -95,14 +95,40 @@ export function namedFor(c: Ctx, item: HeirloomInstance): string | undefined {
   return m ? m[1].trim() : undefined;
 }
 
+/**
+ * Everyone who held the heirloom before the player, oldest first: the person it is named for, the keepers recorded
+ * before the first life (item.holders: the founder, then the parent who kept it), then every earlier life of the
+ * dynasty (review 5 §3.14: "100 years in the family" and only "Ege Dede and you").
+ */
+export function holderNames(c: Ctx, item: HeirloomInstance): string[] {
+  const founder = namedFor(c, item);
+  const pre = (item.holders ?? []).map((n, i) => (i === 0 && founder && founder.includes(n) ? founder : n));
+  const out: string[] = [];
+  const push = (n: string) => {
+    if (n && n !== c.p.firstName && !out.some((x) => x === n || x.includes(n))) out.push(n);
+  };
+  if (founder && !pre.some((n) => n === founder)) push(founder);
+  pre.forEach(push);
+  keeperNames(c, item).forEach(push);
+  return out;
+}
+
+/**
+ * A first-generation child does not hold the heirloom yet: it waits with the parent until the life is grown
+ * (review 5 §3.14: a 10-year-old "counting the hands" that held a recipe book that was not yet theirs).
+ */
+export const holdsItYet = (c: Ctx) => c.s.dynasty.lives.length > 0 || c.age >= 18;
+
 /** "Serkan Dede, Ayla, Kemal and you" / "Serkan Dede, Ayla, Kemal ve sen": the person it is named for, then every earlier keeper. */
 export function handsLine(c: Ctx, item: HeirloomInstance): string {
-  const names = keeperNames(c, item);
-  const founder = namedFor(c, item);
-  const all = founder && !names.some((n) => founder.includes(n)) ? [founder, ...names] : names;
+  const all = holderNames(c, item);
   if (!all.length) return c.t('you', 'sen');
+  if (!holdsItYet(c)) return c.t(`${all.join(', ')}, and one day you`, `${all.join(', ')}; bir gün de sen`);
   return c.t(`${all.join(', ')} and you`, `${all.join(', ')} ve sen`);
 }
+
+/** How many people have held it, the player included once they hold it (matches handsLine). */
+export const holderCount = (c: Ctx, item: HeirloomInstance) => holderNames(c, item).length + (holdsItYet(c) ? 1 : 0);
 
 /** The most recent earlier keeper of the heirloom, if any. */
 export const lastKeeper = (c: Ctx, item: HeirloomInstance): LifeRecord | undefined => {
@@ -317,10 +343,27 @@ export function ringWeddingLine(c: Ctx, ring: HeirloomInstance, partner: string)
       `At the wedding, ${ring.name} went onto ${partner}'s finger. It had waited years for a new hand.`,
       `Nikâhta ${ring.name} takıldı; yüzük yıllardır beklediği yeni parmağa kavuştu.`,
     );
-  if (last.n && last.y > 0)
+  if (last.n && last.y > 0) {
+    // name who that was to the player: "annen Asya" (review 5 §4.24: the mother read as a stranger)
+    const rel = c.p.relations.find((r) => c.s.people[r.personId]?.firstName === last.n && ['mother', 'father', 'grandparent', 'sibling', 'spouse'].includes(r.kind));
+    const q = rel ? c.s.people[rel.personId] : undefined;
+    const f = q?.gender === 'female';
+    const older = q ? q.birthYear < c.p.birthYear : false;
+    const k = !rel
+      ? ['', '']
+      : rel.kind === 'mother'
+        ? ['your mother ', 'annen ']
+        : rel.kind === 'father'
+          ? ['your father ', 'baban ']
+          : rel.kind === 'grandparent'
+            ? [f ? 'your grandmother ' : 'your grandfather ', f ? 'büyükannen ' : 'deden ']
+            : rel.kind === 'sibling'
+              ? [f ? 'your sister ' : 'your brother ', older ? (f ? 'ablan ' : 'ağabeyin ') : f ? 'kız kardeşin ' : 'erkek kardeşin ']
+              : ['', ''];
     return c.t(
-      `At the wedding, ${ring.name} went onto ${partner}'s finger, as it went onto ${last.n}'s in ${last.y}.`,
-      `Nikâhta ${ring.name} bir kez daha yeni bir parmağa takıldı; ${last.y} yılında da ${gen(last.n)} parmağındaydı.`,
+      `At the wedding, ${ring.name} went onto ${partner}'s finger, as it went onto ${k[0]}${last.n}'s in ${last.y}.`,
+      `Nikâhta ${ring.name} bir kez daha yeni bir parmağa takıldı; ${last.y} yılında da ${k[1]}${gen(last.n)} parmağına takılmıştı.`,
     );
+  }
   return c.t(`At the wedding, ${ring.name} went onto one more new finger.`, `Nikâhta ${ring.name} bir kez daha yeni bir parmağa takıldı.`);
 }

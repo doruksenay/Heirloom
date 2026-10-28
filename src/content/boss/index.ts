@@ -1,5 +1,5 @@
 import type { ActivityDef, ChoiceDef, ContentPack, Ctx, EventDef, Txt } from '../types';
-import { cap, dat, gen, kin, kinWord, nm, wage } from '../base/util';
+import { acc, cap, dat, gen, kin, kinWord, loc, nm, wage } from '../base/util';
 import { fmtMoneyShort } from '../../engine/context';
 import { getCountry } from '../../engine/world';
 import { inheritanceTax } from '../../engine/economy';
@@ -115,10 +115,10 @@ const BUYERS_TR = ['büyük bir rakip', 'bir özel sermaye fonu', 'yabancı bir 
 type NameAmount = { name: string; x: string };
 
 const SOLD: ((v: NameAmount) => Pair)[] = [
-  ({ name, x }) => [`You sold ${name} and walked away with ${x} after taxes. You slept for 14 hours.`, `${name} şirketini sattın; vergiden sonra cebine ${x} kaldı. 14 saat uyudun.`],
-  ({ name, x }) => [`You sold ${name}. ${x} after taxes, and a strange quiet on Monday morning.`, `${name} şirketini sattın. Vergiden sonra ${x} kaldı, pazartesi sabahı da tuhaf bir sessizlik.`],
+  ({ name, x }) => [`You sold ${name} and walked away with ${x} after taxes. You slept for 14 hours.`, `${acc(name)} sattın; vergiden sonra cebine ${x} kaldı. 14 saat uyudun.`],
+  ({ name, x }) => [`You sold ${name}. ${x} after taxes, and a strange quiet on Monday morning.`, `${acc(name)} sattın. Vergiden sonra ${x} kaldı, pazartesi sabahı da tuhaf bir sessizlik.`],
   ({ name, x }) => [`The sale of ${name} went through: ${x} for you after taxes. You kept your first business card as a souvenir.`, `${name} satışı tamamlandı: vergiden sonra sana ${x} kaldı. İlk kartvizitini hatıra olarak sakladın.`],
-  ({ name, x }) => [`You handed over the keys to ${name}, and ${x} landed in your account after taxes. You did not know what to do with your hands.`, `${name} şirketinin anahtarlarını teslim ettin, vergiden sonra hesabına ${x} yattı. Ellerini nereye koyacağını bilemedin.`],
+  ({ name, x }) => [`You handed over the keys to ${name}, and ${x} landed in your account after taxes. You did not know what to do with your hands.`, `${gen(name)} anahtarlarını teslim ettin, vergiden sonra hesabına ${x} yattı. Ellerini nereye koyacağını bilemedin.`],
   ({ name, x }) => [`You signed the last page and ${name} was no longer yours. After taxes: ${x}. You took the office mug home.`, `Son sayfayı imzaladın ve ${name} artık senin değildi. Vergiden sonra kalan: ${x}. Ofisteki kupanı eve götürdün.`],
 ];
 
@@ -140,7 +140,7 @@ const KEEP: ((name: string) => Pair)[] = [
   (n) => [`You read the offer twice, then said no. ${n} stays yours.`, `Teklifi iki kez okudun, sonra hayır dedin. ${n} seninle kalıyor.`],
   (n) => [`"Not at that price," you said, and meant "not at any price." ${n} keeps going.`, `"O fiyata olmaz" dedin; aslında "Hiçbir fiyata olmaz" demek istiyordun. ${n} yoluna devam ediyor.`],
   () => ['You walked out of the meeting, then walked back in for your umbrella. Still no deal.', 'Toplantıdan çıktın, sonra şemsiyeni almak için geri döndün. Anlaşma yine yok.'],
-  (n) => [`The buyer's lawyer looked hurt. You did not sell ${n}.`, `Alıcının avukatı kırılmış gibi baktı. ${n} şirketini satmadın.`],
+  (n) => [`The buyer's lawyer looked hurt. You did not sell ${n}.`, `Alıcının avukatı kırılmış gibi baktı. ${acc(n)} satmadın.`],
   (n) => [`You slept on it and woke up certain: you are not done with ${n} yet.`, `Bir gece düşündün ve sabah emin uyandın: ${n} ile işin daha bitmedi.`],
 ];
 
@@ -275,7 +275,7 @@ const events: EventDef[] = [
     title: (c) =>
       c.t(
         `A tech giant wants to buy ${co(c)!.name} for ${c.h.fmt(Number(c.vars.price))}.`,
-        `Bir teknoloji devi ${co(c)!.name} şirketini ${c.h.fmt(Number(c.vars.price))} karşılığında satın almak istiyor.`,
+        `Bir teknoloji devi ${acc(co(c)!.name)} ${c.h.fmt(Number(c.vars.price))} karşılığında satın almak istiyor.`,
       ),
     text: (c) => c.t('The offer expires Friday. Their lawyer has already sent a 90-page contract.', 'Teklif cuma günü sona eriyor. Avukatları 90 sayfalık sözleşmeyi çoktan yolladı.'),
     choices: [
@@ -294,7 +294,7 @@ const events: EventDef[] = [
           if (!c.p.jobId) c.p.jobTitle = formerTitle(c, comp);
           return c.t(
             `You sold ${comp.name} for ${c.h.fmt(Number(c.vars.price))}. Your share after taxes: ${c.h.fmt(payout)}.`,
-            `${comp.name} şirketini ${c.h.fmt(Number(c.vars.price))} karşılığında sattın. Vergiden sonra sana kalan: ${c.h.fmt(payout)}.`,
+            `${acc(comp.name)} ${c.h.fmt(Number(c.vars.price))} karşılığında sattın. Vergiden sonra sana kalan: ${c.h.fmt(payout)}.`,
           );
         },
         tone: 'big',
@@ -315,7 +315,7 @@ const events: EventDef[] = [
     weight: 300,
     cooldown: 1,
     when: (c) => !!co(c) && co(c)!.cash < -Math.max(wage(c, 5000), co(c)!.revenue * 0.25),
-    title: (c) => c.t(`${co(c)!.name} has run out of money.`, `${co(c)!.name} şirketinin kasası boşaldı.`),
+    title: (c) => c.t(`${co(c)!.name} has run out of money.`, `${gen(co(c)!.name)} kasası boşaldı.`),
     text: (c) =>
       c.t(
         `The company is ${c.h.fmt(-co(c)!.cash)} in the hole. Payroll is due Monday.`,
@@ -517,7 +517,7 @@ const events: EventDef[] = [
     title: (c) =>
       c.t(
         `Your ${kinWord(c.h.person(String(c.vars.pid)), 'child')} ${nm(c)} wants to join ${co(c)!.name}.`,
-        `${cap(kin(c, c.h.person(String(c.vars.pid)), 'child'))} ${nm(c)}, ${co(c)!.name} şirketinde çalışmak istiyor.`,
+        `${cap(kin(c, c.h.person(String(c.vars.pid)), 'child'))} ${nm(c)}, ${loc(co(c)!.name)} çalışmak istiyor.`,
       ),
     text: (c) => {
       const k = c.h.person(String(c.vars.pid));
@@ -561,7 +561,7 @@ const GRIND: ((name: string) => Pair)[] = [
   (n) => [`The cleaner found you asleep on the office sofa three mornings in a row. ${n} had its best month yet.`, `Temizlikçi üç sabah üst üste seni ofis kanepesinde uyurken buldu. ${n} en iyi ayını geçirdi.`],
   (n) => [`You personally called every client of ${n}, some of them twice. Sales are up and your voice is gone.`, `${n} müşterilerinin hepsini tek tek aradın, bazılarını iki kez. Satışlar arttı, sesin kısıldı.`],
   (n) => [`Weekends? You vaguely remember them. ${n} grew a little more this month.`, `Hafta sonu mu? Hayal meyal hatırlıyorsun. ${n} bu ay biraz daha büyüdü.`],
-  (n) => [`You fixed a problem at ${n} at 4 a.m. and celebrated alone with a cold toastie. Revenue is up.`, `Sabaha karşı dörtte ${n} şirketindeki bir sorunu çözdün ve soğumuş tostla tek başına kutladın. Ciro yükseldi.`],
+  (n) => [`You fixed a problem at ${n} at 4 a.m. and celebrated alone with a cold toastie. Revenue is up.`, `Sabaha karşı dörtte ${loc(n)}ki bir sorunu çözdün ve soğumuş tostla tek başına kutladın. Ciro yükseldi.`],
   (n) => [`Your family has started setting a plate aside "in case you come home." You didn't. ${n} sold more than ever.`, `Ailen "Belki gelir" diye sana tabak ayırmaya başladı. Gelmedin. ${n} hiç olmadığı kadar sattı.`],
   (n) => [`You redid the prices, the shop window and every process in one sleepless month. ${n} is up; your eyelids are down.`, `Uykusuz bir ayda fiyatları, vitrini ve bütün süreçleri baştan yaptın. ${n} yükselişte, göz kapakların düşüşte.`],
   (n) => [`You took a supplier's call in the dentist's chair, mouth wide open. Still a good month for ${n}.`, `Dişçi koltuğunda, ağzın açıkken bir tedarikçinin telefonunu açtın. Yine de ${n} için iyi bir ay oldu.`],
@@ -591,13 +591,13 @@ const MARKETING_MEH: ((v: NameAmount) => Pair)[] = [
 ];
 
 const INVEST: ((v: NameAmount) => Pair)[] = [
-  ({ name, x }) => [`You moved ${x} of your savings into ${name}.`, `Kendi birikiminden ${name} şirketinin kasasına ${x} aktardın.`],
+  ({ name, x }) => [`You moved ${x} of your savings into ${name}.`, `Kendi birikiminden ${gen(name)} kasasına ${x} aktardın.`],
   ({ name, x }) => [`You put half your savings into ${name}: ${x} in all. Your banking app asked if you were sure.`, `Birikiminin yarısını ${name} kasasına koydun: tam ${x}. Banka uygulaman "Emin misin?" diye sordu.`],
   ({ name, x }) => [`${x} of your own money went into ${name}. It feels like lending money to your own child.`, `${name} için cebinden ${x} çıktı. Kendi çocuğuna borç vermek gibi bir his.`],
   ({ name, x }) => [`You sent ${x} to ${name} and told yourself it was "an investment, not a bottomless pit."`, `${name} hesabına ${x} gönderdin ve kendine "Bu bir yatırım, dipsiz kuyu değil" dedin.`],
   ({ name, x }) => [`Your accountant raised an eyebrow, then moved ${x} from your account into ${name}.`, `Muhasebecin bir kaşını kaldırdı, sonra senin hesabından ${name} kasasına ${x} aktardı.`],
-  ({ name, x }) => [`You set aside ${x} of your savings for ${name}. Holidays can wait; payroll cannot.`, `Birikiminden ${x} ayırıp ${name} şirketine koydun. Tatil bekleyebilir, maaşlar bekleyemez.`],
-  ({ name, x }) => [`You backed ${name} with ${x} from your own pocket. Your wallet is lighter, your mind is at ease.`, `${name} şirketine kendi cebinden ${x} destek verdin. Cüzdanın hafifledi ama için rahat.`],
+  ({ name, x }) => [`You set aside ${x} of your savings for ${name}. Holidays can wait; payroll cannot.`, `Birikiminden ${x} ayırıp ${dat(name)} koydun. Tatil bekleyebilir, maaşlar bekleyemez.`],
+  ({ name, x }) => [`You backed ${name} with ${x} from your own pocket. Your wallet is lighter, your mind is at ease.`, `${dat(name)} kendi cebinden ${x} destek verdin. Cüzdanın hafifledi ama için rahat.`],
   ({ name, x }) => [`You signed the transfer for ${x} with a flourish. ${name} can breathe for a while.`, `Tutarı ${x} olan havaleyi kocaman bir imzayla onayladın. ${name} bir süre nefes alabilir.`],
   ({ name, x }) => [`You moved ${x} into ${name}, then opened the company account four times that evening just to look at it.`, `${name} kasasına ${x} aktardın, sonra o akşam sırf bakmak için şirket hesabını dört kez açtın.`],
   ({ name, x }) => [`Half your savings, ${x}, now lives at ${name}. Your piggy bank feels betrayed.`, `Birikiminin yarısı, yani ${x}, artık ${name} kasasında. Kumbaran ihanete uğramış gibi.`],
@@ -611,7 +611,7 @@ const people = (n: number) => (n === 1 ? 'person' : 'people');
 const FIRST_HIRE: ((v: Staff) => Pair)[] = [
   ({ name }) => [`You hired your first employee at ${name}. The team is now two: you, and someone who actually reads the manual.`, `${name} ilk çalışanını işe aldı. Ekip artık iki kişi: sen ve kullanım kılavuzunu gerçekten okuyan biri.`],
   ({ name }) => [`${name} has its first employee. You gave them the good chair and kept the wobbly one.`, `${name} ilk çalışanına kavuştu. İyi sandalyeyi ona verdin, sallananı sende kaldı.`],
-  ({ name }) => [`Your first hire at ${name} started on Monday. You had practised saying "my team" in the mirror.`, `${name} şirketindeki ilk çalışanın pazartesi başladı. Aynanın karşısında "ekibim" demeyi prova etmiştin.`],
+  ({ name }) => [`Your first hire at ${name} started on Monday. You had practised saying "my team" in the mirror.`, `${loc(name)}ki ilk çalışanın pazartesi başladı. Aynanın karşısında "ekibim" demeyi prova etmiştin.`],
   ({ name }) => [`You signed your first employment contract at ${name}, with a pen you bought for the occasion. A team of two.`, `${name} adına ilk iş sözleşmeni, sırf bu iş için aldığın bir kalemle imzaladın. İki kişilik bir ekip.`],
 ];
 
@@ -619,15 +619,15 @@ const FIRST_HIRE: ((v: Staff) => Pair)[] = [
 type LateHire = { name: string; yrs: number; founded: number; founder: string };
 const FIRST_HIRE_SOLO: ((v: LateHire) => Pair)[] = [
   ({ name, yrs }) => [`For ${yrs} years ${name} was just you and a kettle. Today it has its first employee, and the kettle has competition.`, `${yrs} yıl boyunca ${name} bir sen bir de çaydanlıktan ibaretti. Bugün ilk çalışanını aldı; çaydanlığın artık bir rakibi var.`],
-  ({ name }) => [`After years of doing every job at ${name} yourself, you hired someone. Showing them where the light switches are made you oddly emotional.`, `${name} şirketindeki her işi yıllarca tek başına yaptıktan sonra birini işe aldın. Ona elektrik düğmelerinin yerini gösterirken tuhaf bir şekilde duygulandın.`],
+  ({ name }) => [`After years of doing every job at ${name} yourself, you hired someone. Showing them where the light switches are made you oddly emotional.`, `${loc(name)}ki her işi yıllarca tek başına yaptıktan sonra birini işe aldın. Ona elektrik düğmelerinin yerini gösterirken tuhaf bir şekilde duygulandın.`],
   ({ name }) => [`${name} finally has more than one name on the payroll. Yours is still the one that gets paid last.`, `${name} maaş bordrosunda nihayet birden fazla isim var. Maaşı en son yatan yine sensin.`],
-  ({ name, yrs }) => [`You hired the first employee in the ${yrs}-year history of ${name}. They asked where the manual was. You are the manual.`, `${name} şirketinin ${yrs} yıllık tarihindeki ilk çalışanı işe başladı. Kullanım kılavuzunun nerede olduğunu sordu. Kılavuz sensin.`],
+  ({ name, yrs }) => [`You hired the first employee in the ${yrs}-year history of ${name}. They asked where the manual was. You are the manual.`, `${gen(name)} ${yrs} yıllık tarihindeki ilk çalışanı işe başladı. Kullanım kılavuzunun nerede olduğunu sordu. Kılavuz sensin.`],
 ];
 /** The first employee from outside the family in an inherited firm. */
 const FIRST_HIRE_FAMILY: ((v: LateHire) => Pair)[] = [
   ({ name, founded }) => [`${name} has been run by family hands since ${founded}. Today, for the first time, someone from outside the family signed a contract.`, `${name}, ${founded} yılından beri hep ailenin elinde döndü. Bugün ilk kez aileden olmayan biri iş sözleşmesi imzaladı.`],
-  ({ name, founder }) => [`The first outsider ever hired at ${name} asked who the old photo by the door was. You told ${founder}'s story for an hour.`, `${name} şirketine dışarıdan alınan ilk çalışan, kapının yanındaki eski fotoğrafın kim olduğunu sordu. Bir saat boyunca ${gen(founder)} hikâyesini anlattın.`],
-  ({ name }) => [`You hired someone who is not related to anyone at ${name}. At the family lunch it was the only topic.`, `${name} şirketine kimsenin akrabası olmayan birini aldın. Aile yemeğinde başka konu konuşulmadı.`],
+  ({ name, founder }) => [`The first outsider ever hired at ${name} asked who the old photo by the door was. You told ${founder}'s story for an hour.`, `${dat(name)} dışarıdan alınan ilk çalışan, kapının yanındaki eski fotoğrafın kim olduğunu sordu. Bir saat boyunca ${gen(founder)} hikâyesini anlattın.`],
+  ({ name }) => [`You hired someone who is not related to anyone at ${name}. At the family lunch it was the only topic.`, `${dat(name)} kimsenin akrabası olmayan birini aldın. Aile yemeğinde başka konu konuşulmadı.`],
   ({ name, yrs }) => [`After ${yrs} years as a family-only firm, ${name} has a real employee. Your relatives keep asking if they can trust "the new one".`, `${yrs} yıl sadece aileyle dönen ${name} artık gerçek bir çalışana sahip. Akrabalar durmadan "Yeniye güvenilir mi?" diye soruyor.`],
 ];
 
@@ -637,47 +637,47 @@ const REHIRE: ((v: Staff) => Pair)[] = [
   ({ name, team }) => [`You hired again at ${name}. The empty desks have owners, and the team is ${team} once more.`, `${name} için yeniden eleman aldın. Boş masaların sahibi çıktı, ekip yine ${team} kişi.`],
   ({ name, team }) => [`${name} is hiring again. You are a team of ${team}, and you no longer talk to the printer.`, `${name} yeniden işe alım yapıyor. Artık ${team} kişilik bir ekipsiniz, sen de yazıcıyla konuşmayı bıraktın.`],
   ({ name, team }) => [`You put the "We're hiring" sign back in the window at ${name}. Someone answered it the same day. A team of ${team} again.`, `${name} vitrinine "Eleman aranıyor" yazısını yeniden astın. Aynı gün başvuran oldu. Yine ${team} kişilik bir ekipsiniz.`],
-  ({ name, team }) => [`An old employee came back to ${name}. "I missed the chaos," they said. The team is ${team}.`, `Eski çalışanlarından biri ${name} şirketine geri döndü. "Bu kargaşayı özlemişim" dedi. Ekip ${team} kişi.`],
+  ({ name, team }) => [`An old employee came back to ${name}. "I missed the chaos," they said. The team is ${team}.`, `Eski çalışanlarından biri ${dat(name)} geri döndü. "Bu kargaşayı özlemişim" dedi. Ekip ${team} kişi.`],
   ({ name, team }) => [`${name} has a second coffee cup in the sink again. You hired, and the team is ${team}.`, `${name} ofisinin lavabosunda yine ikinci bir kahve fincanı var. Eleman aldın, ekip ${team} kişi.`],
 ];
 
 /** Small team: up to ten people. */
 const HIRE_SMALL: ((v: Staff) => Pair)[] = [
   ({ name, n, team }) => [`You hired ${n} ${people(n)} at ${name}. The team grows to ${team}.`, `${name} için ${n} kişi işe aldın. Ekip ${team} kişiye çıktı.`],
-  ({ name, n, team }) => [`${n === 1 ? 'A new face' : `${n} new faces`} at ${name}. The team is ${team} now, and the mugs no longer match.`, `${name} şirketinde ${n} yeni yüz var. Ekip artık ${team} kişi ve kupalar birbirini tutmuyor.`],
+  ({ name, n, team }) => [`${n === 1 ? 'A new face' : `${n} new faces`} at ${name}. The team is ${team} now, and the mugs no longer match.`, `${loc(name)} ${n} yeni yüz var. Ekip artık ${team} kişi ve kupalar birbirini tutmuyor.`],
   ({ name, n, team }) => [`You interviewed all week and hired ${n}. ${name} is ${team} people strong, and the lunch order is now a spreadsheet.`, `Bütün hafta mülakat yaptın ve ${n} kişiyi işe aldın. ${name} artık ${team} kişi; öğle yemeği siparişi bir tabloya dönüştü.`],
   ({ name, n, team }) => [`${name} took on ${n} more. With ${team} people, someone has started a birthday calendar.`, `${name} ${n} kişi daha aldı. ${team} kişi olunca biri doğum günü takvimi tutmaya başladı.`],
   ({ name, n, team }) => [`You hired ${n} at ${name} and bought the desks at a flea market. The team grows to ${team}.`, `${name} için ${n} kişi aldın, masaları da bit pazarından buldun. Ekip ${team} kişiye çıktı.`],
-  ({ name, n, team }) => [`Welcome drinks for the new ${people(n)} at ${name}. You are a team of ${team}, and you still know everyone's coffee order.`, `${name} şirketinde yeni gelenlere hoş geldin içkisi. ${team} kişilik bir ekipsiniz ve hâlâ herkesin kahvesini nasıl içtiğini biliyorsun.`],
-  ({ name, n, team }) => [`${n} new ${people(n)} started at ${name} on the same rainy Monday. The team is ${team}, and the umbrella stand is full.`, `Yağmurlu bir pazartesi ${name} şirketinde ${n} kişi işe başladı. Ekip ${team} kişi oldu, şemsiyelik de doldu.`],
+  ({ name, n, team }) => [`Welcome drinks for the new ${people(n)} at ${name}. You are a team of ${team}, and you still know everyone's coffee order.`, `${loc(name)} yeni gelenlere hoş geldin içkisi. ${team} kişilik bir ekipsiniz ve hâlâ herkesin kahvesini nasıl içtiğini biliyorsun.`],
+  ({ name, n, team }) => [`${n} new ${people(n)} started at ${name} on the same rainy Monday. The team is ${team}, and the umbrella stand is full.`, `Yağmurlu bir pazartesi ${loc(name)} ${n} kişi işe başladı. Ekip ${team} kişi oldu, şemsiyelik de doldu.`],
 ];
 
 /** Mid-sized: eleven to fifty. */
 const HIRE_MID: ((v: Staff) => Pair)[] = [
   ({ name, n, team }) => [`You hired ${n} more at ${name}. The team grows to ${team}; you no longer know every name, and you feel bad about it.`, `${name} için ${n} kişi daha aldın. Ekip ${team} kişiye çıktı; artık herkesin adını bilmiyorsun ve bu seni üzüyor.`],
   ({ name, n, team }) => [`${name} brought in ${n} new ${people(n)}. At ${team}, the office needs a second coffee machine and a first HR person.`, `${name} ${n} yeni kişiyle büyüdü. ${team} kişiye ulaşınca ofise ikinci bir kahve makinesi ve ilk insan kaynakları uzmanı şart oldu.`],
-  ({ name, n, team }) => [`${n} new hires at ${name}. The team is ${team} now, and everyone has muted the group chat.`, `${name} şirketine ${n} yeni çalışan katıldı. Ekip ${team} kişi oldu ve herkes grup sohbetini sessize aldı.`],
+  ({ name, n, team }) => [`${n} new hires at ${name}. The team is ${team} now, and everyone has muted the group chat.`, `${dat(name)} ${n} yeni çalışan katıldı. Ekip ${team} kişi oldu ve herkes grup sohbetini sessize aldı.`],
   ({ name, n, team }) => [`You signed ${n} contracts in one afternoon. ${name} is ${team} people now, and the kitchen fridge needs rules.`, `Bir öğleden sonra ${n} sözleşme imzaladın. ${name} artık ${team} kişi; mutfaktaki buzdolabının kurallara ihtiyacı var.`],
   ({ name, n, team }) => [`${name} grew by ${n}. With ${team} people, the all-hands meeting needs a microphone.`, `${name} ${n} kişi büyüdü. ${team} kişi olunca genel toplantıya mikrofon gerekti.`],
-  ({ name, n, team }) => [`The new ${people(n)} at ${name} got name badges, the first ones the company ever printed. The team is ${team}.`, `${name} şirketinde yeni gelenlere yaka kartı basıldı, şirketin bastığı ilk kartlar. Ekip ${team} kişi.`],
+  ({ name, n, team }) => [`The new ${people(n)} at ${name} got name badges, the first ones the company ever printed. The team is ${team}.`, `${loc(name)} yeni gelenlere yaka kartı basıldı, şirketin bastığı ilk kartlar. Ekip ${team} kişi.`],
 ];
 
 /** Big: more than fifty. */
 const HIRE_BIG: ((v: Staff) => Pair)[] = [
   ({ name, n, team }) => [`HR hired ${n} people at ${name} this year. The team is now ${team}; you have met about half of them.`, `İnsan kaynakları bu yıl ${name} için ${n} kişi işe aldı. Ekip ${team} kişi oldu; yarısıyla tanıştın tanışmadın.`],
   ({ name, n, team }) => [`${name} took on ${n} new staff. At ${team} people, the company has a football team, a choir and a feud.`, `${name} ${n} yeni çalışan aldı. ${team} kişilik şirketin artık bir futbol takımı, bir korosu ve bir de küslüğü var.`],
-  ({ name, n, team }) => [`${n} new badges were printed at ${name}. The team is ${team} strong and the lifts are always full.`, `${name} şirketinde ${n} yeni yaka kartı basıldı. Ekip ${team} kişi ve asansörler hep dolu.`],
+  ({ name, n, team }) => [`${n} new badges were printed at ${name}. The team is ${team} strong and the lifts are always full.`, `${loc(name)} ${n} yeni yaka kartı basıldı. Ekip ${team} kişi ve asansörler hep dolu.`],
   ({ name, n, team }) => [`You approved ${n} hires with one signature. ${name} employs ${team} people now, which still surprises you.`, `Tek imzayla ${n} kişinin işe alımını onayladın. ${name} artık ${team} kişiye iş veriyor; bu hâlâ seni şaşırtıyor.`],
   ({ name, n, team }) => [`${name} opened a new floor for ${n} new hires. The team is ${team}, and the canteen now has a queue.`, `${name} ${n} yeni çalışan için yeni bir kat açtı. Ekip ${team} kişi oldu, yemekhanede artık sıra var.`],
 ];
 
 const LAYOFF: ((v: Staff) => Pair)[] = [
   ({ name, n }) => [`You let ${n} ${people(n)} go at ${name}. The office is very quiet.`, `${name} bünyesinde ${n} kişiyi işten çıkardın. Ofiste çıt çıkmıyor.`],
-  ({ name, n }) => [`You had to let ${n} ${people(n)} go at ${name}. You told each of them in person and went home with a headache.`, `${name} şirketinde ${n} kişiyle yollarını ayırmak zorunda kaldın. Her birine yüz yüze söyledin, eve baş ağrısıyla döndün.`],
+  ({ name, n }) => [`You had to let ${n} ${people(n)} go at ${name}. You told each of them in person and went home with a headache.`, `${loc(name)} ${n} kişiyle yollarını ayırmak zorunda kaldın. Her birine yüz yüze söyledin, eve baş ağrısıyla döndün.`],
   ({ name, n, team }) => [`${name} shrank by ${n}. The team is down to ${team}, and nobody laughs at the coffee machine any more.`, `${name} ${n} kişi küçüldü. Ekip ${team} kişiye indi; kahve makinesinin başında artık kimse gülmüyor.`],
-  ({ name, n }) => [`Cutbacks at ${name}: ${n} empty ${n === 1 ? 'desk' : 'desks'}. You wrote a reference letter for every one of them.`, `${name} şirketinde kadro daraldı, ${n} masa boş kaldı. Hepsine birer referans mektubu yazdın.`],
-  ({ name, n, team }) => [`You cut ${n} ${n === 1 ? 'job' : 'jobs'} at ${name}. The ${team} of you who are left work harder and talk less.`, `${name} şirketinde ${n} kişinin işine son verdin. Geride kalan ${team} kişi daha çok çalışıyor, daha az konuşuyor.`],
-  ({ name }) => [`The layoff meeting at ${name} took ten minutes. You thought about it for ten weeks.`, `${name} şirketindeki işten çıkarma toplantısı on dakika sürdü. Sen on hafta düşündün.`],
+  ({ name, n }) => [`Cutbacks at ${name}: ${n} empty ${n === 1 ? 'desk' : 'desks'}. You wrote a reference letter for every one of them.`, `${loc(name)} kadro daraldı, ${n} masa boş kaldı. Hepsine birer referans mektubu yazdın.`],
+  ({ name, n, team }) => [`You cut ${n} ${n === 1 ? 'job' : 'jobs'} at ${name}. The ${team} of you who are left work harder and talk less.`, `${loc(name)} ${n} kişinin işine son verdin. Geride kalan ${team} kişi daha çok çalışıyor, daha az konuşuyor.`],
+  ({ name }) => [`The layoff meeting at ${name} took ten minutes. You thought about it for ten weeks.`, `${loc(name)}ki işten çıkarma toplantısı on dakika sürdü. Sen on hafta düşündün.`],
 ];
 
 const DIVIDEND: ((v: NameAmount) => Pair)[] = [

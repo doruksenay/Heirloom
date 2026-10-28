@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  heirOwnSavings,
   TORCH_AGE,
   activityUsesLeft,
   ageUp,
@@ -130,12 +131,13 @@ describe('pass the torch', () => {
       expect(old.log[old.log.length - 1].text).toContain('passed the torch');
       expect(ribbonFor(life, old, s).id).not.toBe('gone_soon');
 
+      const own = heirOwnSavings(s, heir); // round 5: an adult heir brings savings of their own
       continueAsChild(s, heir.id);
       expect(s.dead).toBeNull();
       expect(s.player.id).toBe(heir.id);
       // half the savings is shared out now between the two children, the other half stays with the parent
       // the heir's part now, after gift tax (Türkiye: allowance 30k × 0.45, 15% on the rest)…
-      expect(s.player.money).toBe(Math.round((50_000 - Math.round((50_000 - 13_500) * 0.15)) / 2));
+      expect(s.player.money).toBe(Math.round((50_000 - Math.round((50_000 - 13_500) * 0.15)) / 2) + own);
       const mom = s.people[old.id];
       expect(mom.deathYear).toBeUndefined();
       expect(mom.estate).toBe(25_000); // …and of what is left later
@@ -229,18 +231,21 @@ describe('inheritance and family history (playtest 2)', () => {
 
   it('splits the estate between all children after a modest tax; the home counts towards the heir\'s part', () => {
     const { s, a } = estate(1);
+    const own = heirOwnSavings(s, a);
     continueAsChild(s, a.id);
     // US: wage factor 1, allowance $30k, 15% on the rest = $25.5k tax; two equal parts, the heir's includes the $50k home
-    expect(s.player.money).toBe(Math.round((200_000 - 25_500 + 50_000) / 2 - 50_000));
+    expect(s.player.money).toBe(Math.round((200_000 - 25_500 + 50_000) / 2 - 50_000) + own);
     expect(s.player.home.owned).toBe(true);
-    expect(s.player.log.some((l) => l.text.includes('inheritance tax') && l.text.includes('2 children'))).toBe(true);
+    expect(s.player.log.some((l) => l.text.includes('inheritance tax') && /between you and your (sister|brother) \w+/.test(l.text))).toBe(true);
     expect(s.player.log.some((l) => l.text.startsWith('You inherited') && l.text.includes('the family home'))).toBe(true);
     // a home worth more than the heir's part: the heir takes the home, the siblings the savings
     const big = estate(2, 100_000, 400_000);
+    const bigOwn = heirOwnSavings(big.s, big.a);
     continueAsChild(big.s, big.a.id);
-    expect(big.s.player.money).toBe(0);
+    expect(big.s.player.money).toBe(bigOwn);
     expect(big.s.player.home.value).toBe(400_000);
-    expect(big.s.player.log.some((l) => l.text.includes('your brothers and sisters shared the savings'))).toBe(true);
+    // one brother: he is named, not "your brothers and sisters" (review 5 §3.9)
+    expect(big.s.player.log.some((l) => /the savings went to your brother \w+/.test(l.text))).toBe(true);
     // an only child keeps everything after tax
     const s1 = fresh(3, false, 'en', 'us');
     setAge(s1, 70);
@@ -249,8 +254,9 @@ describe('inheritance and family history (playtest 2)', () => {
     makeCtx(s1).h.addRelation(only, 'child', 80);
     s1.player.deathCause = 'old age';
     finishLife(s1);
+    const ownOnly = heirOwnSavings(s1, only);
     continueAsChild(s1, only.id);
-    expect(s1.player.money).toBe(100_000 - 10_500);
+    expect(s1.player.money).toBe(100_000 - 10_500 + ownOnly);
   });
 
   it('backdates the spouse an adult heir already has', () => {
@@ -615,9 +621,10 @@ describe('round 3 engine fixes (playtest 3)', () => {
       s.player.deathCause = 'old age';
       finishLife(s);
       expect(heirOptions(s).find((o) => o.person.id === gk.id)?.kind).toBe('grandchild');
+      const own = heirOwnSavings(s, gk);
       continueAsChild(s, gk.id);
       // the living son keeps his part: the grandchild gets half, not everything (US tax: $25.5k on $200k)
-      expect(s.player.money).toBe(Math.round((200_000 - 25_500) / 2));
+      expect(s.player.money).toBe(Math.round((200_000 - 25_500) / 2) + own);
       expect(s.dynasty.generation).toBe(3);
       const text = s.player.log.map((l) => l.text).join('\n');
       expect(text).not.toMatch(/brothers and sisters|kardeş/);

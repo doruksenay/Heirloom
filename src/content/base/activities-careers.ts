@@ -1,7 +1,8 @@
 import type { ActivityDef, Ctx } from '../types';
-import { PART_TIME_JOBS, wage, wth } from './util';
+import { PART_TIME_JOBS, wage, workKind, wth } from './util';
+import { majorOf } from '../../engine/careers';
 import { say, sayWith } from './lines';
-import { promoteAnyway } from '../../engine/context';
+import { addPerformance, promoteAnyway } from '../../engine/context';
 import { isCoastal, seaName } from '../../engine/places';
 
 // v0.7 careers: activities for getting and growing a career, plus the yearly logic for the
@@ -63,7 +64,32 @@ const NETWORK_FRIEND: ((n: string) => readonly [string, string])[] = [
   (n) => [`You and ${n} got stuck in the lift between floors for twenty minutes. You came out friends.`, `${wth(n)} katlar arasında asansörde yirmi dakika mahsur kaldınız. Dost olarak çıktınız.`],
 ];
 
+/** Round 5: lines for the 'career_mentor' activity. */
+const MENTOR_LINES: [string, string][] = [
+  ['You showed the new hire the three shortcuts nobody writes down. They wrote them down.', 'Yeni gelene kimsenin yazmadığı üç kestirmeyi gösterdin. O hepsini yazdı.'],
+  ['Your trainee made the mistake you made at their age. You let them, then helped them fix it.', 'Çırağın, senin onun yaşındayken yaptığın hatayı yaptı. Yapmasına izin verdin, sonra düzeltmesine yardım ettin.'],
+  ['You spent your lunch break explaining how things really work around here. Worth every minute.', 'Öğle arasını buranın gerçekte nasıl işlediğini anlatarak geçirdin. Her dakikasına değdi.'],
+  ['The young one asked how you got so good. "Mistakes," you said. "Lots of them."', 'Genç olan, bu kadar iyi olmayı nasıl başardığını sordu. "Hatalarla," dedin. "Bol bol."'],
+  ['You reviewed a newcomer\'s first real piece of work. You found one thing to fix and four to praise.', 'Yeni birinin ilk gerçek işine baktın. Düzeltilecek bir, övülecek dört şey buldun.'],
+  ['Someone you trained got their first raise and brought you a box of baklava.', 'Yetiştirdiğin biri ilk zammını aldı ve sana bir kutu baklava getirdi.'],
+];
+
 export const careerActivities: ActivityDef[] = [
+  {
+    // round 5: something for the second half of a career
+    id: 'career_mentor',
+    label: (c) => c.t('Mentor a newcomer', 'Yeni birine yol göster'),
+    description: (c) => c.t('Pass on what you know; better performance', 'Bildiklerini aktar; iş performansın artar'),
+    group: 'Career',
+    minAge: 30,
+    hideWhenUnavailable: true,
+    available: (c) => !!c.p.jobId && !c.p.retired && c.p.jailYears === 0 && c.p.jobLevel >= 1 && c.p.jobYears >= 4,
+    run: (c) => {
+      addPerformance(c.p, 4);
+      c.h.stat('happiness', 3);
+      return say(c, 'career.mentor', MENTOR_LINES);
+    },
+  },
   {
     id: 'career_trials',
     label: (c) => c.t('Go to open football trials', 'Futbol seçmelerine katıl'),
@@ -143,7 +169,8 @@ export const careerActivities: ActivityDef[] = [
   },
   {
     id: 'career_enlist',
-    label: (c) => c.t('Visit the recruitment office', 'Askerlik şubesine uğra'),
+    // a career soldier's application, not the conscripts' askerlik şubesi (review 5 §3.13: shown to a woman in Leeds)
+    label: (c) => c.t('Visit the recruitment office', 'Orduya katılmak için başvur'),
     description: (c) => c.t('A career in uniform (ages 18–32)', 'Üniformalı bir kariyer (18–32 yaş)'),
     group: 'Career',
     minAge: 18,
@@ -554,8 +581,45 @@ const FREELANCE_BAD: Lines = [
 ];
 
 /** Yearly career logic for base-game jobs (e.g. athletes retiring, military ranks). Called from the base pack's onYear. */
+/** Round 5 state this file keeps on the player (JSON-safe; older saves start empty). */
+interface CareersExt {
+  /** Criminal record seen at the last yearly check (a new conviction costs a clean-record job). */
+  record?: number;
+}
+const careersExt = (c: Ctx) => ((c.p.ext ??= {}).careers ??= {}) as CareersExt;
+
+/** Lines for losing a clean-record job over a conviction, by work kind ([en, tr], `{t}` = the title). */
+const STRUCK_OFF: Record<string, [string, string]> = {
+  uniform: ['After your conviction you were dismissed from the service and handed in your badge. Your career as {t} ended at a desk with one form on it.', 'Mahkûmiyetinin ardından meslekten ihraç edildin; kimliğini ve rozetini teslim ettin. {t} olarak kariyerin, üstünde tek bir form olan bir masada bitti.'],
+  office: ['The conviction reached HR before you did. Your time as {t} ended with a cardboard box.', 'Mahkûmiyet haberi insan kaynaklarına senden önce ulaştı. {t} olarak geçen günlerin bir karton koliyle bitti.'],
+  other: ['A conviction and that job do not go together. You are no longer {t}.', 'Sabıka kaydıyla o iş bir arada olmuyor. Artık {t} değilsin.'],
+};
+
+/**
+ * Yearly checks for every life (round 5): an older save's graduate gets the major their job implies, and a new
+ * conviction costs a job that needs a clean record (review 5 §3.15: a police chief kept the post after three thefts).
+ * No RNG.
+ */
+function careerChecks(c: Ctx): void {
+  const { p } = c;
+  if (p.major === undefined && p.education === 'university' && !p.school) p.major = majorOf(p);
+  const ext = careersExt(c);
+  const before = ext.record;
+  ext.record = p.criminalRecord;
+  if (before === undefined || p.criminalRecord <= before || !p.jobId || p.retired) return;
+  const job = c.h.job();
+  if (!job?.req?.cleanRecord) return;
+  const title = c.h.jobTitle() ?? '';
+  const kind = workKind(c);
+  const [en, tr] = STRUCK_OFF[kind === 'uniform' || kind === 'office' ? kind : 'other'];
+  c.h.setJob(null);
+  c.h.stat('happiness', -8);
+  c.h.log(c.t(en.replace('{t}', title), tr.replace('{t}', title)), 'bad');
+}
+
 export function careerOnYear(c: Ctx): void {
   const { p } = c;
+  careerChecks(c);
   if (!p.jobId || p.retired) return;
   // athletes retire on time even if something kept them off the pitch
   if (p.jobId === 'athlete' && p.jailYears === 0) return athleteYear(c);

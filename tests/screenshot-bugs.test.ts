@@ -1,6 +1,6 @@
 // Regression tests for the bugs found while making store screenshots (see the bug list in the report).
 import { describe, expect, it } from 'vitest';
-import { ageUp, careerLine, choose, heirCards, newGame, openEvent } from '../src/engine/game';
+import { ageUp, careerLine, choose, heirCards, heirOwnSavings, newGame, openEvent } from '../src/engine/game';
 import { findEvent } from '../src/content/registry';
 import { makeCtx } from '../src/engine/context';
 import { BASE_JOBS } from '../src/engine/careers';
@@ -78,8 +78,9 @@ describe('3. heirs, the home and upkeep', () => {
     for (const card of cards) {
       expect(card.home).toBe(true);
       expect(card.homeValue).toBe(300_000);
-      // (30k cash + 300k home) / 3 = 110k < 300k home: the heir takes the home, the cash goes to the others
-      expect(card.money).toBe(0);
+      // (30k cash + 300k home) / 3 = 110k < 300k home: the heir takes the home, the cash goes to the others;
+      // what is left is the heir's own savings (round 5)
+      expect(card.money).toBe(heirOwnSavings(s, card.person));
     }
   });
   it('caps the value-based upkeep for an ordinary household, not for a high earner', () => {
@@ -167,9 +168,13 @@ describe('7. the career on the life record', () => {
     // fired, or quit: the title is cleared
     makeCtx(s).h.setJob(null);
     expect(careerLine(s)).toBe('Former Head of Surgery');
+    // round 5 (review 5 §3.12): someone who left work long before pension age stays "Former" at 80
     setAge(s, 80);
-    expect(careerLine(s)).toBe('Retired Head of Surgery');
+    expect(careerLine(s)).toBe('Former Head of Surgery');
     s.lang = 'tr';
+    expect(careerLine(s)).toBe('Eski Cerrahi Kliniği Şefi');
+    // ... and someone who stopped close to it reads as retired
+    (s.player.ext as { leftAge?: number }).leftAge = 62;
     expect(careerLine(s)).toBe('Emekli Cerrahi Kliniği Şefi');
   });
 });

@@ -1,5 +1,5 @@
 import type { ActivityDef, Ctx, EventDef } from '../types';
-import { acc, cap, dat, gen, kin, kinWord, nm, wage, wth } from '../base/util';
+import { abl, acc, cap, dat, gen, kin, kinWord, loc, nm, wage, wth } from '../base/util';
 import { getCountry } from '../../engine/world';
 import { cityName } from '../../engine/places';
 import { fameLevel, peekFame } from '../fame/state';
@@ -164,7 +164,7 @@ const LAUNCH_MEH: Pair[] = [
   ['Nobody hated it. Nobody bought it either.', 'Kimse nefret etmedi. Kimse almadı da.'],
   ['The launch party had more balloons than customers.', 'Lansman partisinde müşteriden çok balon vardı.'],
   ['One customer loved it so much she wrote you a letter. She was the only customer.', 'Bir müşteri öyle sevdi ki sana mektup yazdı. Tek müşteri de oydu.'],
-  ['Your mother says it is the best thing you have ever made. Sales disagree.', 'Annen bunun yaptığın en güzel şey olduğunu söylüyor. Satışlar aynı fikirde değil.'],
+  ['Your best friend says it is the best thing you have ever made. Sales disagree.', 'En yakın arkadaşın bunun yaptığın en güzel şey olduğunu söylüyor. Satışlar aynı fikirde değil.'],
 ];
 
 /** Taking time off. `tr` is a life in Türkiye: the island ferry and the yayla belong there. */
@@ -191,7 +191,7 @@ const VACATION: ((tr: boolean) => Pair)[] = [
 /** What a charity project did. The money line comes first, so the amount never takes a suffix. */
 const CHARITY: ((name: string) => Pair)[] = [
   (n) => [`${n} planted 5,000 saplings. A little sign in the forest carries your logo.`, `${n} beş bin fidan dikti. Ormandaki küçük bir tabelada senin logon var.`],
-  (n) => [`${n} filled a village school library with new books. The kids sent you a drawing of yourself with a very big head.`, `${n}, bir köy okulunun kütüphanesini baştan donattı. Çocuklar sana kocaman kafalı bir resmini yolladı.`],
+  (n) => [`${n} filled a village school library with new books. The kids sent you a drawing of yourself with a very big head.`, `${n}, bir köy okulunun kütüphanesini baştan donattı. Çocuklar sana, kafanı kocaman çizdikleri bir resim yolladı.`],
   (n) => [`${n} sponsored the neighborhood football team. They lost every game in your shirts, proudly.`, `${n} mahallenin futbol takımına sponsor oldu. Takım, senin formalarınla bütün maçları gururla kaybetti.`],
   (n) => [`${n} fed the street cats of the whole district for a year. They now meow at your logo.`, `${n} bütün ilçenin sokak kedilerini bir yıl boyunca besledi. Kediler artık logonu görünce miyavlıyor.`],
   (n) => [`${n} paid for a new roof on the animal shelter. The dogs did not say thank you, but they wagged.`, `${n} hayvan barınağının çatısını yaptırdı. Köpekler teşekkür etmedi ama kuyruk salladı.`],
@@ -372,7 +372,7 @@ export const moreEvents: EventDef[] = [
       shrink(comp, 0.85);
       return c.t(
         `Your big client dropped ${comp.name} for a cheaper supplier. Sales dropped by about a seventh overnight.`,
-        `Büyük müşterin daha ucuz bir tedarikçi bulup ${comp.name} şirketini bıraktı. Satışların bir gecede yedide bir eridi.`,
+        `Büyük müşterin daha ucuz bir tedarikçi bulup ${acc(comp.name)} bıraktı. Satışların bir gecede yedide bir eridi.`,
       );
     },
     tone: 'big',
@@ -443,7 +443,7 @@ export const moreEvents: EventDef[] = [
           hype(comp, 5);
           return c.t(
             `You pulled every last one off the shelves. It hurt, but people trusted ${comp.name} more for it.`,
-            `Rafta ne varsa topladın. Canın yandı ama insanlar ${comp.name} şirketine daha çok güvendi.`,
+            `Rafta ne varsa topladın. Canın yandı ama insanlar ${dat(comp.name)} daha çok güvendi.`,
           );
         },
         tone: 'good',
@@ -534,8 +534,8 @@ export const moreEvents: EventDef[] = [
     },
     title: (c) =>
       Number(c.vars.kind) === 0
-        ? c.t(`A fire broke out at ${co(c)!.name} overnight.`, `Gece ${co(c)!.name} şirketinde yangın çıktı.`)
-        : c.t(`A burst pipe flooded ${co(c)!.name} overnight.`, `Gece patlayan bir boru ${co(c)!.name} şirketini su altında bıraktı.`),
+        ? c.t(`A fire broke out at ${co(c)!.name} overnight.`, `Gece ${loc(co(c)!.name)} yangın çıktı.`)
+        : c.t(`A burst pipe flooded ${co(c)!.name} overnight.`, `Gece patlayan bir boru ${acc(co(c)!.name)} su altında bıraktı.`),
     text: (c) => c.t(`Nobody was hurt. The damage is about ${c.h.fmt(Number(c.vars.dmg))}.`, `Kimse yaralanmadı. Zarar aşağı yukarı ${c.h.fmt(Number(c.vars.dmg))}.`),
     choices: [
       {
@@ -825,7 +825,7 @@ export const moreEvents: EventDef[] = [
     text: (c) =>
       c.t(
         `${nm(c)} brings skills, a laptop full of ideas and a little money. The price: 20% of ${co(c)!.name}.`,
-        `Yanında becerilerini, fikir dolu bir laptop ve biraz da para getiriyor. Karşılığında istediği: ${co(c)!.name} şirketinde yüzde yirmi pay.`,
+        `Yanında becerilerini, fikir dolu bir laptop ve biraz da para getiriyor. Karşılığında istediği: ${loc(co(c)!.name)} yüzde yirmi pay.`,
       ),
     choices: [
       {
@@ -865,7 +865,7 @@ export const moreEvents: EventDef[] = [
       c.vars.pi = c.rng.int(0, PIVOTS.length - 1);
       c.vars.price = Math.max(wage(c, 5000), Math.round(comp.valuation * comp.ownership * 0.25));
     },
-    title: (c) => c.t(`Your cofounder ${nm(c)} wants to take ${co(c)!.name} in a new direction.`, `Kurucu ortağın ${nm(c)}, ${co(c)!.name} şirketini bambaşka bir yöne götürmek istiyor.`),
+    title: (c) => c.t(`Your cofounder ${nm(c)} wants to take ${co(c)!.name} in a new direction.`, `Kurucu ortağın ${nm(c)}, ${acc(co(c)!.name)} bambaşka bir yöne götürmek istiyor.`),
     text: (c) => {
       const [en, tr] = PIVOTS[Number(c.vars.pi)];
       return c.t(`${nm(c)} wants to pivot to ${en}. You want to keep doing what works.`, `${nm(c)} işi ${tr} kaydırmak istiyor. Sen işleyen düzeni bozmak istemiyorsun.`);
@@ -1200,7 +1200,7 @@ export const moreEvents: EventDef[] = [
       {
         id: 'skip',
         label: (c) => c.t('Sit this season out', 'Bu sezonu pas geç'),
-        resolve: (c) => c.t('You skipped the show. Your designers sulked in matching outfits.', 'Defileye katılmadın. Tasarımcıların birbirine uyan kıyafetlerle surat astı.'),
+        resolve: (c) => c.t('You skipped the show. Your designers sulked in matching outfits.', 'Defileye katılmadın. Tasarımcıların, takım elbise gibi birbirine uyan kıyafetleriyle surat astılar.'),
       },
     ],
   },
@@ -1465,7 +1465,7 @@ export const moreEvents: EventDef[] = [
       const k = c.h.person(String(c.vars.pid));
       return c.t(
         `Your ${kinWord(k, 'sibling')} ${nm(c)} wants a bigger share of ${co(c)!.name}.`,
-        `${cap(kin(c, k, 'sibling'))} ${nm(c)}, ${co(c)!.name} şirketinden daha büyük pay istiyor.`,
+        `${cap(kin(c, k, 'sibling'))} ${nm(c)}, ${abl(co(c)!.name)} daha büyük pay istiyor.`,
       );
     },
     text: (c) => {
@@ -1557,7 +1557,7 @@ export const moreEvents: EventDef[] = [
           c.h.stat('happiness', 5);
           return c.t(
             `You sold ${name}. ${founder}'s photo came off the office wall and went into a box. You got ${c.h.fmt(payout)}.`,
-            `${name} şirketini sattın. ${gen(founder)} fotoğrafı ofis duvarından indi, bir kutuya kondu. Cebine ${c.h.fmt(payout)} girdi.`,
+            `${acc(name)} sattın. ${gen(founder)} fotoğrafı ofis duvarından indi, bir kutuya kondu. Cebine ${c.h.fmt(payout)} girdi.`,
           );
         },
         tone: 'big',
@@ -1625,7 +1625,7 @@ export const moreEvents: EventDef[] = [
     },
     title: (c) => {
       const k = c.h.person(String(c.vars.pid));
-      return c.t(`Will your ${kinWord(k, 'child')} ${nm(c)} run ${co(c)!.name} one day?`, `${co(c)!.name} şirketinin başına bir gün ${kin(c, k, 'child')} ${nm(c)} ${qmi(nm(c))} geçecek?`);
+      return c.t(`Will your ${kinWord(k, 'child')} ${nm(c)} run ${co(c)!.name} one day?`, `${gen(co(c)!.name)} başına bir gün ${kin(c, k, 'child')} ${nm(c)} ${qmi(nm(c))} geçecek?`);
     },
     text: (c) => c.t('The board wants a name in the succession plan. Your lawyer has a pen ready.', 'Yönetim kurulu veraset planına bir isim yazılmasını istiyor. Avukatın kalemini hazırlamış.'),
     choices: [
@@ -1639,7 +1639,7 @@ export const moreEvents: EventDef[] = [
           c.h.closeness(String(c.vars.pid), 8);
           return c.t(
             `You told the board: when the time comes, ${nm(c)} runs ${co(c)!.name}. ${nm(c)} pretended not to be thrilled.`,
-            `Yönetim kuruluna söyledin: Vakti gelince ${co(c)!.name} şirketinin başına ${nm(c)} geçecek. ${nm(c)} pek sevinmemiş gibi yaptı.`,
+            `Yönetim kuruluna söyledin: Vakti gelince ${gen(co(c)!.name)} başına ${nm(c)} geçecek. ${nm(c)} pek sevinmemiş gibi yaptı.`,
           );
         },
         tone: 'good',

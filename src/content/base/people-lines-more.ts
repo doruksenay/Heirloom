@@ -500,7 +500,7 @@ export const INTRO_AWKWARD: Partial<Record<Rel, PL[]>> = {
 
 export const AGAIN_MORE: Record<string, L[]> = {
   hug: [
-    ({ N, He }) => [`Another hug for ${N}. ${He} said you are getting soft. ${He} did not let go first.`, `${dat(N)} yine sarıldın. Yumuşadığını söyledi. Bırakan ilk o olmadı.`],
+    ({ N, He }) => [`Another hug for ${N}. ${He} said you are getting soft. ${He} did not let go first.`, `${dat(N)} yine sarıldın. "Yaşlandıkça yumuşuyorsun" dedi ama önce o bırakmadı.`],
     ({ N }) => [`You hugged ${N} again. It is becoming a habit, the good kind.`, `${dat(N)} yine sarıldın. Bir alışkanlık oluyor; iyisinden.`],
   ],
   joke: [

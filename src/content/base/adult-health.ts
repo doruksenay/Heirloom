@@ -3,6 +3,7 @@ import { cap, dat, wage } from './util';
 import { byCountry, inTr } from './events-flavour';
 import { inPrison, say, type Pair } from './lines';
 import { T, ch, num, nmv, noMourn, afford, working, partnered, setPartner } from './adult-kit';
+import { aliveKin } from './kin';
 
 // Round 4, ages 25+: health. Illness and surgery, cosmetic procedures, and addiction handled with care:
 // a drinking or painkiller problem is a flag with a real yearly cost, family can step in, help works,
@@ -185,7 +186,9 @@ export const healthEvents: EventDef[] = [
         if (c.rng.chance(0.7)) {
           c.h.stat('looks', 10);
           c.h.stat('happiness', 3);
-          return c.t('Two weeks of swelling, then a face you like very much. Your mother asked if you had lost weight.', 'İki hafta şişlik, sonra çok beğendiğin bir yüz. Annen kilo mu verdin diye sordu.');
+          return aliveKin(c, 'mother')
+            ? c.t('Two weeks of swelling, then a face you like very much. Your mother asked if you had lost weight.', 'İki hafta şişlik, sonra çok beğendiğin bir yüz. Annen kilo mu verdin diye sordu.')
+            : c.t('Two weeks of swelling, then a face you like very much. Your neighbour asked if you had lost weight.', 'İki hafta şişlik, sonra çok beğendiğin bir yüz. Komşun kilo mu verdin diye sordu.');
         }
         c.h.stat('looks', -3);
         c.h.stat('health', -3);

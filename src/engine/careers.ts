@@ -1,4 +1,18 @@
-import type { Education, Gender } from './types';
+/*
+ * ROUND 5: FIELD OF STUDY (MAJOR) API. Stable names; the Türkiye YKS tercih flow and the Campus pack call these.
+ *
+ *   MAJOR_IDS, MajorId     12 fields of study. Campus `MAJORS` (content/campus/state.ts) uses the same ids.
+ *   MAJOR_INFO[id]         { en, tr, minSmarts, minScore, fields } — minScore is on the ÖSYM 0–560 YKS scale.
+ *   setMajor(c, id)        Records the player's major (p.major, plus Campus state and the `major:<id>` flag).
+ *   majorsFor(c, score?)   Majors the player can enter: with a YKS score, those with minScore <= score;
+ *                          without one, those with minSmarts <= smarts. Most selective first.
+ *   majorOf(p)             The player's (or an NPC's) major, or null (no degree / not declared yet).
+ *   majorName(id, lang)    "Medicine" / "Tıp".
+ *   JOB_MAJORS[jobId]      Majors a job requires (doctor → medicine). Jobs not listed are open to any degree.
+ *   majorAllows(p, job)    False when the job needs a major the player lacks (someone already in that job keeps it).
+ *   majorReason(job, lang) "Needs a medicine degree" / "Tıp diploması gerekir" — the job board's lock reason.
+ */
+import type { Education, Gender, Person, Player } from './types';
 import type { Ctx } from '../content/types';
 
 /**
@@ -273,8 +287,44 @@ export function titleFor(job: JobDef, level: number, lang: 'en' | 'tr' = 'en'): 
   return list[Math.min(level, list.length - 1)];
 }
 
-export function salaryFor(job: JobDef, level: number, wageFactor: number): number {
-  return Math.round(job.baseSalary * (1 + 0.32 * level) * wageFactor);
+/**
+ * Pay rise for each step up a ladder (round 5, review 5 §3.2: a flat +32% a step made the top rungs absurd).
+ * Early steps are modest, later ones bigger: +12%, +15%, +18%, then +20% for every further step.
+ */
+export const STEP_RAISES = [0.12, 0.15, 0.18, 0.2];
+/** Seniority: +1.5% a year in the same job, for up to 15 years (kept across promotions, reset by a new job). */
+export const SENIORITY_RAISE = 0.015;
+export const SENIORITY_CAP = 15;
+
+/** Pay multiplier of a rung over the entry rung. */
+export function levelMultiplier(level: number): number {
+  let m = 1;
+  for (let i = 0; i < level; i++) m *= 1 + STEP_RAISES[Math.min(i, STEP_RAISES.length - 1)];
+  return m;
+}
+
+/** The raise, in whole percent, that the step from `level` to `level + 1` brings. */
+export const stepRaisePct = (level: number) => Math.round(STEP_RAISES[Math.min(Math.max(0, level), STEP_RAISES.length - 1)] * 100);
+
+/** Yearly salary at a rung; `years` in the job adds seniority (job listings leave it out: a new hire has none). */
+export function salaryFor(job: JobDef, level: number, wageFactor: number, years = 0): number {
+  const seniority = 1 + SENIORITY_RAISE * Math.min(Math.max(0, years), SENIORITY_CAP);
+  return Math.round(job.baseSalary * levelMultiplier(level) * seniority * wageFactor);
+}
+
+/**
+ * Chance of an ordinary yearly promotion once the minimum years at the level are served (context.minYearsAtLevel).
+ * Driven by performance (work hard, smarts, health; context.performanceOf) and harder near the top: the last rungs
+ * of a ladder are rare, and nobody under 30 gets the upper half (review 5 §3.2). No RNG.
+ */
+export function promotionOdds(job: JobDef, level: number, perf: number, age: number): number {
+  const steps = job.titles.length - 1;
+  const frac = steps <= 1 ? 0 : level / (steps - 1); // 0 on the bottom rung, 1 on the rung before the top
+  let odds = 0.06 + Math.max(0, perf - 35) / 220;
+  odds *= 1 - 0.55 * frac;
+  if (frac >= 0.5 && age < 30) odds *= 0.3;
+  if (frac >= 1) odds *= age < 45 ? 0.3 : 0.8;
+  return Math.max(0.01, Math.min(0.3, odds));
 }
 
 /** Minimum number of title levels for a ladder to count as a "career top" (the goal and the top_job badge). */
@@ -302,6 +352,152 @@ export function isCareerUpgrade(c: Ctx, job: JobDef | string, level = 0): boolea
   const lvl = Math.max(0, Math.min(level, target.titles.length - 1));
   if (target.id === cur.id) return lvl > p.jobLevel;
   if (p.jobLevel >= 1 && lvl === 0) return false;
-  const pay = (j: JobDef, l: number) => j.baseSalary * (1 + 0.32 * l);
+  const pay = (j: JobDef, l: number) => j.baseSalary * levelMultiplier(l);
   return pay(target, lvl) >= pay(cur, p.jobLevel) * 1.1;
+}
+
+// ================================================================ round 5: fields of study
+
+export const MAJOR_IDS = [
+  'medicine',
+  'dentistry',
+  'pharmacy',
+  'law',
+  'engineering',
+  'architecture',
+  'psychology',
+  'vet',
+  'nursing',
+  'education',
+  'business',
+  'arts',
+] as const;
+export type MajorId = (typeof MAJOR_IDS)[number];
+
+export interface MajorInfo {
+  en: string;
+  tr: string;
+  /** Smarts needed to choose it outside a YKS (free choice at enrollment, Campus). */
+  minSmarts: number;
+  /** Lowest YKS score (ÖSYM 0–560 scale) that gets you in, for the Türkiye tercih. */
+  minScore: number;
+  /** Job fields its graduates usually work in (Campus internships and fairs). */
+  fields: JobDef['field'][];
+}
+
+export const MAJOR_INFO: Record<MajorId, MajorInfo> = {
+  medicine: { en: 'Medicine', tr: 'Tıp', minSmarts: 60, minScore: 480, fields: ['health'] },
+  dentistry: { en: 'Dentistry', tr: 'Diş Hekimliği', minSmarts: 58, minScore: 460, fields: ['health'] },
+  pharmacy: { en: 'Pharmacy', tr: 'Eczacılık', minSmarts: 55, minScore: 430, fields: ['health'] },
+  law: { en: 'Law', tr: 'Hukuk', minSmarts: 50, minScore: 440, fields: ['office', 'public'] },
+  engineering: { en: 'Engineering', tr: 'Mühendislik', minSmarts: 50, minScore: 400, fields: ['tech'] },
+  architecture: { en: 'Architecture', tr: 'Mimarlık', minSmarts: 50, minScore: 400, fields: ['creative', 'tech'] },
+  psychology: { en: 'Psychology', tr: 'Psikoloji', minSmarts: 45, minScore: 380, fields: ['health', 'public'] },
+  vet: { en: 'Veterinary Medicine', tr: 'Veterinerlik', minSmarts: 50, minScore: 370, fields: ['health'] },
+  nursing: { en: 'Nursing', tr: 'Hemşirelik', minSmarts: 35, minScore: 300, fields: ['health'] },
+  education: { en: 'Education', tr: 'Öğretmenlik', minSmarts: 0, minScore: 320, fields: ['public'] },
+  business: { en: 'Business', tr: 'İşletme', minSmarts: 0, minScore: 230, fields: ['office', 'tech'] },
+  arts: { en: 'Fine Arts', tr: 'Güzel Sanatlar', minSmarts: 0, minScore: 200, fields: ['creative'] },
+};
+
+export const isMajorId = (id: unknown): id is MajorId => typeof id === 'string' && (MAJOR_IDS as readonly string[]).includes(id);
+
+export const majorName = (id: MajorId, lang: 'en' | 'tr' = 'en') => (lang === 'tr' ? MAJOR_INFO[id].tr : MAJOR_INFO[id].en);
+
+/** Jobs that need a particular degree, as in real life. Every other job takes any graduate (or none). */
+export const JOB_MAJORS: Record<string, MajorId[]> = {
+  doctor: ['medicine'],
+  surgeon: ['medicine'],
+  dentist: ['dentistry'],
+  nurse: ['nursing'],
+  midwife: ['nursing'],
+  pharmacist: ['pharmacy'],
+  vet: ['vet'],
+  psychologist: ['psychology'],
+  lawyer: ['law'],
+  judge: ['law'],
+  engineer: ['engineering'],
+  civil_engineer: ['engineering'],
+  architect: ['architecture'],
+  teacher: ['education'],
+  preschool: ['education'],
+};
+
+/** The degree that best matches a job someone holds (used to give old saves and NPCs a major). */
+const JOB_HINT: Record<string, MajorId> = {
+  research: 'engineering',
+  data_scientist: 'engineering',
+  game_dev: 'engineering',
+  atc: 'engineering',
+  pilot: 'engineering',
+  academic: 'education',
+  librarian: 'education',
+  social_worker: 'psychology',
+  physio: 'nursing',
+  diplomat: 'law',
+  designer: 'arts',
+  curator: 'arts',
+  translator: 'education',
+  journalist: 'arts',
+};
+
+/** A major that fits a job (the required one, a likely one, or Business). No RNG. */
+export function majorForJob(jobId: string | null | undefined): MajorId {
+  if (!jobId) return 'business';
+  return JOB_MAJORS[jobId]?.[0] ?? JOB_HINT[jobId] ?? 'business';
+}
+
+/**
+ * The player's or an NPC's field of study. Players: `p.major`, else the Campus major. A university graduate
+ * from an older save without one gets the degree their (best) job implies, so nothing they hold is lost.
+ * null: no degree, or a student who has not declared yet.
+ */
+export function majorOf(p: Person | Player): MajorId | null {
+  if (isMajorId(p.major)) return p.major;
+  const campus = (p as Player).ext?.campus as { major?: unknown } | undefined;
+  if (isMajorId(campus?.major)) return campus!.major as MajorId;
+  if (p.education !== 'university') return null;
+  const peak = ((p as Player).ext?.engine as { peakJob?: { id: string } } | undefined)?.peakJob?.id;
+  return majorForJob(p.jobId ?? peak);
+}
+
+/** Records the player's major: p.major, the Campus state when it exists, and the `major:<id>` flag. */
+export function setMajor(c: Ctx, id: MajorId): void {
+  c.p.major = id;
+  const campus = c.p.ext?.campus as { major?: unknown } | undefined;
+  if (campus) campus.major = id;
+  c.h.flag(`major:${id}`);
+}
+
+/**
+ * Majors open to the player, most selective first. With a YKS score (0–560), those whose minScore <= score;
+ * without one, those whose minSmarts <= smarts. Business and Fine Arts are always open. No RNG.
+ */
+export function majorsFor(c: Ctx, score?: number): MajorId[] {
+  return MAJOR_IDS.filter((m) => (score === undefined ? MAJOR_INFO[m].minSmarts <= c.p.stats.smarts : MAJOR_INFO[m].minScore <= score)).sort(
+    (a, b) => MAJOR_INFO[b].minScore - MAJOR_INFO[a].minScore,
+  );
+}
+
+/** Majors a job needs ([] = none). */
+export const jobMajors = (job: JobDef | string): MajorId[] => JOB_MAJORS[typeof job === 'string' ? job : job.id] ?? [];
+
+/** Whether the degree allows this job. Someone already in the job keeps it (old saves, heirs). */
+export function majorAllows(p: Person | Player, job: JobDef | string): boolean {
+  const need = jobMajors(job);
+  if (!need.length) return true;
+  const id = typeof job === 'string' ? job : job.id;
+  if (p.jobId === id) return true;
+  const m = majorOf(p);
+  return !!m && need.includes(m);
+}
+
+/** "Needs a medicine degree" / "Tıp diploması gerekir" (job board lock reason); '' for open jobs. */
+export function majorReason(job: JobDef | string, lang: 'en' | 'tr' = 'en'): string {
+  const need = jobMajors(job);
+  if (!need.length) return '';
+  const m = need[0];
+  if (lang === 'tr') return `${MAJOR_INFO[m].tr} diploması gerekir`;
+  const en = MAJOR_INFO[m].en.toLowerCase();
+  return `Needs ${/^[aeiou]/.test(en) ? 'an' : 'a'} ${en} degree`;
 }

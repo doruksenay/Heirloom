@@ -18,6 +18,7 @@ import {
   tierRent,
   tierWord,
 } from './activities-home';
+import { aliveKin } from './kin';
 
 // ---------------------------------------------------------------- helpers
 
@@ -252,7 +253,7 @@ const petEventsOnly: EventDef[] = [
             return say(c, petById(c), 'The photo of {n} looking guilty got 200,000 likes.', '{gen} suçlu suçlu baktığı fotoğraf 200 bin beğeni aldı.');
           }
           c.h.stat('happiness', 1);
-          return c.t('Three likes. One of them was your mother.', 'Üç beğeni. Biri annendi.');
+          return aliveKin(c, 'mother') ? c.t('Three likes. One of them was your mother.', 'Üç beğeni. Biri annendi.') : c.t('Three likes. One of them was your dentist.', 'Üç beğeni. Biri diş hekimindi.');
         },
       },
     ],
@@ -311,7 +312,7 @@ const petEventsOnly: EventDef[] = [
         label: (c) => c.t('Cover the cage when guests come', 'Misafir gelince kafesi ört'),
         resolve: (c) => {
           c.h.stat('happiness', -1);
-          return say(c, petById(c), '{n} swore from under the blanket. Your aunt pretended it was the radio.', '{n} örtünün altından küfretti. Teyzen radyodan geldiğini varsaydı.');
+          return say(c, petById(c), '{n} swore from under the blanket. The neighbour pretended it was the radio.', '{n} örtünün altından küfretti. Komşun, sesin radyodan geldiğine inanmış gibi yaptı.');
         },
       },
     ],
@@ -631,7 +632,9 @@ const petEventsOnly: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 4);
           c.h.stat('smarts', 1);
-          return c.t('A week without internet. You read two books and called your aunt. Strange times.', 'Bir hafta internetsiz. İki kitap okudun, teyzeni aradın. Tuhaf günler.');
+          return aliveKin(c, 'aunt')
+            ? c.t('A week without internet. You read two books and called your aunt. Strange times.', 'Bir hafta internetsiz. İki kitap okudun, teyzeni aradın. Tuhaf günler.')
+            : c.t('A week without internet. You read two books and called an old friend. Strange times.', 'Bir hafta internetsiz. İki kitap okudun, eski bir arkadaşını aradın. Tuhaf günler.');
         },
       },
     ],
@@ -798,6 +801,9 @@ function listingLabel(c: Ctx, tier: HomeTier, mode: string, loan: boolean): stri
     return c.t(`Rent a ${word} (${r} a year)`, `${cap(word)} kirala (yıllık ${r})`);
   }
   const price = c.h.fmt(tierPrice(c, def));
+  // an owner sells the old home to buy: the label says so (review 5 §3.7)
+  if (c.p.home.owned)
+    return loan ? c.t(`Sell yours, buy a ${word} with a mortgage (${price})`, `Evini sat, krediyle ${word} al (${price})`) : c.t(`Sell yours, buy a ${word} (${price})`, `Evini sat, ${word} al (${price})`);
   return loan ? c.t(`Buy a ${word} with a mortgage (${price})`, `Krediyle ${word} al (${price})`) : c.t(`Buy a ${word} outright (${price})`, `Peşin ${word} al (${price})`);
 }
 
@@ -868,7 +874,7 @@ const homeEvents: EventDef[] = [
     category: 'money',
     scheduled: true, // opened by "Sell your home"
     setup: (c) => {
-      c.vars.amt = Math.round(c.p.home.value * 0.95);
+      c.vars.amt = Math.round(c.p.home.value * 0.95) - (c.p.home.loan?.balance ?? 0);
     },
     title: (c) => c.t('You call an estate agent.', 'Bir emlakçı çağırdın.'),
     text: (c) => c.t(`After the fee, the sale would bring in about ${c.h.fmt(amt(c))}.`, `Komisyondan sonra satıştan eline yaklaşık ${c.h.fmt(amt(c))} geçer.`),

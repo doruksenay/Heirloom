@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ageUp, choose, doActivity, newGame } from '../src/engine/game';
 import { activitiesFor, allJobs, findEvent, PACKS } from '../src/content/registry';
-import { MIN_YEARS_PER_LEVEL, makeCtx, promoteAnyway } from '../src/engine/context';
+import { makeCtx, minYearsAtLevel, promoteAnyway } from '../src/engine/context';
 import { createRng } from '../src/engine/rng';
 import { BASE_JOBS, EVENT_ONLY, NEW_JOB_IDS, salaryFor } from '../src/engine/careers';
 import { getCountry } from '../src/engine/world';
@@ -121,8 +121,8 @@ describe('yearly career logic', () => {
     expect(s.player.jobLevel).toBe(1);
     s.year++;
     expect(makeCtx(s).h.promote()).toBe(false); // one year at the level
-    s.year += MIN_YEARS_PER_LEVEL - 1;
-    expect(makeCtx(s).h.promote()).toBe(true); // three years later
+    s.year += minYearsAtLevel(1, 4) - 1;
+    expect(makeCtx(s).h.promote()).toBe(true); // round 5: five years on the second rung of four
     expect(s.player.jobLevel).toBe(2);
     s.year++;
     expect(makeCtx(s).h.promote()).toBe(false);
@@ -413,5 +413,196 @@ describe('round 4: many more jobs and the job board', async () => {
       if (s.player.jobLevel === 1) up++;
     }
     expect(up).toBeGreaterThan(5);
+  });
+});
+
+// ================================================================ round 5: majors, pace, coherence
+describe('round 5: fields of study', () => {
+  it('exposes the major API with Campus ids and YKS score bands', async () => {
+    const { MAJOR_IDS, MAJOR_INFO, majorsFor, setMajor, majorReason } = await import('../src/engine/careers');
+    const { MAJORS } = await import('../src/content/campus/state');
+    expect(Object.keys(MAJORS).sort()).toEqual([...MAJOR_IDS].sort());
+    const c = makeCtx(withJob(fresh(), 18, 'barista'));
+    expect(majorsFor(c, 500)).toContain('medicine');
+    expect(majorsFor(c, 470)).not.toContain('medicine');
+    expect(majorsFor(c, 250)).toEqual(['business', 'arts']);
+    expect(majorsFor(c, 560)[0]).toBe('medicine'); // most selective first
+    for (const m of MAJOR_IDS) expect(MAJOR_INFO[m].tr.length, m).toBeGreaterThan(2);
+    setMajor(c, 'law');
+    expect(c.p.major).toBe('law');
+    expect(c.h.has('major:law')).toBe(true);
+    expect(majorReason('dentist', 'en')).toBe('Needs a dentistry degree');
+    expect(majorReason('engineer', 'en')).toBe('Needs an engineering degree');
+    expect(majorReason('doctor', 'tr')).toBe('Tıp diploması gerekir');
+    expect(majorReason('barista', 'en')).toBe('');
+  });
+
+  it('locks degree jobs to their major on the job board and in offers (a law graduate is no dental intern)', async () => {
+    const { jobListing } = await import('../src/content/base/job-board');
+    const s = withJob(fresh(4), 26, 'barista');
+    s.player.jobId = null;
+    s.player.stats.smarts = 95;
+    s.player.major = 'law';
+    const c = makeCtx(s);
+    const row = (id: string) => jobListing(c).find((r) => r.id === id)!;
+    expect(row('dentist').qualifies).toBe(false);
+    expect(row('dentist').gaps).toContain('major');
+    expect(row('dentist').reason).toBe('Needs a dentistry degree.');
+    expect(row('dentist').requirements).toContain('Dentistry degree');
+    expect(row('lawyer').qualifies).toBe(true);
+    expect(row('accountant').qualifies).toBe(true); // open jobs stay open
+    for (const j of eligibleJobs(c)) expect(['doctor', 'surgeon', 'dentist', 'nurse', 'engineer', 'teacher', 'architect', 'vet', 'pharmacist', 'psychologist']).not.toContain(j.id);
+    s.player.major = 'dentistry';
+    expect(jobListing(makeCtx(s)).find((r) => r.id === 'dentist')!.qualifies).toBe(true);
+  });
+
+  it('keeps old saves working: a graduate without a major is filed under the job they hold', async () => {
+    const { majorOf, majorAllows } = await import('../src/engine/careers');
+    const s = withJob(fresh(5), 45, 'doctor', 2, 15);
+    delete s.player.major;
+    expect(majorAllows(s.player, 'doctor')).toBe(true);
+    expect(majorOf(s.player)).toBe('medicine');
+    careerOnYear(makeCtx(s));
+    expect(s.player.major).toBe('medicine');
+    expect(s.player.jobId).toBe('doctor');
+  });
+
+  it('asks a free-game student to pick a field of study in the first year at university', () => {
+    let asked = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = fresh(seed);
+      s.player.birthYear = s.year - 18;
+      s.player.school = 'university';
+      s.player.schoolYears = 0;
+      s.player.education = 'highschool';
+      s.player.stats.smarts = 40;
+      ageUp(s);
+      if (s.pending?.eventId === 'base.choose_major') {
+        asked++;
+        const med = s.pending.choices.find((ch) => ch.id === 'medicine');
+        expect(!med || med.disabled).toBe(true); // smarts 40: medicine greyed out or hidden
+        choose(s, 'education');
+        expect(s.player.major).toBe('education');
+      }
+    }
+    expect(asked).toBeGreaterThanOrEqual(25);
+  });
+});
+
+describe('round 5: career pace', () => {
+  it('waits longer on each rung, and raises are gradual', async () => {
+    const { minYearsAtLevel, TOP_RUNG_MIN_AGE } = await import('../src/engine/context');
+    const { STEP_RAISES, levelMultiplier } = await import('../src/engine/careers');
+    expect(minYearsAtLevel(0, 5)).toBe(3);
+    expect(minYearsAtLevel(3, 5)).toBe(6);
+    expect(minYearsAtLevel(1, 5)).toBeGreaterThan(3);
+    for (const r of STEP_RAISES) expect(r >= 0.08 && r <= 0.2).toBe(true);
+    expect(levelMultiplier(4)).toBeLessThan(2.3);
+    // no ordinary promotion to the top before 42
+    const s = withJob(fresh(6), 35, 'police', 2, 12);
+    expect(TOP_RUNG_MIN_AGE).toBe(42);
+    expect(makeCtx(s).h.promote()).toBe(false);
+    s.player.birthYear = s.year - 43;
+    expect(makeCtx(s).h.promote()).toBe(true);
+  });
+
+  it('makes the top rung rare before 45 (bot distribution)', { timeout: 180_000 }, () => {
+    const tops: number[] = [];
+    for (let seed = 1; seed <= 120; seed++) {
+      let job: string | null = null;
+      let lvl = 0;
+      play('en', seed, (s) => {
+        const p = s.player;
+        if (p.jobId !== job) {
+          job = p.jobId;
+          lvl = p.jobLevel;
+          return;
+        }
+        const j = p.jobId ? allJobs(s.enabledPacks).find((x) => x.id === p.jobId) : undefined;
+        if (j && !j.ranked && j.titles.length >= 4 && p.jobLevel > lvl && p.jobLevel === j.titles.length - 1) tops.push(s.year - p.birthYear);
+        lvl = p.jobLevel;
+      });
+    }
+    const early = tops.filter((a) => a < 45).length;
+    console.log(`top rung: ${tops.length} in 120 lives, ${early} before 45`);
+    expect(early / 120).toBeLessThan(0.12);
+  });
+});
+
+describe('round 5: career coherence', () => {
+  it('re-renders stored job titles in the current language', async () => {
+    const { relocaliseJobs } = await import('../src/engine/context');
+    const s = withJob(fresh(7, 'tr'), 43, 'trainer', 2, 10);
+    s.player.jobTitle = 'Baş Antrenör';
+    s.lang = 'en';
+    const mom = Object.values(s.people).find((q) => q.id !== s.player.id)!;
+    mom.jobTitle = 'Emekli Hemşire';
+    relocaliseJobs(s);
+    expect(s.player.jobTitle).toBe('Head Trainer');
+    expect(mom.jobTitle).toBe('Retired Nurse');
+  });
+
+  it('sums up a life by the job it retired from, as the log says', async () => {
+    const { careerLine } = await import('../src/engine/game');
+    const s = withJob(fresh(8), 64, 'police', 3, 12);
+    s.player.ext = { ...(s.player.ext ?? {}), engine: { peakJob: { id: 'police', level: 3, salary: 99_000 } } };
+    const c = makeCtx(s);
+    c.h.setJob('politician');
+    s.player.jobLevel = 1;
+    doActivity(s, 'retire');
+    expect(careerLine(s)).toBe('Retired City Councillor');
+  });
+
+  it('dismisses a police officer convicted of a crime', () => {
+    const s = withJob(fresh(9), 34, 'police', 2, 8);
+    careerOnYear(makeCtx(s));
+    s.player.criminalRecord++;
+    careerOnYear(makeCtx(s));
+    expect(s.player.jobId).toBeNull();
+    expect(s.player.log[s.player.log.length - 1].text).toMatch(/badge/);
+  });
+
+  it('fits the retirement party to the work (no "company" for a surgeon or the self-employed)', async () => {
+    const { retirementScene } = await import('../src/content/base/career-helpers');
+    expect(retirementScene(makeCtx(withJob(fresh(10), 65, 'surgeon', 3, 20))).title).not.toMatch(/company/i);
+    expect(retirementScene(makeCtx(withJob(fresh(10, 'tr'), 65, 'surgeon', 3, 20))).title).not.toMatch(/Şirket/);
+    expect(retirementScene(makeCtx(withJob(fresh(10), 65, 'baker', 4, 20))).title).toMatch(/keys/);
+    expect(retirementScene(makeCtx(withJob(fresh(10), 65, 'accountant', 2, 20))).title).toMatch(/company/);
+  });
+
+  it('gives working-age relatives a job (no 54-year-old "no job yet")', () => {
+    let adults = 0;
+    let working = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = withJob(fresh(seed), 50, 'teacher', 1, 5);
+      const c = makeCtx(s);
+      const sib = c.h.newPerson({ age: 54, lastName: s.player.lastName });
+      c.h.addRelation(sib, 'sibling', 60);
+      for (let y = 0; y < 5; y++) {
+        ageUp(s);
+        for (let g = 0; s.pending && g < 6; g++) choose(s, s.pending.choices.find((ch) => !ch.disabled)!.id);
+        if (s.dead) break;
+      }
+      if (s.dead || sib.deathYear !== undefined) continue;
+      adults++;
+      if (sib.jobId) working++;
+    }
+    expect(working / adults).toBeGreaterThan(0.8);
+  });
+
+  it('routes the nudge for the jobless to the job board with salaries', () => {
+    let board = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const s = withJob(fresh(seed), 30, 'barista');
+      s.player.jobId = null;
+      for (let y = 0; y < 6 && !s.dead; y++) {
+        ageUp(s);
+        if (s.pending?.eventId === 'base.job_search') throw new Error('old listings event');
+        if (s.pending?.eventId === 'base.job_board') board++;
+        for (let g = 0; s.pending && g < 6; g++) choose(s, s.pending.choices.filter((ch) => !ch.disabled).pop()!.id);
+        s.player.jobId = null;
+      }
+    }
+    expect(board).toBeGreaterThan(0);
   });
 });

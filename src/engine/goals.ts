@@ -3,6 +3,7 @@ import type { Rng } from './rng';
 import { getCountry } from './world';
 import { PACKS, enabledPacks, packNetWorth } from '../content/registry';
 import { fmtMoney } from './context';
+import { homeEquity } from './economy';
 
 /** Life goals: each life gets three. Completing one adds legacy; all three earns the Overachiever ribbon. */
 export interface GoalDef {
@@ -29,6 +30,7 @@ const kids = (s: GameState) => s.player.relations.filter((r) => r.kind === 'chil
 export const WEALTH_GOAL = 250_000;
 
 const st = (s: GameState) => s.player.stats;
+const married = (s: GameState) => s.player.relations.some((r) => r.kind === 'spouse' && s.people[r.personId] && s.people[r.personId].deathYear === undefined);
 const employed = (s: GameState) => !!s.player.jobId && !s.player.retired;
 const closeOnes = (s: GameState) => s.player.relations.filter((r) => r.closeness >= 80 && s.people[r.personId] && s.people[r.personId].deathYear === undefined).length;
 
@@ -40,11 +42,12 @@ const closeOnes = (s: GameState) => s.player.relations.filter((r) => r.closeness
 export const BASE_GOALS: GoalDef[] = [
   { id: 'graduate', label: 'Graduate from university', labelTr: 'Üniversiteden mezun ol', available: (s) => age(s) < 30 && (age(s) < 18 || s.player.education === 'highschool'), weight: (s) => (st(s).smarts >= 50 ? 3 : 1), check: (s) => s.player.education === 'university' },
   { id: 'homeowner', label: 'Own a home', labelTr: 'Ev sahibi ol', weight: (s) => (age(s) >= 18 && (employed(s) || s.player.money > 0) ? 2 : 1), check: (s) => s.player.home.owned },
-  { id: 'married', label: 'Get married', labelTr: 'Evlen', available: (s) => age(s) < 60, weight: (s) => (s.player.relations.some((r) => r.kind === 'partner') ? 3 : 1.5), check: (s) => has(s, 'married') },
+  // not for someone already married (review 5 §3.9: an heir with a husband of twenty years was told to get married)
+  { id: 'married', label: 'Get married', labelTr: 'Evlen', available: (s) => age(s) < 60 && !married(s), weight: (s) => (s.player.relations.some((r) => r.kind === 'partner') ? 3 : 1.5), check: (s) => has(s, 'married') },
   { id: 'parent', label: 'Become a parent', labelTr: 'Ebeveyn ol', available: (s) => age(s) < 42, weight: () => 1.5, check: (s) => kids(s) >= 1 },
   { id: 'three_kids', label: 'Raise three children', labelTr: 'Üç çocuk büyüt', available: (s) => age(s) < 34 || (age(s) < 40 && kids(s) >= 2), weight: (s) => (kids(s) >= 1 ? 1.5 : 0.7), check: (s) => kids(s) >= 3 },
   { id: 'top_job', label: 'Reach the top of a career', labelTr: 'Bir kariyerin zirvesine çık', available: (s) => age(s) < 45, weight: (s) => (employed(s) ? 2.5 : st(s).smarts >= 50 ? 1.5 : 1), check: (s) => has(s, 'top_job') },
-  { id: 'wealthy', label: 'Be worth {amount}', labelTr: '{amount} servete ulaş', weight: (s) => (employed(s) || st(s).smarts >= 60 ? 2 : 1), check: (s) => s.player.money + (s.player.home.owned ? s.player.home.value : 0) + packNetWorth(s) >= local(s, WEALTH_GOAL) },
+  { id: 'wealthy', label: 'Be worth {amount}', labelTr: '{amount} servete ulaş', weight: (s) => (employed(s) || st(s).smarts >= 60 ? 2 : 1), check: (s) => s.player.money + homeEquity(s.player.home) + packNetWorth(s) >= local(s, WEALTH_GOAL) },
   // long life is mostly luck: only offered late, to someone in good health
   { id: 'age90', label: 'Live to 90', labelTr: '90 yaşını gör', available: (s) => age(s) >= 70 && age(s) < 85 && st(s).health >= 60, check: (s) => age(s) >= 90 },
   { id: 'new_heirloom', label: 'Add a new heirloom to the family', labelTr: 'Aileye yeni bir yadigâr kazandır', available: () => false, check: (s) => s.dynasty.heirlooms.some((h) => h.sinceYear > s.player.birthYear) },

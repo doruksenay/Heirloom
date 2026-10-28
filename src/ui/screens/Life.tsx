@@ -15,6 +15,8 @@ import { track } from '../../platform/analytics';
 import { Tip, tipSeen } from '../Tip';
 import { DailyStrip, dateLabel } from './Daily';
 import { resultFor, todayKey } from '../../engine/daily';
+import { capsName } from '../caps';
+import { skinTone } from '../../engine/skin';
 
 const MILESTONES = [1, 3, 6, 12, 18, 25, 40, 60, 80, 100];
 /** Categories whose label means nothing to a player ("random" is how the engine files odd moments). */
@@ -89,7 +91,7 @@ export function Life({ app }: { app: AppApi }) {
         ) : (
           <div class="row eyebrow" style={{ gap: '8px' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)' }} />
-            {T('{name} family · Gen {n}', { name: s.dynasty.familyName, n: s.dynasty.generation })}
+            {T('{name} family · Gen {n}', { name: capsName(s.dynasty.familyName, app.lang), n: s.dynasty.generation })}
           </div>
         )}
         <div class="row" style={{ gap: '2px' }}>
@@ -117,7 +119,7 @@ export function Life({ app }: { app: AppApi }) {
       </div>
 
       <div class="row life-id">
-        <Avatar id={p.id + p.firstName} gender={p.gender} age={age} size={58} label={T('{name}, age {n}', { name: p.firstName, n: age })} />
+        <Avatar id={p.id + p.firstName} gender={p.gender} age={age} size={58} label={T('{name}, age {n}', { name: p.firstName, n: age })} tone={skinTone(s, p)} />
         <div class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <h1 class="life-name">
             {p.firstName} {p.lastName}
@@ -218,7 +220,9 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
       </Tip>
     );
   }
-  if (!seen('age_up')) {
+  // each tip has an age window, so an undismissed one never blocks the rest or lingers for decades (review 5
+  // §3.15: the "aging up / activities" tip still showing at 32)
+  if (!seen('age_up') && age < 6 && s.dynasty.generation === 1) {
     return (
       <Tip app={app} id="age_up" icon="plus">
         {T('Each tap of Age up is one year. Things will happen, and some of them will ask you to choose.')}
@@ -233,14 +237,14 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
     );
   }
   const first = s.dynasty.heirlooms[0];
-  if (age >= 3 && first && !seen('heirlooms')) {
+  if (age >= 3 && age < 18 && first && !seen('heirlooms')) {
     return (
       <Tip app={app} id="heirlooms" icon="clock" action={{ label: T('Show me'), run: () => app.go('home') }}>
         {T('Your family owns an heirloom: {item}. Heirlooms pass from parent to child, and each one has a power.', { item: first.name })}
       </Tip>
     );
   }
-  if (age >= 6 && seen('heirlooms') && !seen('activities')) {
+  if (age >= 6 && age < 22 && !seen('activities') && (seen('heirlooms') || !first || age >= 9)) {
     return (
       <Tip app={app} id="activities" icon="bolt" action={{ label: T('Open Activities'), run: () => app.go('activities') }}>
         {T('Besides aging up, you can do a few things every year: study, exercise, meet people, look for work.')}

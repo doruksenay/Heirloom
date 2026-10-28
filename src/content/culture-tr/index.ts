@@ -4,26 +4,18 @@ import type { GameState } from '../../engine/types';
 import type { RibbonDef } from '../../engine/ribbons';
 import type { GoalDef } from '../../engine/goals';
 import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, officeJob, single, wage, who, wth } from '../base/util';
-import { isCoastal } from '../../engine/places';
-import { pickIndex, say, sayWith, type Pair } from '../base/lines';
+import { pickIndex, say, type Pair } from '../base/lines';
+import { closeAll, hasDad, hasMom, inTR } from './common';
+import { aliveKin } from '../base/kin';
+import { milestoneEvents, trOnYear, trSchedule } from './milestones';
+import { bayramLine, FERRY_IST, FERRY_IZMIR, HALISAHA, HALISAHA_HURT, kahveLine, pazarLines, sayBand, TAVLA, teaLine } from './lines';
+import { bandOf } from './common';
 
 // "Türkiye" culture pack: everyday Turkish life moments for characters living in Türkiye.
+// The life milestones (sünnet, LGS, YKS and the tercih, askerlik, the wedding, the tapu) are scheduled: milestones.ts.
+// The repeatable activity lines live in lines.ts, split by age band.
 export const CULTURE_TR_ENTITLEMENT = 'pack.culture_tr';
 
-const inTR = (c: Ctx) => c.p.countryId === 'tr';
-/**
- * Married within the last two years: the wedding parties (kına, düğün, takı) can trail the official ceremony.
- * Only a wedding you had in this life counts (proposals give the 'married' achievement); an heir who takes over
- * already married gets a fresh spouse link that year, and that is not a wedding.
- */
-const justMarried = (c: Ctx) => c.p.achievements.includes('married') && c.h.relatives('spouse').some((s) => c.s.year - s.rel.sinceYear <= 2);
-/** Wedding parties with families, gold and davul zurna are for a first-ish wedding, not one at 79. */
-const WEDDING_MAX_AGE = 50;
-const hasMom = (c: Ctx) => c.h.relatives('mother').length > 0;
-const hasDad = (c: Ctx) => c.h.relatives('father').length > 0;
-const coastal = (c: Ctx) => isCoastal(c.p.city);
-/** Running a household of your own (paying the bills), not living with the parents. */
-const ownHome = (c: Ctx) => c.p.home.owned || (!!c.p.jobId && c.age >= 23);
 /** A child of yours who has children of their own and is at least `minAge` years old. */
 const hasGrandkids = (c: Ctx, minAge: number) => c.h.relatives('child').some((k) => (k.person.kids ?? 0) > 0 && c.h.ageOf(k.person) >= minAge);
 /** Grandchildren with real records (newer saves), alive and within an age range. */
@@ -35,15 +27,24 @@ const grandkidsAged = (c: Ctx, min: number, max: number) =>
     .filter((g) => !!g && g.deathYear === undefined && c.h.ageOf(g) >= min && c.h.ageOf(g) <= max);
 /** True when grandchildren have real records (otherwise only a count is known). */
 const knowsGrandkids = (c: Ctx) => c.h.relatives('child').some((k) => (k.person.childIds ?? []).length > 0);
+/** Running a household of your own (paying the bills), not living with the parents. */
+const ownHome = (c: Ctx) => c.p.home.owned || (!!c.p.jobId && c.age >= 23);
 const family = (c: Ctx) => c.h.relatives(['mother', 'father', 'sibling', 'child', 'spouse']);
-const closeAll = (c: Ctx, kinds: Parameters<Ctx['h']['relatives']>[0], d: number) => c.h.relatives(kinds).forEach((r) => c.h.closeness(r.person.id, d));
 const isIzmir = (c: Ctx) => ['İzmir', 'Izmir'].includes(c.p.city);
 const isIstanbul = (c: Ctx) => ['İstanbul', 'Istanbul'].includes(c.p.city);
-
-/** One RNG call, then both languages read from the same row. */
-function line(c: Ctx, rows: readonly (readonly [string, string])[]): string {
-  const i = c.rng.int(0, rows.length - 1);
-  return c.t(rows[i][0], rows[i][1]);
+/** Big cities people moved to; the family hometowns they came from (cities of the game, so moving back is real). */
+const BIG_CITIES = ['İstanbul', 'Istanbul', 'Ankara', 'İzmir', 'Izmir', 'Bursa', 'Antalya'];
+const HOMETOWNS = ['Zonguldak', 'Trabzon', 'Samsun', 'Konya', 'Eskişehir', 'Mersin'];
+/**
+ * The family's memleket: a hometown fixed by the family name (the same for every generation), for a life in a big
+ * city. undefined for a life already in a smaller city: there is no "back home" to move to (review 5 §3.13).
+ */
+export function memleketOf(c: Ctx): string | undefined {
+  if (!BIG_CITIES.includes(c.p.city)) return undefined;
+  const name = c.s.dynasty.familyName || c.p.lastName;
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return HOMETOWNS[h % HOMETOWNS.length];
 }
 
 // ------------------------------------------------------------------ childhood
@@ -120,63 +121,6 @@ const childhood: EventDef[] = [
     ],
   },
   {
-    id: 'tr.sunnet',
-    category: 'childhood',
-    minAge: 5,
-    maxAge: 10,
-    once: true,
-    weight: 25,
-    when: (c) => inTR(c) && c.p.gender === 'male' && hasDad(c),
-    title: (c) => c.t('Your circumcision feast (sünnet düğünü) is this weekend.', 'Bu hafta sonu sünnet düğünün var.'),
-    text: (c) =>
-      c.t(
-        'You have a little prince outfit with a cape and a feathered hat. Someone hired a clown, and a drum-and-pipe band (davul zurna) is at the door.',
-        'Pelerinli, sorguçlu şapkalı bir prens kıyafetin var. Biri palyaço tutmuş, kapıda davul zurna çalıyor.',
-      ),
-    choices: [
-      {
-        id: 'prince',
-        label: (c) => c.t('Wear the cape like a real sultan', 'Pelerini gerçek bir padişah gibi giy'),
-        resolve: (c) => {
-          const cash = wage(c, c.rng.int(60, 200));
-          c.h.money(cash);
-          c.h.stat('happiness', 6);
-          return c.t(
-            `At your circumcision feast (sünnet düğünü) relatives pinned gold coins and banknotes on your sash. You counted ${c.h.fmt(cash)} and ate four plates of pilav.`,
-            `Sünnet düğününde akrabalar kuşağına çeyrek altınlar, banknotlar taktı. Toplam ${c.h.fmt(cash)} saydın, üstüne dört tabak pilav yedin.`,
-          );
-        },
-        tone: 'good',
-      },
-      {
-        id: 'bike',
-        label: (c) => c.t('Remind them about the promised bicycle', 'Söz verilen bisikleti hatırlat'),
-        resolve: (c) => {
-          if (c.rng.chance(0.6)) {
-            c.h.stat('happiness', 8);
-            return c.t('After your sünnet your dad wheeled in a shiny red bicycle. Best day of your life so far.', 'Sünnetten sonra baban parlak kırmızı bir bisikletle içeri girdi. Hayatının şimdiye kadarki en güzel günü.');
-          }
-          c.h.stat('happiness', 2);
-          return c.t(
-            'Your sünnet bicycle was promised "after the summer." Your whole childhood turned out to be after the summer.',
-            'Sünnet hediyesi bisiklet "yaz bitince" alınacakmış. Bütün çocukluğun "yaz bitince" ile geçti.',
-          );
-        },
-      },
-      {
-        id: 'hide',
-        label: (c) => c.t('Hide in the wardrobe', 'Dolaba saklan'),
-        resolve: (c) => {
-          c.h.stat('happiness', 3);
-          return c.t(
-            'On your sünnet day you hid in the wardrobe. Grandma lured you out with Turkish delight (lokum). The clown was a big hit.',
-            'Sünnet günü dolaba saklandın. Ninen seni buldu, bir kutu lokumla ikna edip çıkardı. Palyaço zaten olay oldu.',
-          );
-        },
-      },
-    ],
-  },
-  {
     id: 'tr.mahalle_maci',
     category: 'childhood',
     minAge: 7,
@@ -215,9 +159,10 @@ const childhood: EventDef[] = [
             );
           }
           c.h.stat('health', -4);
+          const caller = hasMom(c) ? ['Your mother', 'Annen'] : hasDad(c) ? ['Your father', 'Baban'] : ['The neighbor upstairs', 'Üst kattaki komşu'];
           return c.t(
-            'Climbing to the neighbor\'s balcony, you fell into the rosebush. Your mother called you in from the fourth floor, and the whole street heard your full name.',
-            'Komşunun balkonuna tırmanırken gül fidanının içine düştün. Annen dördüncü kattan "Eve!" diye bağırdı; bütün sokak göbek adını da öğrendi.',
+            `Climbing to the neighbor's balcony, you fell into the rosebush. ${caller[0]} called you in from the fourth floor, and the whole street heard your full name.`,
+            `Komşunun balkonuna tırmanırken gül fidanının içine düştün. ${caller[1]} dördüncü kattan "Eve!" diye bağırdı; bütün sokak göbek adını da öğrendi.`,
           );
         },
       },
@@ -386,6 +331,7 @@ const childhood: EventDef[] = [
       {
         id: 'grandma',
         label: (c) => c.t('Show your grandmother first', 'Önce ninene göster'),
+        hidden: (c) => !aliveKin(c, 'grandparent', 'female'),
         resolve: (c) => {
           c.h.money(wage(c, 15));
           c.h.stat('happiness', 4);
@@ -451,7 +397,7 @@ const childhood: EventDef[] = [
     minAge: 7,
     maxAge: 12,
     once: true,
-    when: inTR,
+    when: (c) => inTR(c) && aliveKin(c, 'grandparent', 'male') && aliveKin(c, 'grandparent', 'female'),
     title: (c) => c.t("A whole summer at your grandparents' village (köy).", 'Bütün yaz köyde, dedenle ninenin yanındasın.'),
     text: (c) =>
       c.t(
@@ -511,7 +457,7 @@ const childhood: EventDef[] = [
     minAge: 7,
     maxAge: 12,
     once: true,
-    when: inTR,
+    when: (c) => inTR(c) && aliveKin(c, 'grandparent', 'male'),
     title: (c) => c.t('Grandpa remembers when TV had a single channel (TRT).', 'Deden televizyonda tek kanalın, TRT\'nin olduğu günleri anlatıyor.'),
     text: (c) => c.t('Broadcasts ended at midnight with the national anthem and a test card. He says it was better.', 'Yayın gece yarısı İstiklal Marşı ve test kartıyla biterdi. "Daha güzeldi" diyor.'),
     choices: [
@@ -554,57 +500,6 @@ const childhood: EventDef[] = [
 // ------------------------------------------------------------------ youth
 
 const youth: EventDef[] = [
-  {
-    id: 'tr.lgs',
-    category: 'school',
-    minAge: 13,
-    maxAge: 13,
-    once: true,
-    weight: 100,
-    when: (c) => inTR(c) && c.p.school === 'primary' && hasMom(c) && hasDad(c),
-    title: (c) => c.t('The high school entrance exam (LGS) is this year.', 'Bu yıl LGS var.'),
-    text: (c) =>
-      c.t(
-        'Your mom has taped a study timetable to the fridge. Your dad says "fen lisesi" (science high school) the way other dads say "Champions League."',
-        'Annen buzdolabına ders programı yapıştırdı. Baban "fen lisesi" lafını başka babaların "Şampiyonlar Ligi" dediği gibi söylüyor.',
-      ),
-    choices: [
-      {
-        id: 'grind',
-        label: (c) => c.t('Solve test books all year', 'Bütün yıl test çöz'),
-        resolve: (c) => {
-          c.h.stat('smarts', 5);
-          c.h.stat('happiness', -4);
-          if (c.p.stats.smarts >= 65) {
-            c.h.flag('tr_fen_lisesi');
-            return c.t(
-              'You got into a science high school (fen lisesi). Your dad told the grocer, the barber and a stranger on the bus.',
-              'Fen lisesini kazandın. Baban bakkala, berbere ve otobüsteki bir yabancıya anlattı.',
-            );
-          }
-          return c.t('You got into a good Anatolian high school (Anadolu lisesi). Your mom framed the result anyway.', 'İyi bir Anadolu lisesine yerleştin. Annen sonucu yine de çerçeveletti.');
-        },
-      },
-      {
-        id: 'balance',
-        label: (c) => c.t('Study, but keep playing football', 'Çalış ama maçı da bırakma'),
-        resolve: (c) => {
-          c.h.stat('smarts', 2);
-          c.h.stat('health', 2);
-          c.h.stat('happiness', 1);
-          return c.t('You studied for LGS but kept playing football. Your score was fine and your knees were muddy.', 'LGS\'ye çalıştın ama maçı da bırakmadın. Puanın fena değildi, dizlerin de çamurluydu.');
-        },
-      },
-      {
-        id: 'panic',
-        label: (c) => c.t('Panic quietly', 'Sessizce panik yap'),
-        resolve: (c) => {
-          c.h.stat('happiness', -3);
-          return c.t('You panicked about LGS for a whole year and still did okay. Being thirteen is a mystery.', 'Bütün yıl LGS paniği yaşadın, yine de fena çıkmadı. On üç yaş böyle bir şey.');
-        },
-      },
-    ],
-  },
   {
     id: 'tr.lise_ask',
     category: 'love',
@@ -658,65 +553,18 @@ const youth: EventDef[] = [
     ],
   },
   {
-    id: 'tr.yks',
-    category: 'school',
-    minAge: 17,
-    maxAge: 17,
-    once: true,
-    weight: 100,
-    when: (c) => inTR(c) && c.p.school === 'highschool' && hasMom(c),
-    title: (c) => c.t('The university entrance exam (YKS) is in six months.', "YKS'ye altı ay kaldı."),
-    text: (c) => c.t("Your whole family has opinions. Your aunt's son got into medicine.", 'Bütün sülalenin bir fikri var. Teyzenin oğlu tıp kazanmış, haberin olsun.'),
-    choices: [
-      {
-        id: 'dershane',
-        label: (c) => c.t('Join an expensive prep school (dershane)', 'Pahalı bir dershaneye yazıl'),
-        badge: 'Costs more',
-        resolve: (c) => {
-          c.h.money(-wage(c, 1500));
-          c.h.stat('smarts', 6);
-          c.h.stat('happiness', -4);
-          if (c.p.stats.smarts >= 70) c.h.flag('scholarship');
-          return c.p.stats.smarts >= 70
-            ? c.t(
-                'You did practice exams day and night at the prep school and ranked high enough for a scholarship at a good university.',
-                'Dershanede gece gündüz deneme çözdün ve iyi bir üniversitede burslu okuyacak kadar yüksek bir sıralama yaptın.',
-              )
-            : c.t('You survived the prep school. Your ranking was decent.', 'Dershaneden sağ çıktın. Sıralaman fena değil.');
-        },
-      },
-      {
-        id: 'self',
-        label: (c) => c.t('Study on your own', 'Kendi kendine çalış'),
-        resolve: (c) => {
-          c.h.stat('smarts', 4);
-          if (c.p.stats.smarts >= 80) c.h.flag('scholarship');
-          return c.t(
-            'You studied with old test books and online videos. Your mother brought tea every hour.',
-            'Eski soru bankaları ve internetteki konu anlatımlarıyla çalıştın. Annen saat başı çay getirdi.',
-          );
-        },
-      },
-      {
-        id: 'relax',
-        label: (c) => c.t('Trust your luck', 'Şansına güven'),
-        resolve: (c) => {
-          c.h.stat('happiness', 4);
-          return c.t('You trusted your luck. Your ranking did not trust you back.', 'Şansına güvendin. Sıralaman sana güvenmedi.');
-        },
-      },
-    ],
-  },
-  {
     id: 'tr.yurt',
     category: 'school',
     minAge: 18,
     maxAge: 21,
     once: true,
     weight: 40,
-    when: (c) => inTR(c) && c.p.school === 'university' && hasMom(c),
+    when: (c) => inTR(c) && c.p.school === 'university',
     title: (c) => c.t('University in a new city: where will you live?', 'Yeni şehirde üniversite: nerede kalacaksın?'),
-    text: (c) => c.t('Your mother has packed enough dried food for a small army.', 'Annen küçük bir orduya yetecek kadar kuru gıda hazırladı bile.'),
+    text: (c) =>
+      hasMom(c)
+        ? c.t('Your mother has packed enough dried food for a small army.', 'Annen küçük bir orduya yetecek kadar kuru gıda hazırladı bile.')
+        : c.t('You have one suitcase, one box of books and a list of dorm rules nobody follows.', 'Bir valiz, bir koli kitap ve kimsenin uymadığı bir yurt kuralları listesi. Hepsi bu.'),
     choices: [
       {
         id: 'yurt',
@@ -741,52 +589,17 @@ const youth: EventDef[] = [
       },
       {
         id: 'aunt',
-        label: (c) => c.t("Stay at your aunt's in the city", 'Şehirdeki teyzende kal'),
+        label: (c) => c.t('Stay with relatives in the city', 'Şehirdeki akrabalarının yanında kal'),
         badge: 'Free',
         resolve: (c) => {
           c.h.stat('happiness', -2);
-          closeAll(c, 'mother', 2);
-          return c.t('You lived at your aunt\'s during university: a free room, hot dinners and a ten o\'clock curfew. Your aunt reports to your mother every evening.', 'Üniversite boyunca teyzende kaldın: bedava oda, sıcak yemek ve akşam onda kapı kilidi. Teyzen annene her akşam rapor veriyor.');
-        },
-      },
-    ],
-  },
-  {
-    id: 'tr.askerlik',
-    category: 'milestone',
-    minAge: 20,
-    maxAge: 30,
-    once: true,
-    weight: 20,
-    when: (c) => inTR(c) && c.p.gender === 'male' && c.p.jailYears === 0 && c.p.school !== 'university' && hasMom(c),
-    title: (c) => c.t('Your military service papers (celp) have arrived.', 'Askerlik celbin geldi.'),
-    text: (c) => c.t('Your mother is already preparing a farewell dinner. And crying.', 'Annen asker uğurlaması için yemekleri hazırlamaya başladı bile. Bir yandan da ağlıyor.'),
-    choices: [
-      {
-        id: 'serve',
-        label: (c) => c.t('Serve your six months', 'Altı ay vatani görevini yap'),
-        resolve: (c) => {
-          c.h.stat('health', 6);
-          c.h.stat('happiness', -4);
-          closeAll(c, ['mother', 'father'], 6);
-          return line(c, [
-            ['You did your military service. You came back with a moustache and 40 new friends from 40 cities.', 'Askerliğini yaptın. Bir bıyık ve kırk ayrı şehirden kırk yeni arkadaşla döndün.'],
-            ['You did your military service. You can now make a bed in nine seconds. Your mother wept with joy.', 'Askerliğini yaptın. Artık yatağı dokuz saniyede topluyorsun. Annen sevinçten ağladı.'],
-          ]);
-        },
-      },
-      {
-        id: 'paid',
-        label: (c) => c.t('Pay for the short paid service (bedelli)', 'Bedelli askerlik parasını yatır'),
-        requires: (c) => c.p.money >= wage(c, 6000),
-        requiresLabel: 'Not enough money',
-        badge: 'Costs more',
-        resolve: (c) => {
-          c.h.money(-wage(c, 6000));
-          return c.t(
-            'You paid for the shortened service and were home in a month. Your uncle calls it "cheating."',
-            'Bedelliyi yatırdın, bir ayda evdeydin. Amcan buna hâlâ "kaçak güreşmek" diyor.',
-          );
+          closeAll(c, ['mother', 'father'], 2);
+          return hasMom(c) || hasDad(c)
+            ? c.t(
+                'You lived with relatives during university: a free room, hot dinners and a ten o\'clock curfew. They report to your parents every evening.',
+                `Üniversite boyunca akrabalarının yanında kaldın: bedava oda, sıcak yemek ve akşam onda kapı kilidi. Her akşam ${hasMom(c) ? 'annene' : 'babana'} rapor veriyorlar.`,
+              )
+            : c.t('You lived with relatives during university: a free room, hot dinners and a ten o\'clock curfew.', 'Üniversite boyunca akrabalarının yanında kaldın: bedava oda, sıcak yemek ve akşam onda kapı kilidi.');
         },
       },
     ],
@@ -833,7 +646,9 @@ const youth: EventDef[] = [
           c.h.money(wage(c, 800));
           c.h.stat('happiness', 8);
           closeAll(c, ['mother', 'father'], -4);
-          return c.t('You went to Bodrum and stayed three summers and two winters. Your parents now blame everything on "that Bodrum."', 'Bodrum\'a gittin ve üç yaz iki kış kaldın. Annenler artık her şeye "O Bodrum yüzünden" diyor.');
+          return hasMom(c) || hasDad(c)
+            ? c.t('You went to Bodrum and stayed three summers and two winters. Your parents now blame everything on "that Bodrum."', 'Bodrum\'a gittin ve üç yaz iki kış kaldın. Ailen artık her şeye "O Bodrum yüzünden" diyor.')
+            : c.t('You went to Bodrum and stayed three summers and two winters. The neighbors now call you "the one from Bodrum."', 'Bodrum\'a gittin ve üç yaz iki kış kaldın. Mahallede artık sana "Bodrumlu" diyorlar.');
         },
       },
     ],
@@ -1011,151 +826,6 @@ const love: EventDef[] = [
       },
     ],
   },
-  {
-    id: 'tr.dugun_salonu',
-    category: 'love',
-    maxAge: WEDDING_MAX_AGE,
-    once: true,
-    weight: 60,
-    when: (c) => inTR(c) && justMarried(c) && hasMom(c),
-    title: (c) => c.t('The families want a proper wedding party (düğün).', 'Aileler adam gibi bir düğün istiyor.'),
-    text: (c) => c.t('Your new in-laws have a guest list of six hundred. You have met eleven of them.', 'Karşı tarafın altı yüz kişilik bir davetli listesi var. Sen bunların on birini tanıyorsun.'),
-    choices: [
-      {
-        id: 'salon',
-        label: (c) => c.t('Book a wedding hall (düğün salonu)', 'Düğün salonu tut'),
-        badge: 'Costs more',
-        resolve: (c) => {
-          c.h.money(-wage(c, 5000));
-          c.h.stat('happiness', 4);
-          closeAll(c, ['spouse', 'mother', 'father'], 4);
-          return c.t('At the wedding hall: a smoke machine, a first dance under lasers and a buffet that ran out of pilav. Perfect.', 'Düğün salonunda sis makinesi, lazer şovlu ilk dans ve pilavı biten bir açık büfe. Kusursuz.');
-        },
-      },
-      {
-        id: 'village',
-        label: (c) => c.t('Hold it in the village square with davul zurna', 'Köy meydanında davul zurnayla yap'),
-        resolve: (c) => {
-          c.h.money(-wage(c, 2000));
-          c.h.stat('happiness', 6);
-          c.h.stat('health', -1);
-          closeAll(c, ['spouse', 'mother', 'father'], 3);
-          return c.t('Your wedding: three days of halay (a line dance) in the village square. Your feet will recover by spring.', 'Düğününde köy meydanında üç gün halay çekildi. Ayakların ancak bahara iyileşir.');
-        },
-        tone: 'good',
-      },
-      {
-        id: 'nikah',
-        label: (c) => c.t('Just sign at the registry office and run', 'Sadece nikâh kıy, kaç'),
-        badge: 'Free',
-        resolve: (c) => {
-          c.h.stat('happiness', 2);
-          closeAll(c, ['mother', 'father'], -4);
-          return coastal(c)
-            ? c.t('A quick ceremony at the registry office and a fish dinner by the sea. Your mother has not stopped sighing.', 'Belediyede kısa bir nikâh, akşamına deniz kenarında balık. Annen o günden beri iç çekiyor.')
-            : c.t('A quick ceremony at the registry office and a kebab dinner for two. Your mother has not stopped sighing.', 'Belediyede kısa bir nikâh, akşamına baş başa bir kebap. Annen o günden beri iç çekiyor.');
-        },
-      },
-    ],
-  },
-  {
-    id: 'tr.kina',
-    category: 'love',
-    maxAge: WEDDING_MAX_AGE,
-    once: true,
-    weight: 60,
-    when: (c) => inTR(c) && justMarried(c) && c.p.gender === 'female' && hasMom(c),
-    title: (c) => c.t('Tonight is your henna night (kına gecesi).', 'Bu gece kına gecen.'),
-    text: (c) => c.t('Henna is about to be pressed into your palm. Tradition says the bride must cry.', 'Avucuna kına yakılacak. Adettendir, gelin ağlamalı.'),
-    choices: [
-      {
-        id: 'cry',
-        label: (c) => c.t('Cry when they sing', 'Türküler söylenince ağla'),
-        resolve: (c) => {
-          c.h.stat('happiness', 6);
-          closeAll(c, 'mother', 8);
-          return c.t(
-            'Your friends sang the old songs until everyone, even your mother, was crying.',
-            'Arkadaşların "Yüksek yüksek tepelere"yi söyledi; annen dahil herkes gözyaşlarına boğuldu.',
-          );
-        },
-        tone: 'good',
-      },
-      {
-        id: 'dance',
-        label: (c) => c.t('Refuse to cry and dance instead', 'Ağlamayı reddet, oyna'),
-        resolve: (c) => {
-          c.h.stat('happiness', 8);
-          return c.t(
-            "You refused to cry and danced to every song. Your aunts call it a bad omen. Your friends call it the best henna night in years.",
-            'Ağlamayı reddedip her şarkıda oynadın. Teyzeler uğursuzluk diyor, arkadaşların yılların en iyi kınası diyor.',
-          );
-        },
-      },
-      {
-        id: 'fist',
-        label: (c) => c.t('Keep your fist shut until you get gold', 'Altın gelmeden avucunu açma'),
-        resolve: (c) => {
-          const gold = wage(c, c.rng.int(150, 300));
-          c.h.money(gold);
-          c.h.stat('happiness', 3);
-          return c.t(
-            `You kept your fist closed until your mother-in-law placed a gold coin in it, worth about ${c.h.fmt(gold)}. Tradition is tradition.`,
-            `Kayınvaliden avucuna altın koyana kadar yumruğunu açmadın. Altının değeri aşağı yukarı ${c.h.fmt(gold)}. Adet adettir.`,
-          );
-        },
-      },
-    ],
-  },
-  {
-    id: 'tr.taki',
-    category: 'love',
-    maxAge: WEDDING_MAX_AGE,
-    once: true,
-    weight: 60,
-    when: (c) => inTR(c) && justMarried(c),
-    setup: (c) => {
-      c.vars.amt = wage(c, c.rng.int(3000, 12000));
-    },
-    title: (c) => c.t('The gold-pinning ceremony (takı merasimi)!', 'Takı merasimi!'),
-    text: (c) =>
-      c.t(
-        `Guests pinned gold coins and banknotes on you. You counted ${c.h.fmt(Number(c.vars.amt))} at 4 a.m., still in your wedding clothes.`,
-        `Misafirler üstüne çeyrek altınlar ve banknotlar taktı. Sabahın dördünde, hâlâ düğün kıyafetlerinle toplam ${c.h.fmt(Number(c.vars.amt))} saydın.`,
-      ),
-    choices: [
-      {
-        id: 'pillow',
-        label: (c) => c.t('Keep the gold "under the pillow" (yastık altı)', 'Altınları yastık altında sakla'),
-        badge: 'Safe',
-        resolve: (c) => {
-          c.h.money(Number(c.vars.amt));
-          c.h.stat('happiness', 2);
-          return c.t('You hid the wedding gold somewhere very safe. You check on it more often than on your plants.', 'Düğün altınlarını çok güvenli bir yere sakladın. Onlara çiçeklerinden daha sık bakıyorsun.');
-        },
-      },
-      {
-        id: 'honeymoon',
-        label: (c) => c.t('Spend some on a honeymoon', 'Bir kısmıyla balayına çık'),
-        resolve: (c) => {
-          c.h.money(Math.round(Number(c.vars.amt) * 0.6));
-          c.h.stat('happiness', 8);
-          closeAll(c, 'spouse', 6);
-          return c.t('You spent part of the wedding gold on a week in Kapadokya (Cappadocia). Hot air balloons, cave hotel, zero regrets.', 'Düğün takılarının bir kısmıyla Kapadokya\'da bir hafta geçirdiniz. Balonlar, mağara otel, sıfır pişmanlık.');
-        },
-        tone: 'good',
-      },
-      {
-        id: 'parents',
-        label: (c) => c.t('Pay your parents back for the wedding', 'Düğün masrafını annenlere geri öde'),
-        resolve: (c) => {
-          c.h.money(Math.round(Number(c.vars.amt) * 0.4));
-          closeAll(c, ['mother', 'father'], 6);
-          return c.t('You gave most of the wedding gold to your parents for the wedding costs. They refused twice, then accepted.', 'Takıların çoğunu düğün masrafı için annenlere verdin. İki kez "Olmaz" dediler, sonra kabul ettiler.');
-        },
-      },
-    ],
-  },
 ];
 
 // ------------------------------------------------------------------ adult life
@@ -1164,31 +834,22 @@ const adult: EventDef[] = [
   {
     id: 'tr.bayram',
     category: 'family',
-    cooldown: 3,
+    // twice a year in real life, but one log line every few years is enough (review 5 §3.6: bayram lines dominated)
+    cooldown: 5,
     when: (c) => inTR(c) && c.h.relatives(['mother', 'father', 'sibling', 'child']).length > 0,
     text: '',
     apply: (c) => {
       closeAll(c, ['mother', 'father', 'sibling', 'child'], 5);
+      // the same banded pools and memory as the bayram-visit activity (lines.ts), so the two never repeat each other
+      const head = c.t('Bayram (the holiday)! ', 'Bayram geldi! ');
       if (c.age < 15) {
         const cash = wage(c, c.rng.int(10, 40));
         c.h.money(cash);
         c.h.stat('happiness', 6);
-        return c.t(
-          `Bayram (the holiday)! You kissed every elder's hand on the street and collected ${c.h.fmt(cash)} in pocket money (harçlık).`,
-          `Bayram geldi! Sokaktaki bütün büyüklerin elini öptün, cebine ${c.h.fmt(cash)} bayram harçlığı girdi.`,
-        );
+        return head + bayramLine(c, cash);
       }
       c.h.stat('happiness', 3);
-      // one row per slot, picked once; the middle line depends on whether you are the visitor or the visited
-      return line(c, [
-        ['Bayram visits: eleven houses, eleven cups of tea, one sugar coma.', 'Bayram ziyareti turu: on bir ev, on bir bardak çay, bir de şeker koması.'],
-        c.age < 45
-          ? ["Bayram at the grandparents'. Your aunt asked about your salary in front of everyone.", 'Bayramda dedengildesin. Halan herkesin önünde "Maaşın ne kadar?" diye sordu.']
-          : ['The whole family came to you for bayram. Twenty-two shoes by the door, one bathroom.', 'Bayramda bütün aile sana geldi. Kapının önünde yirmi iki ayakkabı, evde tek banyo.'],
-        c.age < 60
-          ? ['You handed out pocket money (harçlık) to the kids on your street. You are officially an elder now.', 'Sokaktaki çocuklara bayram harçlığı dağıttın. Artık resmen "büyükler" kategorisindesin.']
-          : ['A queue of grandchildren and neighbors kissed your hand. Your harçlık budget did not survive the morning.', 'Torunlar ve komşu çocukları elini öpmek için sıraya girdi. Harçlık bütçen öğleni görmedi.'],
-      ]);
+      return head + bayramLine(c);
     },
   },
   {
@@ -1200,8 +861,8 @@ const adult: EventDef[] = [
     title: (c) => c.t('A nine-day bayram holiday. Everyone drives home at once.', 'Dokuz günlük bayram tatili. Herkes aynı anda memlekete gidiyor.'),
     text: (c) =>
       c.t(
-        'The motorway (otoban) is one long car park. Your mom has been calling since Tuesday: "Did you leave yet?"',
-        'Otoban dev bir otoparka dönmüş. Annen salıdan beri arıyor: "Yola çıktınız mı?"',
+        `The motorway (otoban) is one long car park. Your ${hasMom(c) ? 'mom' : 'dad'} has been calling since Tuesday: "Did you leave yet?"`,
+        `Otoban dev bir otoparka dönmüş. ${hasMom(c) ? 'Annen' : 'Baban'} salıdan beri arıyor: "Yola çıktınız mı?"`,
       ),
     choices: [
       {
@@ -1237,7 +898,7 @@ const adult: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 2);
           closeAll(c, ['mother', 'father'], -5);
-          return c.t('You skipped the bayram trip. The city was empty and silent; you crossed it in twelve minutes. Your mom has questions.', 'Bayramda şehirde kaldın. Şehir bomboş ve sessizdi. Bir uçtan öbür uca on iki dakikada gittin. Annenin soruları var.');
+          return c.t(`You skipped the bayram trip. The city was empty and silent; you crossed it in twelve minutes. Your ${hasMom(c) ? 'mom' : 'dad'} has questions.`, `Bayramda şehirde kaldın. Şehir bomboş ve sessizdi. Bir uçtan öbür uca on iki dakikada gittin. ${hasMom(c) ? 'Annenin' : 'Babanın'} soruları var.`);
         },
       },
     ],
@@ -1397,44 +1058,6 @@ const adult: EventDef[] = [
     ],
   },
   {
-    id: 'tr.tapu',
-    category: 'money',
-    maxAge: 85,
-    once: true,
-    weight: 25,
-    when: (c) => inTR(c) && c.p.home.owned,
-    title: (c) => c.t('Title deed day (tapu) at the land registry.', 'Tapu dairesinde imza günü.'),
-    text: (c) => c.t('Your name, in ink, on an official paper saying this home is yours.', 'Adın, mürekkeple, "bu ev senin" diyen resmî bir kâğıdın üstünde.'),
-    choices: [
-      {
-        id: 'baklava',
-        label: (c) => c.t('Bring a tray of baklava for the clerks', 'Memurlara bir tepsi baklava götür'),
-        resolve: (c) => {
-          c.h.money(-wage(c, 30));
-          c.h.stat('happiness', 4);
-          return c.t('The land registry clerks loved the baklava. The stamp on your deed came down with extra feeling.', 'Tapu dairesindeki memurlar baklavaya bayıldı. Mühür ekstra bir duyguyla basıldı.');
-        },
-        tone: 'good',
-      },
-      {
-        id: 'photo',
-        label: (c) => c.t('Pose with the deed like a trophy', 'Tapuyla kupa kaldırır gibi poz ver'),
-        resolve: (c) => {
-          c.h.stat('happiness', 5);
-          return c.t('You held the deed up like a cup final. The family group chat exploded.', 'Tapuyu kupa finali gibi havaya kaldırdın. Aile grubu yıkıldı.');
-        },
-      },
-      {
-        id: 'hide',
-        label: (c) => c.t('Hide it somewhere very safe', 'Çok güvenli bir yere sakla'),
-        resolve: (c) => {
-          c.h.stat('happiness', 2);
-          return c.t('You hid the deed somewhere very safe. Nobody knows where. That includes you.', 'Tapuyu çok güvenli bir yere sakladın. Nerede olduğunu kimse bilmiyor, sen dahil.');
-        },
-      },
-    ],
-  },
-  {
     id: 'tr.aidat',
     category: 'money',
     minAge: 25,
@@ -1491,7 +1114,7 @@ const adult: EventDef[] = [
     text: (c) =>
       c.t(
         'Everyone agrees an emergency bag (deprem çantası) is a good idea. Far fewer people have actually packed one.',
-        'Herkes deprem çantasının şart olduğunda hemfikir. Gerçekten hazırlayan ise pek az.',
+        'Herkes deprem çantasının şart olduğu konusunda hemfikir. Gerçekten hazırlayan ise pek az.',
       ),
     choices: [
       {
@@ -1587,22 +1210,30 @@ const adult: EventDef[] = [
     maxAge: 58,
     once: true,
     weight: 14,
-    when: (c) => inTR(c) && !!c.p.jobId && c.p.jailYears === 0,
-    title: (c) => c.t('You dream of leaving the big city for your hometown (memleket).', 'Büyük şehri bırakıp memlekete dönmeyi düşünüyorsun.'),
-    text: (c) => c.t("Fresh air, a garden, your mother's old neighbors. Also: one cinema and a single cash machine.", 'Temiz hava, bir bahçe, annenin eski komşuları. Bir de tek bir sinema ve tek bir bankamatik.'),
+    // only a family that came to a big city from somewhere else has a memleket to go back to (review 5 §3.13)
+    when: (c) => inTR(c) && !!c.p.jobId && c.p.jailYears === 0 && !!memleketOf(c),
+    title: (c) =>
+      c.t(`You dream of leaving the big city for your family's hometown (memleket), ${memleketOf(c)}.`, `Büyük şehri bırakıp memlekete, ${dat(memleketOf(c) ?? '')} dönmeyi düşünüyorsun.`),
+    text: (c) =>
+      c.t(
+        'Fresh air, a garden, neighbors who remember you from childhood summers. Also: one cinema and a single cash machine.',
+        'Temiz hava, bir bahçe, seni çocukluk yazlarından hatırlayan komşular. Bir de tek bir sinema ve tek bir bankamatik.',
+      ),
     choices: [
       {
         id: 'move',
         label: (c) => c.t('Quit and move back', 'İstifa et, memlekete dön'),
         badge: 'Big change',
         resolve: (c) => {
+          const m = memleketOf(c) ?? c.p.city;
           c.h.setJob(null);
           c.h.flag('tr_memleket');
           c.h.stat('happiness', 8);
           c.h.stat('health', 3);
+          c.p.city = m;
           return c.t(
-            'You quit, packed the car and moved back. You now grow tomatoes and argue with the local baker. Bliss.',
-            'İstifa ettin, arabayı doldurup memlekete döndün. Artık domates yetiştiriyor, mahallenin fırıncısıyla atışıyorsun. Huzur.',
+            `You quit, loaded a van and moved to ${m}. You now grow tomatoes and argue with the local baker. Bliss.`,
+            `İstifa ettin, eşyaları bir kamyonete yükleyip ${dat(m)} taşındın. Artık domates yetiştiriyor, mahallenin fırıncısıyla atışıyorsun. Huzur.`,
           );
         },
         tone: 'big',
@@ -1626,7 +1257,7 @@ const adult: EventDef[] = [
         label: (c) => c.t('Stay in the city', 'Şehirde kal'),
         resolve: (c) => {
           c.h.stat('happiness', -2);
-          return c.t('You stayed in the big city. Every evening you check the weather back home, like a second clock.', 'Büyük şehirde kaldın. Her akşam memleketin hava durumuna ikinci bir saat gibi bakıyorsun.');
+          return c.t('You stayed in the big city. Every evening you check the weather back home, like a second clock.', 'Büyük şehirde kaldın. Her akşam, saate bakar gibi memleketin hava durumuna bakıyorsun.');
         },
       },
     ],
@@ -1817,11 +1448,10 @@ const later: EventDef[] = [
     text: '',
     apply: (c) => {
       c.h.stat('happiness', 3);
-      return line(c, [
-        ['You lost three games of okey (a tile game) at the tea house and accused everyone of cheating.', 'Kahvehanede üç el üst üste okey kaybettin ve masadaki herkesi hile yapmakla suçladın.'],
-        ['The tea house regulars solved the economy, football and the weather in one afternoon.', 'Kahvehanenin müdavimleri tek bir öğleden sonrada ekonomiyi, futbolu ve havayı çözdü.'],
-        ['The tea boy at the kahvehane now brings your tea before you sit down. You have arrived.', 'Kahvehanenin çırağı artık sen oturmadan çayını getiriyor. Müdavim oldun.'],
-      ]);
+      // men at the kahvehane, women at the tea garden or the gold day: the activity's pools and memory (lines.ts)
+      const [text, pays] = kahveLine(c);
+      if (pays) c.h.money(-wage(c, 3));
+      return text;
     },
   },
   {
@@ -2066,150 +1696,21 @@ const later: EventDef[] = [
   },
 ];
 
-const events: EventDef[] = [...childhood, ...youth, ...love, ...adult, ...later];
+const events: EventDef[] = [...childhood, ...youth, ...love, ...adult, ...later, ...milestoneEvents];
 
 // ------------------------------------------------------------------ activities
 
-// Repeatable activities pick their line with `say` (base/lines.ts): one rng call, and a line does not
-// come back until most of its list has been seen in this life. Everything here happens outside, at a
+// Repeatable activities pick their line from lines.ts: one rng call, split by age band, and a line does not
+// come back until most of its list has been seen in this dynasty. Everything here happens outside, at a
 // market, on a ferry or at somebody's door, so none of it runs in prison (`jailOk: false`).
 
-const FERRY_IST: Pair[] = [
-  ['You crossed the Bosphorus from Europe to Asia by ferry, drank tea from a thin tulip glass and threw simit to the gulls. Perfect.', 'Boğaz vapuruyla Avrupa yakasından Anadolu yakasına geçtin, ince belli bardakta çayını yudumladın, martılara simit attın. Daha ne olsun.'],
-  ['A gull snatched the simit right out of your hand in mid-air. You have never been robbed so gracefully.', 'Bir martı simidi havada elinden kaptı. Hayatında hiç bu kadar zarif soyulmamıştın.'],
-  ['You sat on the open deck at the back, wind in your face, and let the city drift past for twenty minutes.', 'Arka güvertede oturdun, rüzgâr yüzünü yaladı geçti. Şehir de yirmi dakika boyunca önünden akıp gitti.'],
-  ['The tea seller walked past three times. Three times you had another glass.', 'Çaycı önünden üç kez geçti, üçünde de bir çay daha aldın.'],
-  ['You ran down the pier and jumped aboard just as the ropes came off. Half the deck applauded.', 'Koşa koşa iskeleye vardın, halatlar çözülürken son anda vapura atladın. Güvertenin yarısı alkışladı.'],
-  ["You passed the Maiden's Tower and made up a brand new legend about it. You were the hero.", 'Kız Kulesi önünden geçerken ona yepyeni bir efsane uydurdun. Kahramanı sendin.'],
-  ['A dolphin surfaced next to the ferry. Half the passengers saw it; the other half will never believe them.', 'Vapurun yanında bir yunus belirdi. Yolcuların yarısı gördü, öbür yarısı asla inanmayacak.'],
-  ["Fog rolled in over the Bosphorus and the ferry's horn sounded like a sad old uncle. You loved every second.", 'Boğaz\'a sis çöktü, vapurun düdüğü dertli bir amca gibi öttü. Her saniyesine bayıldın.'],
-  ['You shared your simit with an old man who told you the whole history of the Bosphorus ferries. A free guided tour.', 'Simidini yaşlı bir amcayla paylaştın, o da sana Boğaz vapurlarının bütün tarihini anlattı. Bedava rehberlik.'],
-  ['You fed the gulls from the back deck until the simit ran out. They followed you all the way across anyway.', 'Arka güvertede simit bitene kadar martıları besledin. Yine de karşı kıyıya kadar peşinden geldiler.'],
-  ['Sunset on the Bosphorus, a glass of tea and nowhere to be. You took the ferry back just to do it again.', 'Boğaz\'da gün batımı, elinde bir bardak çay, yetişecek hiçbir yer yok. Sırf bir daha yaşamak için dönüş vapuruna da bindin.'],
-  ['Someone was playing the saz on the lower deck. First one passenger sang along, then the whole ferry.', 'Alt katta biri saz çalıyordu. Önce bir yolcu eşlik etti, sonra bütün vapur.'],
-];
-
-const FERRY_IZMIR: Pair[] = [
-  ['You crossed the bay to Karşıyaka by ferry, drank tea from a thin tulip glass and threw simit to the gulls. Perfect.', 'Körfez vapuruyla karşıya geçtin, ince belli bardakta çayını yudumladın, martılara simit attın. Daha ne olsun.'],
-  ['The ferry crossed the bay at sunset and the whole Kordon glowed orange. You forgot to take a photo, and that was fine.', 'Vapur gün batımında körfezi geçti, bütün Kordon turuncuya boyandı. Fotoğraf çekmeyi unuttun, iyi ki de unuttun.'],
-  ['A gull took the simit from your fingers so politely that you nearly thanked it.', 'Bir martı simidi parmaklarının arasından öyle kibarca aldı ki neredeyse teşekkür edecektin.'],
-  ['The afternoon sea breeze (imbat) blew your hair in every direction at once. You reached Konak looking like a poet.', 'İmbat saçlarını aynı anda her yöne savurdu. Konak\'a şair kılığında vardın.'],
-  ['You sat on the open deck with a boyoz (an İzmir pastry) in one hand and tea in the other. İzmir has life figured out.', 'Açık güvertede bir elinde boyoz, bir elinde çay oturdun. İzmirliler hayatı çözmüş.'],
-  ['A flock of flamingos flew low over the bay. Everyone on deck went quiet for a moment.', 'Bir flamingo sürüsü körfezin üstünden alçaktan uçtu. Güvertedeki herkes bir an sustu.'],
-  ['Two old men argued about Göztepe and Karşıyaka football the whole crossing. Nobody won; the ferry docked.', 'İki amca bütün yol Göztepe mi Karşıyaka mı diye tartıştı. Kazanan olmadı, vapur yanaştı.'],
-  ['Two teas on the way over, one on the way back. Purely for balance.', 'Gidişte iki, dönüşte bir çay içtin. Tamamen denge için.'],
-  ['You ran for the ferry and made it with one second to spare. Even the gulls looked impressed.', 'Vapura koştun ve son saniyede yetiştin. Martılar bile etkilenmiş görünüyordu.'],
-  ['The bay was flat as glass. You watched Karşıyaka slide away and thought about nothing at all. Bliss.', 'Körfez cam gibiydi. Karşıyaka\'nın uzaklaşmasını izledin ve hiçbir şey düşünmedin. Mutluluk buymuş.'],
-  ['A kid next to you fed the gulls with you. The two of you are now a small seagull charity.', 'Yanındaki çocukla birlikte martılara simit attınız. Artık iki kişilik bir martı yardım derneğisiniz.'],
-];
-
-const teaLines = (c: Ctx): Pair[] => [
-  ['You drank five glasses of tea on the balcony and learned who in the building is getting divorced.', 'Balkonda beş bardak çay içtin ve apartmanda kimin boşandığını öğrendin.'],
-  coastal(c)
-    ? ['Tea and simit with the neighbors. A seagull stole your simit.', 'Komşularla çay simit keyfi. Bir martı simidini kapıp gitti.']
-    : ['Tea and simit with the neighbors. A pigeon stole your simit.', 'Komşularla çay simit keyfi. Bir güvercin simidini kapıp gitti.'],
-  ['The neighbor from upstairs read your fortune in your coffee cup (fal). She saw a journey, a letter and a dark-haired stranger.', 'Üst kattaki komşu kahve falına baktı. Yol göründü, bir haber var, bir de esmer biri.'],
-  ['You asked for "just half a glass." Your glass was refilled seven times. Nobody listens to "just half."', '"Yarım bardak" dedin. Bardağın yedi kez doldu. "Yarım bardak" diyeni kimse dinlemez.'],
-  ['The neighbors compared electricity bills, grandchildren and blood pressure, in that order.', 'Komşular sırasıyla elektrik faturalarını, torunları ve tansiyonlarını karşılaştırdı.'],
-  ['The neighbor brought her famous börek. You had three slices and now owe her a visit.', 'Komşu meşhur böreğini getirdi. Üç dilim yedin, artık bir ziyaret borçlusun.'],
-  ["Somebody's nephew got into medical school. You heard the news eleven times in one afternoon.", 'Birinin yeğeni tıp fakültesini kazanmış. Bir öğleden sonrada haberi on bir kez dinledin.'],
-  ['You tried to leave three times. "Sit, sit, one more glass" won every time.', 'Üç kez kalkmaya yeltendin. "Otur otur, bir bardak daha" her seferinde kazandı.'],
-  ['The building manager came up for "one quick tea" and stayed two hours explaining the new heating fees.', 'Apartman yöneticisi "Bir çay içip kalkacağım" diye geldi, iki saat yeni kalorifer paylarını anlattı.'],
-  ['The neighbors fixed the economy, the traffic and the price of tomatoes before the second pot was empty.', 'Komşular ikinci demlik bitmeden ekonomiyi, trafiği ve domates fiyatlarını çözdü.'],
-  ['Someone brought out a plate of sunflower seeds. Two hours and a mountain of shells later, you knew everyone\'s secrets.', 'Biri bir tabak çekirdek çıkardı. İki saat ve bir dağ kabuk sonra herkesin sırrını biliyordun.'],
-];
-
-/** Kahvehane lines; `true` marks the ones where you lost a game and pay for the table's tea (2 of 10, as before 1 of 5). */
-const KAHVEHANE: (readonly [string, string, boolean])[] = [
-  ['You played okey (a tile game) for three hours and won exactly one hand. You talked about that hand for three more.', 'Üç saat okey oynadın, tek bir el kazandın. Sonraki üç saat o eli anlattın.', false],
-  ['The man at the next table explained how to fix the national football team. Everyone agreed, then everyone disagreed.', 'Yan masadaki amca milli takımın nasıl düzeleceğini anlattı. Önce herkes katıldı, sonra herkes itiraz etti.', false],
-  ['You read three newspapers for the price of one tea. The crossword in the third was already done.', 'Bir çay parasına üç gazete okudun. Üçüncüsünün bulmacasını biri çoktan çözmüştü.', false],
-  ['You lost at batak (a card game), so the whole table\'s tea is on you. Loser pays.', 'Batakta kaybettin, bütün masanın çayı senden. Kaybeden öder.', true],
-  ['You stood behind the okey players giving advice nobody asked for. They call you "the consultant" now.', 'Okey oynayanların arkasında durup kimsenin istemediği akıllar verdin. Artık sana "danışman" diyorlar.', false],
-  ['You watched the match on the old TV with forty strangers. At the goal you hugged three of them.', 'Kahvehanenin eski televizyonunda kırk yabancıyla maç izledin. Golde üçüne sarıldın.', false],
-  ['You threw the wrong tile at the very end of an okey game. The whole table\'s tea is on you.', 'Okeyde son taşı yanlış attın. Bütün masanın çayı senden.', true],
-  ['A retired teacher solved the crossword out loud and waited for applause after every word. He got it.', 'Emekli bir öğretmen bulmacayı yüksek sesle çözdü ve her kelimeden sonra alkış bekledi. Aldı da.', false],
-  ['The tea boy remembered exactly how you take your tea. You are officially a regular.', 'Çaycı çocuk çayını nasıl içtiğini ezbere biliyordu. Artık resmen müdavimsin.', false],
-  ['Someone asked whether the old days were better. The debate lasted until closing time and settled nothing.', 'Biri "Eski günler daha mı güzeldi?" diye sordu. Tartışma kapanış saatine kadar sürdü, hiçbir sonuca varmadı.', false],
-];
-
-const TAVLA: Pair[] = [
-  ['You rolled double sixes (düşeş) three times in a row and slammed the board shut. Küt.', 'Üst üste üç düşeş attın ve tavlayı küt diye kapattın.'],
-  ['Your opponent rolled double ones (hep yek) and still beat you. Humiliating.', 'Rakibin hep yek attı ve yine de seni yendi. Rezalet.'],
-  ['You lost by a double game (mars). This topic is now closed.', 'Mars oldun. Bu konu kapanmıştır.'],
-  ['You played until the tea went cold and the score was "who\'s counting?"', 'Çay soğuyana kadar oynadınız. Skor mu? "Sayan mı var?"'],
-  ['You moved your checkers so fast your opponent asked you to "count out loud, please."', 'Pulları o kadar hızlı oynadın ki rakibin "Yüksek sesle say lütfen" dedi.'],
-  ['You beat your uncle for the first time. He demanded a rematch, then another, then one more.', 'Amcanı ilk kez yendin. Rövanş istedi, sonra bir rövanş daha, sonra bir tane daha.'],
-  ['You called out the dice like an old pro: "şeş beş!" The whole table nodded with respect.', 'Zarları ustalar gibi "şeş beş!" diye bağırarak attın. Masadakiler saygıyla başını salladı.'],
-  ['You were five checkers from winning when your opponent rolled double sixes twice. Fate plays tavla too.', 'Kazanmana beş pul kalmıştı ki rakibin iki kez düşeş attı. Kader de tavla oynuyor.'],
-  ['You played on a balcony over the street. The neighbors started taking bets from their windows.', 'Sokağa bakan bir balkonda oynadınız. Komşular pencerelerden bahse girmeye başladı.'],
-  ['You tried a clever strategy you saw online. It lost spectacularly but looked very stylish.', 'İnternette gördüğün havalı bir taktiği denedin. Rezil oldun ama çok şık görünüyordun.'],
-  ['Three games, three wins. You will be unbearable for at least a week.', 'Üç oyun, üç galibiyet. En az bir hafta çekilmez olacaksın.'],
-];
-
-const pazarLines = (sib: string): Pair[] => [
-  ['"Taste it, taste it!" A stallholder pushed a slice of melon into your hand. You left with three kilos of peaches.', `"Tadına bak ${sib}, tadına bak!" Bir pazarcı eline bir dilim kavun tutuşturdu. Üç kilo şeftaliyle döndün.`],
-  ['You went at closing time and got a whole crate of tomatoes for the price of a tea.', 'Pazar sonuna gittin, bir kasa domatesi bir çay parasına aldın.'],
-  ['You dragged your shopping trolley through the crowd and ran over three toes, one of them yours.', 'Pazar arabanı kalabalıkta sürükledin, üç ayak ezdin; biri kendininki.'],
-  ['A stallholder sang a whole song about his cucumbers. You bought some out of respect.', 'Bir pazarcı salatalıkları için koca bir şarkı uydurmuştu. Saygından bir kilo aldın.'],
-  ['You picked every tomato one by one. The stallholder sighed: "They\'re all the same, all beautiful."', 'Domatesleri tek tek seçtin. Pazarcı iç geçirdi: "Hepsi aynı, hepsi güzel."'],
-  ['You haggled a few coins off the cherries and felt like a business genius all day.', 'Kirazda pazarlık yapıp birkaç kuruş indirdin, bütün gün kendini iş dâhisi gibi hissettin.'],
-  ['The stallholders shouted over each other: "Here, here, the sweetest ones are here!" You bought from the loudest.', 'Pazarcılar birbirinin sesini bastırdı: "Buraya buraya, en tatlısı burada!" En yüksek sesle bağırandan aldın.'],
-  ['You ran into your old teacher at the cheese stall. You both acted as if this was perfectly normal.', 'Peynirci tezgâhında eski öğretmeninle karşılaştın. İkiniz de bu çok normalmiş gibi davrandınız.'],
-  ['Your bags were so heavy you rested on every bench on the way home. Worth it.', 'Poşetler o kadar ağırdı ki eve dönerken her bankta mola verdin. Değdi ama.'],
-  ['A stallholder gave you a free bunch of parsley "for a loyal customer." It was your first time there.', 'Bir pazarcı "Müdavimimizsin" deyip bir demet maydanozu hediye etti. Oraya ilk kez gidiyordun.'],
-  ['You went for tomatoes and came back with tomatoes, peppers, a melon, slippers and a tablecloth.', 'Domates almaya gittin; domates, biber, kavun, bir çift terlik ve bir masa örtüsüyle döndün.'],
-];
-
-/** Halı saha lines; `true` marks a lost match where your side pays for the pitch (3 of 12, as before 1 of 4). */
-const HALISAHA: (readonly [string, string, boolean])[] = [
-  ['One goal, four open misses. In the group chat, only the goal exists.', 'Bir gol attın, dört net pozisyon kaçırdın. Mesaj grubunda sadece gol konuşuluyor.', false],
-  ['You went in goal because nobody else would and let in eleven. The losing side pays for the pitch.', 'Kimse geçmeyince kaleye sen geçtin, on bir gol yedin. Saha parası kaybedenden.', true],
-  ['The match ended fourteen–thirteen. Both teams claim they won.', 'Maç on dört on üç bitti. İki takım da kazandığını iddia ediyor.', false],
-  ['You played a whole hour at full speed, then spent the next hour lying on the artificial grass.', 'Bir saat bütün hızınla oynadın, sonraki bir saati suni çimin üstünde yatarak geçirdin.', false],
-  ['You lost by one goal in the last minute. The pitch fee and the ayran afterwards are on your team.', 'Son dakikada tek golle kaybettiniz. Saha parası da maç sonu ayranları da sizden.', true],
-  ['You scored with a back-heel and will be calling it "a bicycle kick" for years.', 'Topuğunla bir gol attın. Yıllarca "rövaşata" diye anlatacaksın.', false],
-  ['The match stopped twice over whether the ball crossed the line. There is no line.', 'Maç iki kez "Top çizgiyi geçti mi?" tartışmasıyla durdu. Çizgi diye bir şey yok ki.', false],
-  ['Your side lost, so as agreed you paid for the pitch. The winners have not stopped talking since.', 'Kaybettiniz, söz verildiği gibi saha parasını siz ödediniz. Kazananlar o günden beri susmuyor.', true],
-  ['Someone brought a referee\'s whistle. Nobody obeyed it, not even him.', 'Biri hakem düdüğü getirmişti. Kimse dinlemedi, kendisi bile.', false],
-  ['You played in rain so heavy the artificial grass became a lake. Best match of the year.', 'O kadar yağmurda oynadınız ki suni çim göle döndü. Yılın en güzel maçıydı.', false],
-  ['You set up three goals and nobody thanked you. Midfielders understand.', 'Üç gol pası verdin, kimse teşekkür etmedi. Orta sahalar bilir.', false],
-  ['You played until the floodlights went off. Everyone limped home, grinning.', 'Işıklar sönene kadar oynadınız. Herkes eve topallayarak ama sırıtarak döndü.', false],
-];
-
-const HALISAHA_HURT: Pair[] = [
-  ['You pulled a muscle chasing a ball you were never going to reach.', 'Asla yetişemeyeceğin bir topun peşinden koşarken adalen çekti.'],
-  ['You went in for a slide tackle on artificial grass. The grass won.', 'Suni çimde kayarak topa girdin. Çim kazandı.'],
-  ['You twisted your ankle in the first five minutes and refereed the rest from the bench.', 'İlk beş dakikada bileğini burktun, maçın geri kalanını yedek kulübesinden yönettin.'],
-  ['A teammate\'s knee met your thigh at full speed. You walked like a cowboy for a week.', 'Bir takım arkadaşının dizi tam gaz uyluğuna girdi. Bir hafta kovboy gibi yürüdün.'],
-];
-
-/** Bayram as a child: pocket money (harçlık). The amount stands alone, never with a suffix. */
-const BAYRAM_KID: ((cash: string) => Pair)[] = [
-  (x) => [`You kissed eleven hands and touched each one to your forehead. You collected ${x} in pocket money (harçlık) and a pocketful of sticky candy.`, `On bir el öpüp alnına koydun. Toplam ${x} harçlık topladın, ceplerin de yapış yapış şekerle doldu.`],
-  (x) => [`A great-aunt pinched both your cheeks and slipped you money. By evening you had ${x} and a sugar rush.`, `Büyük teyzen iki yanağını birden sıkıp cebine harçlık sıkıştırdı. Akşama kadar toplam ${x} biriktirdin, bir de şeker sarhoşluğu.`],
-  (x) => [`You wore your new bayram clothes and stayed spotless until the third house. Pocket money total: ${x}.`, `Bayramlıklarını giydin ve üçüncü eve kadar tek leke yapmadın. Toplam harçlık: ${x}.`],
-  (x) => [`You counted your pocket money after every visit. Final tally: ${x}, plus one coin of unknown origin.`, `Her evden sonra harçlıklarını saydın. Son durum: ${x}, bir de nereden geldiği belli olmayan bir bozuk para.`],
-  (x) => [`An uncle made you recite a poem before he paid up. Worth it: ${x} in pocket money by the end of the day.`, `Bir amcan harçlığı vermeden önce sana şiir okuttu. Değdi: gün sonunda cebinde toplam ${x} vardı.`],
-  (x) => [`You and your cousins compared earnings in the stairwell like tiny bankers. Your share: ${x}.`, `Kuzenlerinle merdiven boşluğunda minik bankacılar gibi kazançlarınızı karşılaştırdınız. Senin payın: ${x}.`],
-  (x) => [`You ate so much baklava you had to lie down at the fourth house. You still collected ${x}.`, `O kadar baklava yedin ki dördüncü evde uzanmak zorunda kaldın. Yine de toplam ${x} harçlık topladın.`],
-  (x) => [`Grandpa handed you a crisp banknote and said "don't spend it all at once." You collected ${x} in total and spent it all at once.`, `Deden gıcır gıcır bir banknot verip "Hepsini birden harcama" dedi. Toplam ${x} topladın ve hepsini birden harcadın.`],
-];
-
-const bayramLines = (c: Ctx): Pair[] => [
-  ['Four homes, eight teas and a box of chocolates eaten one politely refused piece at a time.', 'Dört ev gezdin, sekiz çay içtin, bir kutu çikolatayı "Yok, almayayım" diye diye bitirdin.'],
-  ['Every aunt asked when you are getting married, when the baby is coming, or why you got so thin.', 'Her teyze ya "Ne zaman evleniyorsun?", ya "Bebek ne zaman?", ya da "Neden bu kadar zayıfladın?" diye sordu.'],
-  ['You splashed lemon cologne (kolonya) on every guest\'s hands like a pro.', 'Gelen her misafirin eline ustalıkla limon kolonyası döktün.'],
-  ["Your uncle told the same story he tells every bayram. You mouthed it along with him.", 'Amcan her bayram anlattığı hikâyeyi yine anlattı. Sen de dudaklarınla eşlik ettin.'],
-  c.age < 40
-    ? ['You kissed the hands of the elders and touched them to your forehead. Grandma still slipped you money, at your age.', 'Büyüklerin elini öpüp alnına koydun. Ninen bu yaşında bile cebine para sıkıştırdı.']
-    : ['The little ones kissed your hand and touched it to their foreheads. You slipped each of them money, just like your grandma used to.', 'Küçükler elini öpüp alınlarına koydu. Ninenin yaptığı gibi her birinin cebine para sıkıştırdın.'],
-  ['You toured relatives you see once a year. Every single one asked: "So, what are you up to these days?"', 'Senede bir gördüğün akrabaları gezdin. Hepsi aynı soruyu sordu: "Eee, neler yapıyorsun bakalım?"'],
-  ['You helped with the bayram breakfast: three kinds of cheese, two kinds of olives, one exhausted host.', 'Bayram sabahı kahvaltısına yardım ettin: üç çeşit peynir, iki çeşit zeytin, bir de bitkin ev sahibi.'],
-  ['Every house brought out the candy bowl. By the fifth you could not look at a lokum.', 'Her evde şeker kâsesi önüne geldi. Beşinci evde artık lokuma bakamıyordun.'],
-  ['You phoned the relatives you could not visit. Every call lasted forty minutes and ended with "come and see us."', 'Gidemediğin akrabaları telefonla aradın. Her konuşma kırk dakika sürdü ve "Bekleriz ama" diye bitti.'],
-  ['The whole family squeezed around one table for lunch. Someone had to sit on a stool. It was you.', 'Bütün aile öğle yemeğinde tek bir masanın etrafına sıkıştı. Birinin taburede oturması gerekti. O kişi sendin.'],
-];
+/** Women go to a tea garden or a patisserie when young and to the monthly gold day (altın günü) later; men to the kahvehane. */
+const kahveLabel = (c: Ctx) =>
+  c.p.gender !== 'female'
+    ? c.t('Go to the tea house (kahvehane)', 'Kahvehaneye git')
+    : c.age < 30
+      ? c.t('Meet friends at a tea garden (çay bahçesi)', 'Çay bahçesine git')
+      : c.t('Go to your gold day (altın günü)', 'Altın gününe git');
 
 const activities: ActivityDef[] = [
   {
@@ -2222,35 +1723,35 @@ const activities: ActivityDef[] = [
     available: inTR,
     run: (c) => {
       c.h.stat('happiness', 4);
-      return say(c, 'tr_tea', teaLines(c));
+      return teaLine(c);
     },
   },
   {
     id: 'tr_ferry',
     label: (c) => (isIstanbul(c) ? c.t('Take the Bosphorus ferry (vapur)', 'Boğaz vapuruna bin') : c.t('Take a ferry ride (vapur)', 'Vapura bin')),
-    description: (c) => c.t('+Happiness, feed the gulls', '+Mutluluk, martılara simit'),
+    description: (c) => (isIzmir(c) ? c.t('+Happiness, feed the gulls', '+Mutluluk, martılara gevrek') : c.t('+Happiness, feed the gulls', '+Mutluluk, martılara simit')),
     group: 'Mind & Body',
     minAge: 6,
     jailOk: false,
     available: (c) => inTR(c) && (isIstanbul(c) || isIzmir(c)),
     run: (c) => {
       c.h.stat('happiness', 5);
-      return isIzmir(c) ? say(c, 'tr_ferry.izmir', FERRY_IZMIR) : say(c, 'tr_ferry', FERRY_IST);
+      return isIzmir(c) ? sayBand(c, 'tr_ferry.izmir', FERRY_IZMIR) : sayBand(c, 'tr_ferry', FERRY_IST);
     },
   },
   {
     id: 'tr_kahvehane',
-    label: (c) => c.t('Go to the tea house (kahvehane)', 'Kahvehaneye git'),
-    description: (c) => c.t('+Happiness, okey and chat', '+Mutluluk, okey ve muhabbet'),
+    label: kahveLabel,
+    description: (c) => (c.p.gender === 'female' ? c.t('+Happiness, tea and gossip', '+Mutluluk, çay ve muhabbet') : c.t('+Happiness, okey and chat', '+Mutluluk, okey ve muhabbet')),
     group: 'Mind & Body',
     minAge: 18,
     jailOk: false,
     available: (c) => inTR(c) && c.p.jailYears === 0,
     run: (c) => {
       c.h.stat('happiness', 3);
-      const [en, tr, pays] = KAHVEHANE[pickIndex(c, 'tr_kahvehane', KAHVEHANE.length)];
+      const [text, pays] = kahveLine(c);
       if (pays) c.h.money(-wage(c, 3));
-      return c.t(en, tr);
+      return text;
     },
   },
   {
@@ -2265,7 +1766,7 @@ const activities: ActivityDef[] = [
     run: (c) => {
       c.h.stat('smarts', 1);
       c.h.stat('happiness', 2);
-      return say(c, 'tr_tavla', TAVLA);
+      return sayBand(c, 'tr_tavla', TAVLA);
     },
   },
   {
@@ -2280,7 +1781,7 @@ const activities: ActivityDef[] = [
       c.h.money(-wage(c, 10));
       c.h.stat('health', 2);
       c.h.stat('happiness', 2);
-      return say(c, 'tr_pazar', pazarLines(c.p.gender === 'female' ? 'abla' : 'abi'));
+      return say(c, `tr_pazar.${bandOf(c.age)}`, pazarLines(c));
     },
   },
   {
@@ -2299,7 +1800,8 @@ const activities: ActivityDef[] = [
       }
       c.h.stat('health', 3);
       c.h.stat('happiness', 3);
-      const [en, tr, pays] = HALISAHA[pickIndex(c, 'tr_halisaha', HALISAHA.length)];
+      const b = bandOf(c.age) === 'young' ? 'young' : 'adult';
+      const [en, tr, pays] = HALISAHA[b][pickIndex(c, `tr_halisaha.${b}`, HALISAHA[b].length)];
       if (pays) c.h.money(-wage(c, 5));
       return c.t(en, tr);
     },
@@ -2318,9 +1820,9 @@ const activities: ActivityDef[] = [
       if (c.age < 15) {
         const cash = wage(c, c.rng.int(5, 20));
         c.h.money(cash);
-        return sayWith(c, 'tr_bayram.kid', BAYRAM_KID, c.h.fmt(cash));
+        return bayramLine(c, cash);
       }
-      return say(c, 'tr_bayram', bayramLines(c));
+      return bayramLine(c);
     },
   },
 ];
@@ -2351,7 +1853,7 @@ const inTr = (s: GameState) => s.player.countryId === 'tr';
 
 const goals: GoalDef[] = [
   { id: 'tr_muhtar', label: 'Get elected neighborhood muhtar', labelTr: 'Mahallene muhtar seçil', available: inTr, check: (s) => s.player.achievements.includes('tr_muhtar') },
-  { id: 'tr_memleket', label: 'Move back to your hometown (memleket) or buy a summer house there', labelTr: 'Memlekete dön ya da orada bir yazlık al', available: inTr, check: (s) => 'tr_memleket' in s.player.flags },
+  { id: 'tr_memleket', label: 'Move back to your hometown (memleket) or buy a summer house there', labelTr: 'Memlekete dön ya da orada bir yazlık al', available: (s) => inTr(s) && BIG_CITIES.includes(s.player.city), check: (s) => 'tr_memleket' in s.player.flags },
 ];
 
 export const cultureTrPack: ContentPack = {
@@ -2365,4 +1867,6 @@ export const cultureTrPack: ContentPack = {
   activities,
   ribbons,
   goals,
+  schedule: trSchedule,
+  onYear: trOnYear,
 };

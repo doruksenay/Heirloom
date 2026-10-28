@@ -182,7 +182,7 @@ export const streetEvents: EventDef[] = [
     once: true,
     when: (c) => free(c) && (c.p.criminalRecord > 0 || c.p.money < 0),
     title: (c) => c.t('A man in a nice coat says he has "work" for someone like you.', 'Şık paltolu bir adam, senin gibi birine uygun bir "iş"i olduğunu söylüyor.'),
-    text: (c) => c.t("He knows your name. And your mother's address.", 'Adını biliyor. Annenin adresini de.'),
+    text: (c) => (c.h.relatives('mother').length ? c.t("He knows your name. And your mother's address.", 'Adını biliyor. Annenin adresini de.') : c.t('He knows your name. And your address.', 'Adını biliyor. Adresini de.')),
     choices: [
       {
         id: 'join',

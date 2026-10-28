@@ -377,7 +377,7 @@ export const parentingEvents: EventDef[] = [
   }),
 
   kidEvent('base.ad_driving_lesson', 17, 19, {
-    title: (c) => c.t(`${kid(c)} wants you to teach ${kidPron(c)} to drive.`, `${kid(c)} ona araba kullanmayı öğretmeni istiyor.`),
+    title: (c) => c.t(`${kid(c)} wants you to teach ${kidPron(c)} to drive.`, `${kid(c)}, kendisine araba kullanmayı öğretmeni istiyor.`),
     text: T('You have seen how this child parks a bicycle.', 'Bu çocuğun bisikleti nasıl park ettiğini gördün.'),
     choices: [
       ch('teach', 'Teach them yourself', 'Kendin öğret', (c) => {

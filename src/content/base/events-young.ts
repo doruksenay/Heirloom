@@ -2,6 +2,7 @@ import type { EventDef } from '../types';
 import { cap, da, dat, gen, kin, nm, wage, who, wth, quietInMourning } from './util';
 import { coastal, He, he, him } from './events-flavour';
 import { catName, syncFlagCat } from '../../engine/pets';
+import { aliveKin } from './kin';
 
 // Childhood, school and teen years.
 export const youngEvents: EventDef[] = [
@@ -141,7 +142,7 @@ export const youngEvents: EventDef[] = [
     minAge: 5,
     maxAge: 14,
     once: true,
-    when: (c) => !c.h.has('pet_cat'),
+    when: (c) => !c.h.has('pet_cat') && aliveKin(c, 'parents'),
     title: (c) => c.t('A stray kitten follows you home.', 'Sokakta bir kedi yavrusu peşine takılıp eve kadar geldi.'),
     text: (c) => c.t('It is white, tiny and very loud.', 'Bembeyaz, minicik ve çok gürültülü.'),
     choices: [
