@@ -7,6 +7,7 @@ import { moreFameEvents } from './events-more';
 import { moreFameActivities } from './activities-more';
 import { say, sayWith, type Pair } from '../base/lines';
 import { bandNameEvent } from '../base/street-fame';
+import { fameLaterActivities, fameLaterEvents, fameLaterGoals, fameSchedule } from './later';
 
 // "Fame" expansion: music, social media and acting careers, the single-player side of Popmundo.
 // Builds on the free first steps (base/street-fame.ts: busking, open mics, posting videos, a local band, a small
@@ -518,6 +519,7 @@ const events: EventDef[] = [
           const g = gainFans(c, f, f.fans * 1.5 + 30000);
           c.h.money(wage(c, 60000));
           c.h.stat('happiness', 10);
+          if (c.age >= 50) c.h.achieve('comeback50');
           return c.t(
             `Your comeback sold out in minutes. ${compact(c, g)} fans, old and new, are back.`,
             `Dönüş konserinin biletleri dakikalar içinde tükendi. Eski yeni ${compact(c, g)} hayran geri döndü.`,
@@ -889,9 +891,10 @@ export const famePack: ContentPack = {
   description: 'Record deals, albums, tours, acting, awards and scandals. Picks up your free following and takes it all the way.',
   rating: 'all',
   entitlement: FAME_ENTITLEMENT,
-  events: [...events, ...moreFameEvents],
-  activities: [...activities, ...moreFameActivities],
+  events: [...events, ...moreFameEvents, ...fameLaterEvents],
+  activities: [...activities, ...moreFameActivities, ...fameLaterActivities],
   onYear,
+  schedule: fameSchedule,
   onInherit,
   lifeTiles: (s) => {
     const f = peekFame(s.player);
@@ -909,6 +912,7 @@ export const famePack: ContentPack = {
     { id: 'fame_star', label: 'Reach 60 Fame', labelTr: '60 Şöhrete ulaş', check: (s) => (peekFame(s.player)?.peakFame ?? 0) >= 60 },
     { id: 'fame_world_tour', label: 'Finish a world tour', labelTr: 'Bir dünya turnesini tamamla', check: (s) => s.player.achievements.includes('world_tour') },
     { id: 'fame_wax', label: 'Get your own wax figure', labelTr: 'Kendi balmumu heykeline kavuş', check: (s) => s.player.achievements.includes('wax') },
+    ...fameLaterGoals,
   ],
   ribbons: [
     { id: 'superstar', name: 'Superstar', desc: 'Reached 80+ Fame.', nameTr: 'Süperstar', descTr: '80+ Şöhrete ulaştı.', test: (_r, p) => (peekFame(p)?.peakFame ?? 0) >= 80 },

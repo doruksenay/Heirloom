@@ -162,7 +162,7 @@ describe('base content guards (playtest 2)', () => {
     expect(typeof d.title === 'function' ? d.title(cc) : d.title).toContain("Sidney'e");
   });
 
-  it('heirloom events only mention heirlooms the family owns', () => {
+  it('heirloom events only mention heirlooms the family owns', { timeout: 20_000 }, () => {
     // English nouns of every type; an event about one type must not name another
     const NOUN: Record<HeirloomType, RegExp> = {
       clock: /pocket watch|\bwatch\b/i,

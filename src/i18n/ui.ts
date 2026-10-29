@@ -1,6 +1,7 @@
 import type { Lang } from '../engine/types';
 import { TR_DAILY } from './ui-daily';
 import { TR_UI4 } from '../ui/tr-strings';
+import { TR_CLOUD } from '../ui/tr-cloud';
 
 /**
  * Interface strings. Keys are the English text, so screens stay readable:
@@ -374,7 +375,7 @@ export const TR: Record<string, string> = {
   Men: 'Erkekler',
 };
 
-Object.assign(TR, TR_DAILY, TR_UI4);
+Object.assign(TR, TR_DAILY, TR_UI4, TR_CLOUD);
 const DICTS: Partial<Record<Lang, Record<string, string>>> = { tr: TR };
 
 /** Translate an interface string into the current language, filling {placeholders}. */

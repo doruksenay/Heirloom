@@ -1,0 +1,26 @@
+# Heirloom cloud: Cloudflare Worker + D1. Step-by-step guide (Turkish): ../MOBILE.md → "Bulut sunucusu".
+name = "heirloom-cloud"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Origins allowed to call /v1 from the app's WebView (iOS: capacitor://localhost, Android: https://localhost).
+# Add your web build's origin here if you host the game on the web.
+[vars]
+ALLOWED_ORIGINS = "capacitor://localhost,https://localhost,http://localhost,http://localhost:5173"
+
+# 1) npx wrangler d1 create heirloom --location=weur
+# 2) paste the database_id it prints below (replace the zeros)
+[[d1_databases]]
+binding = "DB"
+database_name = "heirloom"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+# Nightly clean-up at 03:17 UTC: old leaderboards, families not seen for 18 months, spent rate counters.
+[triggers]
+crons = ["17 3 * * *"]
+
+# Secrets are NOT written here. Set them once with:
+#   npx wrangler secret put ADMIN_TOKEN   (the admin panel password, 24+ random characters)
+#   npx wrangler secret put PEPPER        (random, 32+ characters; never change it, or every PIN stops working)
+# For `wrangler dev`, copy .dev.vars.example to .dev.vars.

@@ -7,6 +7,7 @@ import { T } from '../../i18n/ui';
 import { track } from '../../platform/analytics';
 import type { Lang } from '../../engine/types';
 import { DATING_PREFS, datingPref, datingPrefLabel, setDatingPref } from '../../content/base/dating';
+import { CloudSettings } from './CloudSettings';
 
 const LANGS: { id: Lang; label: string }[] = [
   { id: 'en', label: 'English' },
@@ -141,6 +142,8 @@ export function Settings({ app }: { app: AppApi }) {
           />
         </div>
       </section>
+
+      <CloudSettings app={app} />
 
       <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="item-title">{T('Start over')}</div>

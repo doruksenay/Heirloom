@@ -9,7 +9,9 @@ import type { GameState, Person } from './types';
  */
 export const SKIN_TONES = 6;
 
-const RANGE: Record<string, [number, number]> = { tr: [1, 3], br: [1, 5], us: [0, 5], uk: [0, 3], de: [0, 2] };
+const RANGE: Record<string, [number, number]> = {
+  tr: [1, 3], br: [1, 5], us: [0, 5], uk: [0, 3], de: [0, 2], fr: [0, 4], es: [0, 3], it: [0, 3], nl: [0, 3], ca: [0, 5], mx: [1, 4], jp: [0, 2],
+};
 
 function hash(s: string): number {
   let h = 2166136261;

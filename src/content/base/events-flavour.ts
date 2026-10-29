@@ -2,6 +2,7 @@ import type { Ctx } from '../types';
 import type { Person } from '../../engine/types';
 import { cityName, isCoastal } from '../../engine/places';
 import { currentTier } from '../../engine/home';
+import type { CountryId } from '../../engine/world';
 
 // Small helpers shared by the base event files: location flavour, English pronouns and per-person flags.
 // Everything here is pure (no rng), so it is safe in `when`, `title` and `text`.
@@ -16,7 +17,7 @@ export const coastal = (c: Ctx) => isCoastal(c.p.city);
 export const cityOf = (c: Ctx) => cityName(c.p.city, c.lang);
 
 /** A value per country id, with a fallback. */
-export type ByCountry<T> = { tr?: T; us?: T; uk?: T; de?: T; br?: T; other: T };
+export type ByCountry<T> = { [K in CountryId]?: T } & { other: T };
 
 /** Picks a value by country, falling back to `other`: byCountry(c, { tr: 'simit', other: 'hot dog' }). */
 export function byCountry<T>(c: Ctx, m: ByCountry<T>): T {
@@ -43,6 +44,16 @@ export const ABROAD_CITIES: [string, string][] = [
   ['Tokyo', 'Tokyo'],
   ['Barcelona', 'Barselona'],
 ];
+/** The country of each ABROAD_CITIES entry ('au' is not a playable country). */
+const ABROAD_CITY_COUNTRY = ['nl', 'ca', 'au', 'jp', 'es'];
+/** An ABROAD_CITIES index that is really abroad for this life: steps past a city in the player's own country. No rng. */
+export function foreignCityIdx(c: Ctx, idx: number): number {
+  for (let k = 0; k < ABROAD_CITIES.length; k++) {
+    const i = (idx + k) % ABROAD_CITIES.length;
+    if (ABROAD_CITY_COUNTRY[i] !== c.p.countryId) return i;
+  }
+  return idx;
+}
 /** Sends a child abroad: sets the flag and remembers the city (c.p.ext.abroad, id → city index). */
 export function sendAbroad(c: Ctx, personId: string, cityIdx: number) {
   c.h.flag(`${ABROAD}:${personId}`);

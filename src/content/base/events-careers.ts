@@ -38,6 +38,12 @@ const PATROL_SNACK: ByCountry<[string, string]> = {
   uk: ['sausage roll', 'sosisli böreğinin'],
   de: ['pretzel', 'pretzelinin'],
   br: ['cheese bread', 'peynirli ekmeğinin'],
+  fr: ['croissant', 'kruvasanının'],
+  it: ['panino', 'paninosunun'],
+  nl: ['stroopwafel', 'stroopwafelinin'],
+  ca: ['donut', 'donutunun'],
+  mx: ['taco', 'takosunun'],
+  jp: ['rice ball', 'onigirisinin'],
   other: ['sandwich', 'sandviçinin'],
 };
 
@@ -58,6 +64,9 @@ function waters(c: Ctx) {
     de: ['herring', 'Ringa'],
     uk: ['mackerel', 'Uskumru'],
     br: ['sardines', 'Sardalya'],
+    es: ['sardines', 'Sardalya'],
+    it: ['anchovies', 'Hamsi'],
+    jp: ['saury', 'Sanma balığı'],
     other: ['mackerel', 'Uskumru'],
   });
   return {

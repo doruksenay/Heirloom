@@ -106,6 +106,68 @@ const PATHS: Record<string, JSX.Element> = {
     </>
   ),
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />,
+  // round 6: the heirlooms added in round 4 get their own drawings (engine/heirlooms.ts HeirloomIcon)
+  camera: (
+    <>
+      <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h3L9 4.5h6L16.5 7h3A1.5 1.5 0 0 1 21 8.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
+  letters: (
+    <>
+      <path d="M7 4h12a2 2 0 0 1 2 2v9" />
+      <rect x="3" y="8" width="15" height="12" rx="2" />
+      <path d="m3 10 7.5 5 7.5-5" />
+    </>
+  ),
+  teaset: (
+    <>
+      <path d="M6 10h11v3.5a5.5 5.5 0 0 1-11 0z" />
+      <path d="M9 10a2.5 2.5 0 0 1 5 0M11.5 7.5V6" />
+      <path d="M6 11.5 3 9M17 11.5h1.5a2 2 0 0 1 0 4H17M4 21.5h15" />
+    </>
+  ),
+  sewing: (
+    <>
+      <rect x="6" y="3" width="12" height="3" rx="1" />
+      <rect x="6" y="18" width="12" height="3" rx="1" />
+      <path d="M8.5 6v12M15.5 6v12M8.5 9l7 2.5M8.5 13l7 2.5" />
+    </>
+  ),
+  radio: (
+    <>
+      <rect x="3" y="8" width="18" height="12" rx="2" />
+      <path d="m7 8 9-5" />
+      <circle cx="8.5" cy="14" r="2.5" />
+      <path d="M14 12h4M14 16h4" />
+    </>
+  ),
+  kilim: (
+    <>
+      <rect x="5" y="4" width="14" height="16" rx="1" />
+      <path d="m12 8 3 4-3 4-3-4z" />
+      <path d="M8 2v2M12 2v2M16 2v2M8 20v2M12 20v2M16 20v2" />
+    </>
+  ),
+  typewriter: (
+    <>
+      <path d="M8 12V4h8v8M10.5 7h3" />
+      <rect x="3" y="12" width="18" height="8" rx="2" />
+      <path d="M7 16h.01M10.5 16h.01M14 16h.01M17 16h.01" />
+    </>
+  ),
+  backgammon: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="1.5" />
+      <path d="M12 5v14M5 5l2.5 5.5L10 5M14 5l2.5 5.5L19 5M5 19l2.5-5.5L10 19M14 19l2.5-5.5L19 19" />
+    </>
+  ),
+  toolbox: (
+    <>
+      <rect x="3" y="9" width="18" height="11" rx="2" />
+      <path d="M9 9V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V9M3 13.5h7M14 13.5h7M10 12.5h4v2.5h-4z" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 22, label }: { name: string; size?: number; label?: string }) {

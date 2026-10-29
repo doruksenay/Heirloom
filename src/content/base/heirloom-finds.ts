@@ -15,15 +15,15 @@ import { MORE_HEIRLOOM_TYPES, type MoreHeirloomType } from './heirloom-words';
 // ------------------------------------------------ the definitions (icons reuse the existing set until the UI draws new ones)
 
 const MORE_DEFS: Record<MoreHeirloomType, HeirloomDef> = {
-  camera: { id: 'camera', icon: 'painting', effect: '+Happiness from 50', effectTr: '50 yaşından sonra +Mutluluk' },
-  letters: { id: 'letters', icon: 'book', effect: 'You and your partner stay closer', effectTr: 'Eşinle aran hep sıcak kalır' },
-  teaset: { id: 'teaset', icon: 'book', effect: 'Friends stay closer', effectTr: 'Arkadaşlıklar daha yakın kalır' },
-  sewing: { id: 'sewing', icon: 'quilt', effect: '+Looks', effectTr: '+Görünüş' },
-  radio: { id: 'radio', icon: 'music', effect: 'Lifts you in hard years', effectTr: 'Zor yıllarda moral verir' },
-  kilim: { id: 'kilim', icon: 'quilt', effect: 'Your children stay closer', effectTr: 'Çocukların sana daha yakın kalır' },
-  typewriter: { id: 'typewriter', icon: 'book', effect: '+Smarts in adulthood', effectTr: 'Yetişkinlikte +Zekâ' },
-  tavla: { id: 'tavla', icon: 'trophy', effect: 'A sharp mind in old age', effectTr: 'Yaşlılıkta zihin açık kalır' },
-  toolbox: { id: 'toolbox', icon: 'clock', effect: 'Saves money every year', effectTr: 'Her yıl biraz para kazandırır' },
+  camera: { id: 'camera', icon: 'camera', effect: '+Happiness from 50', effectTr: '50 yaşından sonra +Mutluluk' },
+  letters: { id: 'letters', icon: 'letters', effect: 'You and your partner stay closer', effectTr: 'Eşinle aran hep sıcak kalır' },
+  teaset: { id: 'teaset', icon: 'teaset', effect: 'Friends stay closer', effectTr: 'Arkadaşlıklar daha yakın kalır' },
+  sewing: { id: 'sewing', icon: 'sewing', effect: '+Looks', effectTr: '+Görünüş' },
+  radio: { id: 'radio', icon: 'radio', effect: 'Lifts you in hard years', effectTr: 'Zor yıllarda moral verir' },
+  kilim: { id: 'kilim', icon: 'kilim', effect: 'Your children stay closer', effectTr: 'Çocukların sana daha yakın kalır' },
+  typewriter: { id: 'typewriter', icon: 'typewriter', effect: '+Smarts in adulthood', effectTr: 'Yetişkinlikte +Zekâ' },
+  tavla: { id: 'tavla', icon: 'backgammon', effect: 'A sharp mind in old age', effectTr: 'Yaşlılıkta zihin açık kalır' },
+  toolbox: { id: 'toolbox', icon: 'toolbox', effect: 'Saves money every year', effectTr: 'Her yıl biraz para kazandırır' },
 };
 registerHeirlooms(Object.values(MORE_DEFS));
 

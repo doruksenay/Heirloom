@@ -1,3 +1,4 @@
+import { retirementLine } from '../../engine/common-lines';
 import type { ActivityDef } from '../types';
 import type { Ctx } from '../types';
 import type { Person } from '../../engine/types';
@@ -1223,7 +1224,7 @@ export const baseActivities: ActivityDef[] = [
   {
     id: 'university',
     label: (c) => c.t('Go to university', 'Üniversiteye git'),
-    description: (c) => c.t('A 4-year degree', '4 yıllık lisans'),
+    description: (c) => c.t('A degree: 4 years, 6 for medicine', 'Lisans: 4 yıl, tıpta 6 yıl'),
     group: 'Career',
     minAge: 18,
     maxAge: 45,
@@ -1271,7 +1272,7 @@ export const baseActivities: ActivityDef[] = [
       c.p.jobId = null;
       c.p.jobTitle = title;
       c.h.stat('happiness', 8);
-      return c.t(`You retired as ${title}.`, `${title} olarak emekli oldun.`);
+      return retirementLine(c, title); // round 6: varied (engine/common-lines.ts)
     },
   },
 

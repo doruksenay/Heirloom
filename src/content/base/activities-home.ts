@@ -201,6 +201,48 @@ const LANDLORDS: Record<string, [string, string][]> = {
     ['Dona Cida', 'Dona Cida'],
     ['Seu Osvaldo', 'Seu Osvaldo'],
   ],
+  fr: [
+    ['Monsieur Lemoine', 'Mösyö Lemoine'],
+    ['Madame Garnier', 'Madam Garnier'],
+    ['Monsieur Perrin', 'Mösyö Perrin'],
+    ['Madame Lacroix', 'Madam Lacroix'],
+  ],
+  es: [
+    ['Señor Ortega', 'Señor Ortega'],
+    ['Señora Castro', 'Señora Castro'],
+    ['Don Ernesto', 'Don Ernesto'],
+    ['Doña Pilar', 'Doña Pilar'],
+  ],
+  it: [
+    ['Signor Bellini', 'Signor Bellini'],
+    ['Signora Ferri', 'Signora Ferri'],
+    ['Signor Valenti', 'Signor Valenti'],
+    ['Signora Pace', 'Signora Pace'],
+  ],
+  nl: [
+    ['Meneer de Haan', 'Meneer de Haan'],
+    ['Mevrouw Kok', 'Mevrouw Kok'],
+    ['Meneer Prins', 'Meneer Prins'],
+    ['Mevrouw Bosman', 'Mevrouw Bosman'],
+  ],
+  ca: [
+    ['Mr. Lapointe', 'Bay Lapointe'],
+    ['Mrs. MacLeod', 'Bayan MacLeod'],
+    ['Mr. Kowalczyk', 'Bay Kowalczyk'],
+    ['Mrs. Pelletier', 'Bayan Pelletier'],
+  ],
+  mx: [
+    ['Don Rogelio', 'Don Rogelio'],
+    ['Doña Lupe', 'Doña Lupe'],
+    ['Don Chuy', 'Don Chuy'],
+    ['Doña Mari', 'Doña Mari'],
+  ],
+  jp: [
+    ['Mr. Okada', 'Okada-san'],
+    ['Mrs. Fujita', 'Fujita-san'],
+    ['Mr. Nishimura', 'Nishimura-san'],
+    ['Mrs. Kondo', 'Kondo-san'],
+  ],
 };
 function rentLine(c: Ctx, where: string): string {
   const i = c.rng.int(0, RENT_LINES.length - 1);

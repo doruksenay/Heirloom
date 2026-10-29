@@ -1,7 +1,7 @@
 import type { Ctx, Helpers } from '../content/types';
 import type { Gender, GameState, Lang, Person, RelationKind, Tone } from './types';
 import { createRng } from './rng';
-import { firstNames, getCountry } from './world';
+import { familyNamePool, getCountry } from './world';
 import { allJobs } from '../content/registry';
 import { CAREER_TOP_MIN_LEVELS, titleFor } from './careers';
 
@@ -80,6 +80,8 @@ export function familyFirstNames(s: GameState, kinds?: RelationKind[]): Set<stri
     taken.add(s.people[life.personId]?.firstName ?? life.name.split(' ')[0]);
     if (life.partnerName) taken.add(life.partnerName);
   }
+  // close family of the last two generations, also those no longer in this life's relations (round 6, item 2)
+  for (const n of recentLineageNames(s)) taken.add(n);
   return taken;
 }
 
@@ -90,24 +92,73 @@ export function familyFirstNames(s: GameState, kinds?: RelationKind[]): Set<stri
  * Baby-name choices should use this too.
  */
 export function freshFirstNames(s: GameState, gender: Gender): string[] {
-  const pool = firstNames(s.player.countryId, gender);
+  // a family abroad mixes names from home with local ones (world.ts familyNamePool)
+  const pool = familyNamePool(s.player.countryId, s.dynasty.roots?.countryId, gender);
+  recentLineageNames(s, true); // note this generation's close family on the dynasty
   for (const kinds of [undefined, FAMILY_KINDS]) {
     const taken = familyFirstNames(s, kinds);
     const free = pool.filter((n) => !taken.has(n));
     if (free.length) return free;
   }
-  return pool;
+  // a very long dynasty has used every name: still never a living relative's, nor a close one who died within the
+  // last two generations (round 6, item 2); only then a name some living relative has
+  const close = new Set<string>([...livingFamilyNames(s), ...recentLineageNames(s)]);
+  const free = pool.filter((n) => !close.has(n));
+  if (free.length) return free;
+  const living = livingFamilyNames(s);
+  const left = pool.filter((n) => !living.has(n));
+  return left.length ? left : pool;
+}
+
+/** First names of the player and every living relative of a family kind. No RNG. */
+export function livingFamilyNames(s: GameState): Set<string> {
+  const out = new Set<string>([s.player.firstName]);
+  for (const r of s.player.relations) {
+    const q = s.people[r.personId];
+    if (q && q.deathYear === undefined && FAMILY_KINDS.includes(r.kind)) out.add(q.firstName);
+  }
+  return out;
 }
 
 /**
- * Whether a first name belongs to the player or a living close relative (parent, grandparent, sibling, child,
- * partner). Content that names a stranger from a fixed list (a landlord, a teacher) should skip such names
+ * Close family of this life and the last two lives of the dynasty: parents, grandparents, siblings, partners and
+ * children, living or dead. An heir's grandmother is no longer in the heir's own relations, but her name is still the
+ * family's (round 6, item 2). Each generation's names are noted on the dynasty whenever a name is picked
+ * (dynasty.closeNames), so nothing in game.ts has to remember them. No RNG.
+ */
+export function recentLineageNames(s: GameState, record = false): Set<string> {
+  const gen = s.dynasty.generation;
+  const out = new Set<string>([s.player.firstName]);
+  for (const r of s.player.relations) {
+    const q = s.people[r.personId];
+    if (q && FAMILY_KINDS.includes(r.kind)) out.add(q.firstName);
+  }
+  if (record) {
+    const book = (s.dynasty.closeNames ??= {});
+    const mine = new Set([...(book[gen] ?? []), ...out]);
+    if (mine.size !== (book[gen] ?? []).length) book[gen] = [...mine];
+    for (const k of Object.keys(book)) if (Number(k) < gen - 2) delete book[k];
+  }
+  const book = s.dynasty.closeNames;
+  if (book) for (let g = gen - 2; g <= gen; g++) for (const n of book[g] ?? []) out.add(n);
+  for (const l of s.dynasty.lives.slice(-2)) {
+    out.add(s.people[l.personId]?.firstName ?? l.name.split(' ')[0]);
+    if (l.partnerName) out.add(l.partnerName);
+  }
+  return out;
+}
+
+/**
+ * Whether a first name belongs to the player, a living close relative (parent, grandparent, sibling, child,
+ * partner) or a close relative of the last two generations, living or dead. Content that names a stranger from a fixed list (a landlord, a teacher) should skip such names
  * (playtest 3: the landlord "Kemal Bey" had the player's father's name). No RNG.
  */
 export function nameClashesWithFamily(s: GameState, firstName: string): boolean {
   const p = s.player;
   if (p.firstName === firstName) return true;
-  return p.relations.some((r) => FAMILY_KINDS.includes(r.kind) && s.people[r.personId]?.deathYear === undefined && s.people[r.personId]?.firstName === firstName);
+  if (p.relations.some((r) => FAMILY_KINDS.includes(r.kind) && s.people[r.personId]?.deathYear === undefined && s.people[r.personId]?.firstName === firstName)) return true;
+  // round 6 (item 2): nor a close relative who died within the last two generations (a late father's name on a new friend)
+  return recentLineageNames(s).has(firstName);
 }
 
 /**

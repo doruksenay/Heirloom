@@ -135,10 +135,10 @@ function line(c: Ctx, lines: readonly (readonly [string, string])[]): string {
 
 /** Toys and the names a child in each country would give them (the same name in both languages: Pofuduk only in Türkiye). */
 const TOYS: { en: string; tr: string; trAcc: string; names: ByCountry<string> }[] = [
-  { en: 'stuffed bunny', tr: 'peluş tavşanın', trAcc: 'peluş tavşanını', names: { tr: 'Pofuduk', de: 'Hoppel', br: 'Fofinho', other: 'Mr. Floppy' } },
-  { en: 'teddy bear', tr: 'oyuncak ayın', trAcc: 'oyuncak ayını', names: { tr: 'Bal Kaptan', de: 'Kapitän Honig', br: 'Capitão Mel', other: 'Captain Honey' } },
-  { en: 'knitted elephant', tr: 'örgü filin', trAcc: 'örgü filini', names: { tr: 'Biber', de: 'Pfeffer', br: 'Pimenta', other: 'Pepper' } },
-  { en: 'one-eared dog', tr: 'tek kulaklı köpeğin', trAcc: 'tek kulaklı köpeğini', names: { tr: 'Kurabiye', de: 'Keks', br: 'Biscoito', other: 'Biscuit' } },
+  { en: 'stuffed bunny', tr: 'peluş tavşanın', trAcc: 'peluş tavşanını', names: { tr: 'Pofuduk', de: 'Hoppel', br: 'Fofinho', fr: 'Pompon', es: 'Orejitas', it: 'Coniglietto', nl: 'Hoppie', mx: 'Conejito', jp: 'Mochi', other: 'Mr. Floppy' } },
+  { en: 'teddy bear', tr: 'oyuncak ayın', trAcc: 'oyuncak ayını', names: { tr: 'Bal Kaptan', de: 'Kapitän Honig', br: 'Capitão Mel', fr: 'Capitaine Miel', es: 'Capitán Miel', it: 'Capitan Miele', nl: 'Kapitein Honing', mx: 'Capitán Miel', jp: 'Kuma-chan', other: 'Captain Honey' } },
+  { en: 'knitted elephant', tr: 'örgü filin', trAcc: 'örgü filini', names: { tr: 'Biber', de: 'Pfeffer', br: 'Pimenta', fr: 'Caramel', es: 'Pimienta', it: 'Pepe', nl: 'Peper', mx: 'Chile', jp: 'Zou-san', other: 'Pepper' } },
+  { en: 'one-eared dog', tr: 'tek kulaklı köpeğin', trAcc: 'tek kulaklı köpeğini', names: { tr: 'Kurabiye', de: 'Keks', br: 'Biscoito', fr: 'Doudou', es: 'Galleta', it: 'Biscotto', nl: 'Koekie', mx: 'Galleta', jp: 'Pochi', other: 'Biscuit' } },
 ];
 const toy = (c: Ctx) => TOYS[Number(c.vars.toy) || 0];
 const toyNm = (c: Ctx) => byCountry(c, toy(c).names);

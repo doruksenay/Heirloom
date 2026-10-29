@@ -33,3 +33,10 @@ export const KEYS = {
    */
   sentryDsn: '',
 };
+
+/**
+ * The cloud server (server/ folder: Cloudflare Worker + D1), e.g. 'https://heirloom-cloud.yourname.workers.dev'.
+ * No trailing slash. Empty = every cloud feature (cloud save, family code, Daily leaderboard, gift codes) is hidden.
+ * Deploy guide (Turkish): MOBILE.md → "Bulut sunucusu".
+ */
+export const CLOUD_URL = '';

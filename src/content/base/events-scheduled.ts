@@ -1,4 +1,5 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
+import { keepWorkingLine, retirementLine } from '../../engine/common-lines';
 import { MAX_HIRE_AGE, aOrAn, acc, dat, eligibleJobs, familyFirstNames, gen, nm, wage, who, wth } from './util';
 import { da } from '../../i18n/tr-grammar';
 import { say, sayWith, type Pair } from './lines';
@@ -671,21 +672,14 @@ export const scheduledEvents: EventDef[] = [
           c.p.jobId = null;
           c.p.jobTitle = title;
           c.h.stat('happiness', 10);
-          return c.t(
-            `You retired as ${title}. The cake was lemon. You hate lemon.`,
-            `${title} olarak emekli oldun. Pasta limonluydu. Limondan nefret edersin.`,
-          );
+          return retirementLine(c, title); // round 6: eight variants (engine/common-lines.ts)
         },
         tone: 'big',
       },
       {
         id: 'keep',
         label: (c) => c.t('Keep working', 'Çalışmaya devam et'),
-        resolve: (c) =>
-          c.t(
-            'You told them to eat the cake without you. You have work to do.',
-            'Pastayı sensiz yemelerini söyledin. Daha yapacak işin var.',
-          ),
+        resolve: (c) => keepWorkingLine(c), // round 6: varied (engine/common-lines.ts)
       },
     ],
   },

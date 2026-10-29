@@ -9,6 +9,7 @@ import { expandEntitlements } from '../platform/purchases';
 import { isNative, syncStatusBar } from '../platform/native';
 import { setUiLang } from '../i18n/ui';
 import { configureAnalytics, track } from '../platform/analytics';
+import { bindCloudHost, cloudTick, startCloudSync, type CloudHost } from '../platform/cloud';
 import type { Lang } from '../engine/types';
 
 export type Tab = 'life' | 'activities' | 'home' | 'family' | 'store' | 'settings' | 'daily';
@@ -86,6 +87,11 @@ export function useApp(): AppApi {
   const lang: Lang = profile.settings.language ?? deviceLang();
   setUiLang(lang); // before any screen renders this frame
   useEffect(() => configureAnalytics({ consent: profile.settings.analytics, lang }), [profile.settings.analytics, lang]);
+  // opt-in cloud save (platform/cloud.ts): reads the newest render through this ref; inert while CLOUD_URL is empty
+  const cloudHost = useRef<CloudHost | null>(null);
+  bindCloudHost(() => cloudHost.current);
+  useEffect(() => startCloudSync(() => cloudHost.current), []);
+  useEffect(() => cloudTick());
 
   const theme = (() => {
     const t = getTheme(profile.settings.themeId);
@@ -108,7 +114,7 @@ export function useApp(): AppApi {
     [game, mode],
   );
 
-  return {
+  const api: AppApi = {
     game,
     family,
     daily,
@@ -195,4 +201,6 @@ export function useApp(): AppApi {
       return ok;
     },
   };
+  cloudHost.current = { family, daily, profile, updateProfile: api.updateProfile };
+  return api;
 }

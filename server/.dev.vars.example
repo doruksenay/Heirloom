@@ -1,0 +1,3 @@
+# Local secrets for `npx wrangler dev` only. Copy to .dev.vars (it is git-ignored). Never use these in production.
+ADMIN_TOKEN="local-admin-token-change-me-0123456789"
+PEPPER="local-pepper-change-me-0123456789abcdef"

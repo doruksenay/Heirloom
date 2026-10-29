@@ -38,6 +38,7 @@ export const BOSS_ENTITLEMENT = 'pack.boss';
 
 const co = (c: Ctx) => companyOf(c.p);
 const free = (c: Ctx) => c.p.jailYears === 0;
+const bossAge = (s: { year: number; player: { birthYear: number } }) => s.year - s.player.birthYear;
 const local = (countryId: string, usd: number) => usd * getCountry(countryId).wageFactor;
 const NEXT_STAGE = { garage: 'startup', startup: 'scaleup', scaleup: 'scaleup', public: 'public' } as const;
 
@@ -975,6 +976,38 @@ export const bossPack: ContentPack = {
     { id: 'boss_exit', label: 'Sell a company', labelTr: 'Bir şirket sat', check: (s) => s.player.achievements.includes('exit') },
     { id: 'boss_ipo', label: 'Take a company public', labelTr: 'Bir şirketi halka arz et', check: (s) => s.player.achievements.includes('ipo') },
     { id: 'boss_team50', label: 'Lead a team of 50', labelTr: '50 kişilik bir ekibi yönet', check: (s) => (companyOf(s.player)?.employees ?? 0) + 1 >= 50 },
+    // round 6 (item 1): goals for the middle and the end of a working life
+    {
+      id: 'boss_charity',
+      label: 'Fund a good cause through your company',
+      labelTr: 'Şirketinle bir sosyal sorumluluk projesine destek ol',
+      stage: 'mid',
+      available: (s) => !!companyOf(s.player) && bossAge(s) >= 25 && bossAge(s) < 70,
+      check: (s) => s.player.achievements.includes('charity_firm'),
+    },
+    {
+      id: 'boss_25',
+      label: 'See your company turn 25',
+      labelTr: 'Şirketinin 25. yaşını kutla',
+      stage: 'mid',
+      available: (s) => {
+        const comp = companyOf(s.player);
+        if (!comp) return false;
+        const left = 25 - companyAge(comp, s.year);
+        return bossAge(s) >= 28 && left > 0 && left <= 22 && bossAge(s) + left < 85;
+      },
+      weight: () => 2,
+      check: (s) => s.player.achievements.includes('jubilee25') || (!!companyOf(s.player) && hasMark(companyOf(s.player)!, 'twentyfive')),
+    },
+    {
+      id: 'boss_successor',
+      label: 'Choose a child to run the company one day',
+      labelTr: 'Şirketin başına geçecek çocuğunu belirle',
+      stage: 'late',
+      available: (s) => !!companyOf(s.player) && bossAge(s) >= 45 && s.player.relations.some((r) => r.kind === 'child' && s.people[r.personId]?.deathYear === undefined),
+      weight: () => 2,
+      check: (s) => s.player.achievements.includes('successor'),
+    },
   ],
   ribbons: [
     { id: 'unicorn', name: 'Unicorn', desc: 'Built a billion-dollar company.', nameTr: 'Tek Boynuzlu At', descTr: 'Milyar dolarlık bir şirket kurdu.', test: (_r, p) => p.achievements.includes('unicorn') },

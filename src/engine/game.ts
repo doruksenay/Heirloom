@@ -8,7 +8,9 @@ import { abl, acc, dat, gen, gen as gen_, loc } from '../i18n/tr-grammar';
 import { furniture, hasGarden } from './home';
 import { keepSkin, skinTone } from './skin';
 import { ribbonFor } from './ribbons';
-import { assignGoals, checkGoals } from './goals';
+import { assignGoals, checkGoals, goalChapter } from './goals';
+import { highSchoolGradLine, highSchoolStartLine, primaryStartLine } from './common-lines';
+import { degreeYears } from './degree';
 import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, PENSION_AGE, homeEquity, inheritanceTax, payMortgage, safetyNet, tuitionFor, yearBudget } from './economy';
 import { babyOdds, bailoutHelpers, canHaveBaby } from '../content/base/events-scheduled';
 import { canAdopt } from '../content/base/adoption';
@@ -382,6 +384,16 @@ export function deathCauseFor(age: number, health: number, rng: Rng): string {
 }
 const deathCause = (c: Ctx) => deathCauseFor(c.age, c.p.stats.health, c.rng);
 
+/** The last mortgage payment (round 6: one line in a quarter of all lives). */
+const MORTGAGE_DONE: Pair[] = [
+  ['You made the last mortgage payment. The home is all yours now, every brick.', 'Konut kredisinin son taksitini ödedin. Ev artık tuğlasına kadar senin.'],
+  ['The bank sent a letter: the mortgage is paid off. You read it four times and put it in a frame.', 'Bankadan mektup geldi: kredi bitti. Dört kez okudun, sonra çerçeveletip duvara astın.'],
+  ['Last mortgage payment made. You walked round the home touching the walls like a new owner.', 'Kredinin son taksiti de ödendi. Evi yeni sahibiymiş gibi duvarlara dokunarak dolaştın.'],
+  ['The mortgage is paid off. That night you slept like someone who owns their own ceiling.', 'Konut kredisi bitti. O gece, başının üstündeki tavan artık senin olduğu için mışıl mışıl uyudun.'],
+  ['You paid the last instalment and opened something fizzy. The home is yours, every creaky step of it.', 'Son taksiti ödeyip bir gazoz açtın. Ev artık gıcırdayan her basamağıyla senin.'],
+  ['No more mortgage. The first month without the payment felt like a pay rise nobody gave you.', 'Kredi bitti. Taksitsiz geçen ilk ay, kimsenin vermediği bir zam gibi geldi.'],
+];
+
 /** Leaving prison (playtest 2: one line, 106 times in 202 lives). */
 const RELEASE_LINES: Pair[] = [
   ['You were released from prison. The air outside smells different.', 'Cezaevinden çıktın. Dışarının havası bambaşka kokuyor.'],
@@ -403,16 +415,24 @@ const GRAD_PARENTS: Pair[] = [
   ['You graduated from university! Your mom cried at the first speech, your dad at the last one.', 'Üniversiteden mezun oldun! Annen ilk konuşmada ağladı, baban son konuşmada.'],
   ['You graduated from university! Your parents brought flowers, a flask of tea and their best clothes.', 'Üniversiteden mezun oldun! Annenle baban çiçekleri, bir termos çayı ve en güzel kıyafetlerini getirdi.'],
   ['You graduated from university! Your dad shook hands with three professors as if he had taught them himself.', 'Üniversiteden mezun oldun! Baban üç hocanın elini, onları kendisi yetiştirmiş gibi sıktı.'],
+  ['You graduated from university! Your parents framed the diploma before you had even seen it properly.', 'Üniversiteden mezun oldun! Annenle baban diplomayı sen daha doğru dürüst görmeden çerçeveletti.'],
+  ['You graduated from university! Your mom told the photographer where to stand; your dad told him again.', 'Üniversiteden mezun oldun! Annen fotoğrafçıya nerede durması gerektiğini söyledi, baban bir daha söyledi.'],
+  ['You graduated from university! Your parents took you to dinner and paid, and for once you let them.', 'Üniversiteden mezun oldun! Annenle baban seni yemeğe götürdü, hesabı da onlar ödedi; bu sefer itiraz etmedin.'],
 ];
 const GRAD_ONE: ((k: [string, string]) => Pair)[] = [
   (k) => [`You graduated from university! Your ${k[0]} clapped louder than anyone in the hall.`, `Üniversiteden mezun oldun! Salonda en çok ${k[1]} alkışladı.`],
   (k) => [`You graduated from university! Your ${k[0]} kept the program and has read it ever since.`, `Üniversiteden mezun oldun! ${k[1] === 'annen' ? 'Annen' : 'Baban'} tören programını sakladı, hâlâ arada bir okuyor.`],
   (k) => [`You graduated from university! Your ${k[0]} took forty photos, all of them of you.`, `Üniversiteden mezun oldun! ${k[1] === 'annen' ? 'Annen' : 'Baban'} kırk fotoğraf çekti, hepsinde sen varsın.`],
+  (k) => [`You graduated from university! Your ${k[0]} told everyone in the row behind that you were the one in the middle.`, `Üniversiteden mezun oldun! ${k[1] === 'annen' ? 'Annen' : 'Baban'} arka sıradaki herkese ortadakinin sen olduğunu anlattı.`],
+  (k) => [`You graduated from university! Your ${k[0]} dressed up for the day and carried your cap all the way home.`, `Üniversiteden mezun oldun! ${k[1] === 'annen' ? 'Annen' : 'Baban'} en güzel kıyafetini giydi, kepini de eve kadar elinden bırakmadı.`],
 ];
 const GRAD_ALONE: Pair[] = [
   ['You graduated from university! You threw your cap in the air and caught somebody else\'s.', 'Üniversiteden mezun oldun! Kepini havaya attın, inerken eline başkasınınki geçti.'],
   ['You graduated from university! Your friends cheered your name as if it were a goal.', 'Üniversiteden mezun oldun! Arkadaşların adını gol olmuş gibi bağırdı.'],
   ['You graduated from university! You walked across the stage and did not trip. A personal best.', 'Üniversiteden mezun oldun! Sahneden geçtin ve tökezlemedin. Kişisel rekor.'],
+  ['You graduated from university! Your flatmates made a banner with your name spelled wrong. You kept it.', 'Üniversiteden mezun oldun! Ev arkadaşların adını yanlış yazdıkları bir pankart hazırladı. Sakladın.'],
+  ['You graduated from university! You had your photo taken with the dean, who had no idea who you were.', 'Üniversiteden mezun oldun! Seni hiç tanımayan dekanla fotoğraf çektirdin.'],
+  ['You graduated from university! Afterwards you sat on the steps in your gown and ate a simit. Perfect day.', 'Üniversiteden mezun oldun! Sonra cübbenle merdivenlere oturup bir simit yedin. Kusursuz bir gün.'],
 ];
 
 function graduationLine(c: Ctx): string {
@@ -453,17 +473,17 @@ function yearlyTick(c: Ctx): string | null {
   if (age === 6) {
     p.school = 'primary';
     p.schoolYears = 0;
-    h.log(c.t('You started primary school.', 'İlkokula başladın.'));
+    h.log(primaryStartLine(c)); // round 6: varied by city, school, an older sibling, the weather (common-lines.ts)
   } else if (age === 14 && p.school === 'primary') {
     p.education = 'primary';
     p.school = 'highschool';
     p.schoolYears = 0;
-    h.log(c.t('You started high school.', 'Liseye başladın.'));
+    h.log(highSchoolStartLine(c));
   } else if (age === 18 && p.school === 'highschool') {
     p.school = null;
     if (p.stats.smarts >= 25 || rng.chance(0.6)) {
       p.education = 'highschool';
-      h.log(c.t('You graduated from high school!', 'Liseden mezun oldun!'), 'good');
+      h.log(highSchoolGradLine(c), 'good');
       scheduled = 'base.after_highschool';
     } else {
       h.log(c.t('You failed your final exams and left high school without a diploma.', 'Bitirme sınavlarında çaktın ve liseyi diplomasız bıraktın.'), 'bad');
@@ -473,9 +493,12 @@ function yearlyTick(c: Ctx): string | null {
     p.schoolYears++;
     const fee = tuitionFor(p.countryId);
     if (!h.has('scholarship') && fee > 0) h.money(-fee); // tuition: none at a Turkish state university
-    if (p.schoolYears >= 4) {
+    // round 6: medicine takes six years, a few majors five, an English prep year one more (degree.ts)
+    if (p.schoolYears >= degreeYears(p)) {
       p.school = null;
       p.education = 'university';
+      p.prepYear = undefined;
+      p.degreeYears = undefined;
       h.log(graduationLine(c), 'big');
       h.achieve('graduate');
       h.stat('happiness', 8);
@@ -516,7 +539,7 @@ function yearlyTick(c: Ctx): string | null {
     if (p.home.owned) p.home.value = Math.round(p.home.value * (1 + HOME_GROWTH));
     // the instalment left with the budget; book it on the loan (paused in prison, like the budget)
     if (p.home.loan && p.jailYears === 0 && payMortgage(p))
-      h.log(c.t('You made the last mortgage payment. The home is all yours now, every brick.', 'Konut kredisinin son taksitini ödedin. Ev artık tuğlasına kadar senin.'), 'good');
+      h.log(say(c, 'engine.mortgage_done', MORTGAGE_DONE), 'good');
   } else if (salary) {
     h.money(salary * 0.75); // a teenager's wages, no bills yet
   }
@@ -1042,6 +1065,7 @@ export function ageUp(s: GameState): void {
   const c = makeCtx(s);
   const logStart = s.player.log.length;
   const scheduled = yearlyTick(c);
+  goalChapter(s); // round 6: new goals at 30 and 50 (goals.ts)
 
   const country = getCountry(s.player.countryId);
   if (c.rng.chance(annualMortality(c.age, s.player.stats.health, country.mortalityShift))) {

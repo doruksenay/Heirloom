@@ -60,6 +60,13 @@ const SNACK: ByCountry<[string, string]> = {
   uk: ['sausage roll', 'sosisli milföy'],
   de: ['pretzel', 'pretzel'],
   br: ['cheese bread', 'peynirli ekmek'],
+  fr: ['croissant', 'kruvasan'],
+  es: ['churro', 'churros'],
+  it: ['slice of pizza', 'dilim pizza'],
+  nl: ['stroopwafel', 'stroopwafel'],
+  ca: ['hot dog', 'sosisli sandviç'],
+  mx: ['taco', 'taco'],
+  jp: ['rice ball', 'onigiri'],
   other: ['sandwich', 'sandviç'],
 };
 

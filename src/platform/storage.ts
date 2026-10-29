@@ -79,3 +79,34 @@ export const loadDaily = () => {
 export const saveDaily = (g: GameState | null) => write(DAILY_KEY, g);
 export const loadMode = (): 'family' | 'daily' => (read<string>(MODE_KEY) === 'daily' ? 'daily' : 'family');
 export const saveMode = (m: 'family' | 'daily') => write(MODE_KEY, m);
+
+/**
+ * Replaces both saves and the profile at once and waits until the phone's Preferences have them too, so a reload
+ * right after (restoring a family from the cloud) cannot bring the old saves back from Preferences.
+ */
+export async function replaceAll(family: GameState | null, daily: GameState | null, profile: Profile): Promise<void> {
+  const entries: [string, unknown][] = [
+    [GAME_KEY, family],
+    [DAILY_KEY, daily],
+    [PROFILE_KEY, profile],
+    [MODE_KEY, 'family'],
+  ];
+  for (const [key, value] of entries) {
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* see write() */
+    }
+  }
+  if (!isNative()) return;
+  try {
+    const { Preferences } = await import('@capacitor/preferences');
+    for (const [key, value] of entries) {
+      if (value === null) await Preferences.remove({ key });
+      else await Preferences.set({ key, value: JSON.stringify(value) });
+    }
+  } catch {
+    /* localStorage has them */
+  }
+}

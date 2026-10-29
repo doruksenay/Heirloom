@@ -757,6 +757,13 @@ const favFood = (c: Ctx): [string, string] =>
     uk: ['the full English breakfast', 'İngiliz kahvaltısı'],
     us: ['bacon cheeseburgers', 'pastırmalı çizburger'],
     br: ['feijoada', 'feijoada'],
+    fr: ['the cheese board', 'peynir tabağı'],
+    es: ['jamón', 'jamón'],
+    it: ['carbonara', 'karbonara'],
+    nl: ['bitterballen', 'bitterballen'],
+    ca: ['poutine', 'poutine'],
+    mx: ['tacos al pastor', 'tacos al pastor'],
+    jp: ['tonkatsu', 'tonkatsu'],
     other: ['fried cheese', 'kızarmış peynir'],
   });
 

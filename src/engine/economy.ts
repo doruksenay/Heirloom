@@ -71,7 +71,11 @@ export function inheritanceTax(cash: number, wageFactor: number): number {
  * state university charged about ₺54K a year). Türkiye: state universities, no tuition. Germany: a small semester
  * fee. Brazil: the public universities are free, but most students pay a private one. UK and US: real fees.
  */
-export const TUITION_USD: Record<string, number> = { tr: 0, de: 300, br: 1500, uk: 3500, us: 4500 };
+export const TUITION_USD: Record<string, number> = {
+  tr: 0, de: 300, br: 1500, uk: 3500, us: 4500,
+  // round 6: France and Italy have low public fees, the Netherlands a set fee, Spain and Mexico mid, Canada and Japan high
+  fr: 300, it: 1500, es: 1500, nl: 2500, mx: 1000, ca: 5000, jp: 4000,
+};
 
 /** Yearly tuition in game dollars for a student in this country (0 means free). */
 export function tuitionFor(countryId: string): number {

@@ -16,7 +16,7 @@ export const RIBBONS: RibbonDef[] = [
   { id: 'gone_soon', name: 'Gone Too Soon', desc: 'Died before 30.', nameTr: 'Erken Gidenler', descTr: '30 yaşından önce öldü.', test: (r) => r.age < 30 },
   { id: 'black_sheep', name: 'Black Sheep', desc: 'Convicted more than once.', nameTr: 'Kara Koyun', descTr: 'Birden fazla kez mahkûm oldu.', test: (_r, p) => p.criminalRecord >= 2 },
   { id: 'tycoon', name: 'Tycoon', desc: 'Ended a life worth a million (US dollars).', nameTr: 'Kodaman', descTr: 'Hayatını bir milyon (ABD doları) servetle tamamladı.', test: (r, p) => isTycoon(r.netWorth, p.money) },
-  { id: 'overachiever', name: 'Overachiever', desc: 'Completed all three life goals.', nameTr: 'Başarı Avcısı', descTr: 'Üç hayat hedefinin hepsini tamamladı.', test: (_r, p) => !!p.goals?.length && p.goals.every((g) => g.done) },
+  { id: 'overachiever', name: 'Overachiever', desc: 'Completed every life goal.', nameTr: 'Başarı Avcısı', descTr: 'Bütün hayat hedeflerini tamamladı.', test: (_r, p) => !!p.goals?.length && p.goals.every((g) => g.done) },
   { id: 'big_family', name: 'Big Family', desc: 'Raised four or more children.', nameTr: 'Kalabalık Aile', descTr: 'Dört ya da daha fazla çocuk büyüttü.', test: (r) => r.children >= 4 },
   { id: 'soulmates', name: 'Soulmates', desc: '40+ years with the same partner.', nameTr: 'Ruh İkizleri', descTr: 'Aynı kişiyle 40 yıldan fazla.', test: (r) => (r.partnerYears ?? 0) >= 40 },
   { id: 'top_ladder', name: 'Top of the Ladder', desc: 'Reached the highest title in a career.', nameTr: 'Zirvedeki', descTr: 'Bir kariyerin en üst unvanına ulaştı.', test: (_r, p) => p.achievements.includes('top_job') },

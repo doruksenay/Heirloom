@@ -289,7 +289,7 @@ export const youngChildEvents: EventDef[] = [
     minAge: 4,
     maxAge: 10,
     once: true,
-    when: (c) => c.p.countryId !== 'br',
+    when: (c) => c.p.countryId !== 'br' && c.p.countryId !== 'mx',
     title: tt('Snow day! School is closed.', 'Kar tatili! Okullar kapalı.'),
     text: tt('The whole street is white and silent. Not for long.', 'Bütün sokak bembeyaz ve sessiz. Uzun sürmeyecek.'),
     choices: [

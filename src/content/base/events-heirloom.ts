@@ -844,6 +844,8 @@ const holiday = (c: Ctx): [string, string, string] =>
   byCountry<[string, string, string]>(c, {
     tr: ['Bayram', 'Bayram', 'bayram'],
     us: ['Thanksgiving', 'Şükran Günü', 'Şükran Günü'],
+    ca: ['Thanksgiving', 'Şükran Günü', 'Şükran Günü'],
+    jp: ['New Year', 'Yılbaşı', 'yılbaşı'],
     other: ['Christmas', 'Yılbaşı', 'yılbaşı'],
   });
 

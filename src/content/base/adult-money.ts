@@ -165,7 +165,7 @@ export const moneyEvents: EventDef[] = [
     maxAge: 75,
     once: true,
     weight: 4,
-    title: (c) => byCountry(c, { tr: c.t('You have been called to court as a witness to a car accident.', 'Gördüğün bir trafik kazası için mahkemeye tanık olarak çağrıldın.'), us: c.t('You have been called for jury duty.', 'Jüri görevine çağrıldın.'), uk: c.t('You have been called for jury duty.', 'Jüri görevine çağrıldın.'), other: c.t('You have been called to court as a witness to a car accident.', 'Gördüğün bir trafik kazası için mahkemeye tanık olarak çağrıldın.') }),
+    title: (c) => byCountry(c, { tr: c.t('You have been called to court as a witness to a car accident.', 'Gördüğün bir trafik kazası için mahkemeye tanık olarak çağrıldın.'), us: c.t('You have been called for jury duty.', 'Jüri görevine çağrıldın.'), uk: c.t('You have been called for jury duty.', 'Jüri görevine çağrıldın.'), ca: c.t('You have been called for jury duty.', 'Jüri görevine çağrıldın.'), other: c.t('You have been called to court as a witness to a car accident.', 'Gördüğün bir trafik kazası için mahkemeye tanık olarak çağrıldın.') }),
     text: T('The letter is very official. It has a stamp and a tone.', 'Mektup çok resmî. Bir mührü ve bir tavrı var.'),
     choices: [
       ch('serve', 'Go and do your duty', 'Git ve görevini yap', (c) => {

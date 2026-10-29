@@ -713,7 +713,7 @@ export const loveEvents: EventDef[] = [
     when: all(noMourn, partnered),
     setup: setPartner,
     title: (c) => c.t(`${nmv(c)} has signed you both up for dance lessons.`, `${nmv(c)} ikinizi de dans kursuna yazdırmış.`),
-    text: (c) => byCountry(c, { tr: c.t('Tango, every Tuesday. The teacher is very serious.', 'Tango, her salı. Hoca çok ciddi.'), br: c.t('Samba, every Tuesday. The teacher is very serious.', 'Samba, her salı. Hoca çok ciddi.'), other: c.t('Ballroom, every Tuesday. The teacher is very serious.', 'Salon dansı, her salı. Hoca çok ciddi.') }),
+    text: (c) => byCountry(c, { tr: c.t('Tango, every Tuesday. The teacher is very serious.', 'Tango, her salı. Hoca çok ciddi.'), br: c.t('Samba, every Tuesday. The teacher is very serious.', 'Samba, her salı. Hoca çok ciddi.'), es: c.t('Flamenco, every Tuesday. The teacher is very serious.', 'Flamenko, her salı. Hoca çok ciddi.'), mx: c.t('Salsa, every Tuesday. The teacher is very serious.', 'Salsa, her salı. Hoca çok ciddi.'), other: c.t('Ballroom, every Tuesday. The teacher is very serious.', 'Salon dansı, her salı. Hoca çok ciddi.') }),
     choices: [
       ch('commit', 'Commit fully', 'Kendini tamamen ver', (c) => {
         c.h.closeness(pid(c), 8);

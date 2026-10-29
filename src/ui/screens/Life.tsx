@@ -1,4 +1,5 @@
 import type { AppApi } from '../app-state';
+import { uniYearLabel } from '../../engine/degree';
 import { TORCH_AGE, ageUp, canPassTorch, canRewind, choose, lifeStage, playerAge, rewind, rewindsLeft, salaryOf } from '../../engine/game';
 import { useState } from 'preact/hooks';
 import { JOB_BOARD_EVENT } from '../../content/base/job-board';
@@ -58,7 +59,7 @@ export function Life({ app }: { app: AppApi }) {
           : p.jobTitle
             ? p.jobTitle
             : p.school === 'university'
-              ? T('University student')
+              ? `${T('University student')} · ${uniYearLabel(p, app.lang)}`
               : p.school
                 ? T('Student')
                 : age >= 18

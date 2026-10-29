@@ -7,6 +7,7 @@ import { afterEvents } from './events-after';
 import { justiceEvents } from './events-justice';
 import { prisonEvents } from './events-prison';
 import { streetEvents } from './events-street';
+import { crimeLaterActivities, crimeLaterEvents, crimeLaterGoals } from './later';
 import { convictFor, crimeState, isPetty, localMoney, peekCrime, yearsServed } from './state';
 
 // "Crime World" expansion (18+). Bundled with the app, unlocked by purchase + adult-content opt-in.
@@ -40,8 +41,8 @@ export const crimePack: ContentPack = {
   description: 'Burglary, gangs, heists, big trials and prison life in depth. Builds on the free street crime: every choice has a cost, and your family remembers.',
   rating: 'mature',
   entitlement: CRIME_ENTITLEMENT,
-  events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents],
-  activities: crimeActivities,
+  events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents, ...crimeLaterEvents],
+  activities: [...crimeActivities, ...crimeLaterActivities],
 
   // heat cooling and noticing a release run in the free game (base/street.ts streetOnYear) on the same state
   onYear: (c) => {
@@ -79,6 +80,7 @@ export const crimePack: ContentPack = {
   goals: [
     { id: 'crime_heist', label: 'Pull off a heist', labelTr: 'Bir soygunu başarıyla tamamla', check: (s) => s.player.achievements.includes('heist') },
     { id: 'crime_reformed', label: 'Turn your life around after a conviction', labelTr: 'Sabıkadan sonra hayatını düzene sok', check: (s) => s.player.achievements.includes('reformed') },
+    ...crimeLaterGoals,
   ],
 
   ribbons: [

@@ -17,5 +17,8 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: 'node',
+    // long simulation suites block a worker thread; separate processes keep vitest's RPC from timing out
+    pool: 'forks',
+    testTimeout: 120_000,
   },
 }));

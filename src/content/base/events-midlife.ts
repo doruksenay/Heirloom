@@ -4,7 +4,7 @@ import { salaryFor, titleFor } from '../../engine/careers';
 import { getCountry } from '../../engine/world';
 import { abl, acc, cap, dat, eligibleJobs, employee, gen, kin, loc, nm, single, wage, who, wth, officeJob, workKind, quietInMourning } from './util';
 import { divorceTerms, divorcedLine } from './relationships';
-import { ABROAD_CITIES, abroadCity, bringHome, byCountry, cityOf, didFor, he, He, him, his, His, inTr, isAbroad, markFor, sendAbroad, type ByCountry } from './events-flavour';
+import { ABROAD_CITIES, abroadCity, bringHome, byCountry, cityOf, didFor, foreignCityIdx, he, He, him, his, His, inTr, isAbroad, markFor, sendAbroad, type ByCountry } from './events-flavour';
 
 // Ages 25–64: work, kids, love, money, health and the small absurdities of the middle of life.
 
@@ -94,6 +94,12 @@ const TRUCK: ByCountry<[string, string, string, string, string, string, string]>
   uk: ['kebab van', 'kebapçı minibüsü', 'a wrap', 'bir dürüme', 'dürüm', 'kebab', 'Kebap'],
   us: ['taco truck', 'taco kamyoneti', 'a taco', 'bir takoya', 'taco', 'taco', 'Taco'],
   br: ['pastel stand', 'pastel tezgâhı', 'a pastel', 'bir pastele', 'pastel', 'pastel', 'Pastel'],
+  fr: ['crêpe stand', 'krep tezgâhı', 'a crêpe', 'bir krebe', 'krep', 'crêpe', 'Krep'],
+  it: ['pizza van', 'pizza kamyoneti', 'a pizza', 'bir pizzaya', 'pizza', 'pizza', 'Pizza'],
+  nl: ['herring stand', 'ringa tezgâhı', 'a herring roll', 'bir ringa sandviçine', 'ringa sandviçi', 'herring', 'Ringa'],
+  ca: ['hot dog cart', 'sosisli arabası', 'a hot dog', 'bir sosisliye', 'sosisli', 'hot-dog', 'Sosisli'],
+  mx: ['taco stand', 'taco tezgâhı', 'a taco', 'bir takoya', 'taco', 'taco', 'Taco'],
+  jp: ['ramen stall', 'ramen tezgâhı', 'a ramen bowl', 'bir ramen kâsesine', 'ramen', 'ramen', 'Ramen'],
   other: ['food truck', 'yemek kamyoneti', 'a dish', 'bir yemeğe', 'yemek', 'street-food', 'Sokak lezzetleri'],
 };
 const truck = (c: Ctx) => byCountry(c, TRUCK);
@@ -105,6 +111,11 @@ const SPICY: ByCountry<[string, string]> = {
   uk: ['a vindaloo', 'yakıcı bir vindaloo körisiyle'],
   de: ['an extra-hot currywurst', 'ekstra acılı bir körili sosisle'],
   br: ['a huge feijoada', 'koca bir tabak feijoadayla'],
+  fr: ['a fiery merguez', 'acı bir merguez sucuğuyla'],
+  es: ['a plate of patatas bravas', 'acı soslu bir tabak patatesle'],
+  it: ["a penne all'arrabbiata", 'acılı arrabbiata makarnasıyla'],
+  mx: ['a habanero salsa', 'habanero sosuyla'],
+  jp: ['a bowl of spicy ramen', 'acılı bir kâse ramenle'],
   other: ['a very spicy curry', 'çok acılı bir köriyle'],
 };
 
@@ -932,7 +943,7 @@ export const midlifeEvents: EventDef[] = [
     when: (c) => kidsAged(c, 22, 35).length > 0,
     setup: (c) => {
       c.vars.pid = c.rng.pick(kidsAged(c, 22, 35)).person.id;
-      c.vars.city = c.rng.int(0, ABROAD_CITIES.length - 1);
+      c.vars.city = foreignCityIdx(c, c.rng.int(0, ABROAD_CITIES.length - 1));
     },
     title: (c) => {
       const [en, tr] = ABROAD_CITIES[amt(c, 'city')];

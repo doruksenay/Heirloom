@@ -3,6 +3,8 @@ import { MAJOR_IDS, MAJOR_INFO, majorsFor, setMajor, type MajorId } from '../../
 import { houseState } from '../../engine/home';
 import { wage } from '../base/util';
 import type { Pair } from '../base/lines';
+import { renameHighSchool } from '../../engine/common-lines';
+import { classYearsFor, hasPrepProgramme, yearsWord } from '../../engine/degree';
 import { closeAll, coastal, hasDad, hasMom, inTR, line, peekTr, trState, WEDDING_MAX_AGE, type Lise } from './common';
 
 /*
@@ -26,7 +28,6 @@ import { closeAll, coastal, hasDad, hasMom, inTR, line, peekTr, trState, WEDDING
 
 const fired = (c: Ctx, id: string) => c.p.eventLastAge[id] !== undefined;
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-const t2 = (c: Ctx, p: Pair) => c.t(p[0], p[1]);
 
 /** A boy's sünnet age: 6 to 9, fixed by his birth year and name (no rng). */
 export function sunnetAge(birthYear: number, firstName: string): number {
@@ -50,32 +51,8 @@ export function yksScore(c: Ctx, bonus: number): number {
 
 // ------------------------------------------------------------------ schedule
 
-const START_HS: Pair = ['You started high school.', 'Liseye başladın.'];
-const LISE_START: Record<Lise, Pair> = {
-  fen: ['You started at the science high school (fen lisesi).', 'Fen lisesine başladın.'],
-  anadolu: ['You started at an Anatolian high school (Anadolu lisesi).', 'Anadolu lisesine başladın.'],
-  mahalle: ['You started at the high school in your neighborhood.', 'Mahalledeki liseye başladın.'],
-};
-
-const GRAD_HS: Pair = ['You graduated from high school!', 'Liseden mezun oldun!'];
-const LISE_GRAD: Partial<Record<Lise, Pair>> = {
-  fen: ['You graduated from the science high school!', 'Fen lisesinden mezun oldun!'],
-  anadolu: ['You graduated from the Anatolian high school!', 'Anadolu lisesinden mezun oldun!'],
-};
-
-/** Rewrites this year's engine line `from` (either language) as `to`. */
-function relabel(c: Ctx, from: Pair, to: Pair) {
-  const log = c.p.log;
-  for (let i = log.length - 1; i >= 0 && log[i].age === c.age; i--) {
-    if (log[i].text === from[0] || log[i].text === from[1]) {
-      log[i].text = t2(c, to);
-      return;
-    }
-  }
-}
-
-/** The engine's "You started high school." names the school your LGS score got you into. */
-const nameHighSchool = (c: Ctx, lise: Lise) => relabel(c, START_HS, LISE_START[lise]);
+// The engine's school lines name the school themselves (engine/common-lines.ts: the LGS school from this pack's state),
+// so the high-school start and graduation lines are no longer rewritten here (round 6, item 3).
 
 const lgsDue = (c: Ctx) => !fired(c, 'tr.lgs') && ((c.age === 13 && c.p.school === 'primary') || (c.age === 14 && c.p.school === 'highschool' && !peekTr(c.p)?.lise));
 const yksDue = (c: Ctx) => !fired(c, 'tr.yks') && c.p.school === 'highschool' && c.age >= 17;
@@ -100,10 +77,6 @@ const tapuDue = (c: Ctx) => {
 /** ContentPack.schedule for the Türkiye pack: one milestone a year, in this order. */
 export function trSchedule(c: Ctx, current: string | null): string | null {
   if (!inTR(c)) return current;
-  const st = peekTr(c.p);
-  if (c.age === 14 && st?.lise) nameHighSchool(c, st.lise);
-  const grad = st?.lise ? LISE_GRAD[st.lise] : undefined;
-  if (c.age === 18 && grad) relabel(c, GRAD_HS, grad);
   // in Türkiye the way from high school to university is the YKS tercih
   if (current === 'base.after_highschool') return 'tr.tercih';
   if (current || c.p.jailYears > 0) return current;
@@ -126,6 +99,11 @@ export function trOnYear(c: Ctx) {
   if (st.retake !== undefined && c.s.year === st.retake + 1 && c.p.school === null) c.h.stat('smarts', 3);
   // vakıf fees: the parents pay while one of them is alive
   if (st.vakif && c.p.school === 'university' && !hasMom(c) && !hasDad(c)) c.h.money(-vakifFee(c));
+  // the English prep year (hazırlık) is over: on to the first class year
+  if (c.p.school === 'university' && c.p.prepYear && c.p.schoolYears === 1) {
+    c.h.stat('smarts', 3);
+    c.h.log(c.t('You passed the English prep year. You now dream in two languages, and both have grammar exercises.', 'İngilizce hazırlığı geçtin. Artık rüyaların iki dilde, ikisinde de dilbilgisi alıştırması var.'), 'good');
+  }
 }
 
 const vakifFee = (c: Ctx) => wage(c, 5000);
@@ -243,7 +221,7 @@ function lgsResult(c: Ctx, bonus: number, clause: Pair): string {
   st.lise = lise;
   if (lise === 'fen') c.h.flag('tr_fen_lisesi');
   // a high school that starts this very year (an LGS pushed to 14 by a death in the family) is named now
-  if (c.p.school === 'highschool') nameHighSchool(c, lise);
+  if (c.p.school === 'highschool') renameHighSchool(c);
   const dad = hasDad(c);
   const par = dad || hasMom(c);
   const pool = [...LGS_REACT[lise].any, ...(par ? LGS_REACT[lise].parent : [])];
@@ -400,11 +378,14 @@ const ENROLL: Record<MajorId, Pair> = {
 /** The majors offered as choices this tercih (set in setup), most selective first. */
 const offered = (c: Ctx): string[] => [c.vars.m0, c.vars.m1, c.vars.m2].filter((x): x is string => typeof x === 'string' && x !== '');
 
-function enroll(c: Ctx, m: MajorId, vakif: boolean): string {
+function enroll(c: Ctx, m: MajorId, vakif: boolean, prep = false): string {
   const st = trState(c.p);
   setMajor(c, m);
   c.p.school = 'university';
   c.p.schoolYears = 0;
+  // round 6: the degree's length (medicine six years, a few majors five) and an English prep year (degree.ts)
+  c.p.prepYear = prep || undefined;
+  c.p.degreeYears = classYearsFor(m) + (prep ? 1 : 0);
   st.retake = undefined;
   st.vakif = vakif || undefined;
   c.h.stat('happiness', vakif ? 5 : 8);
@@ -429,6 +410,14 @@ function enroll(c: Ctx, m: MajorId, vakif: boolean): string {
   } else {
     [en, tr] = ENROLL[m];
   }
+  const years = classYearsFor(m);
+  if (prep) {
+    en += ` The programme is taught in English: first a prep year, then ${yearsWord(years, 'en').replace('-year', '')} years of ${MAJOR_INFO[m].en.toLowerCase()}.`;
+    tr += ` Bölüm İngilizce: önce bir yıl hazırlık, sonra ${yearsWord(years, 'tr').replace(' yıllık', '')} yıl ${MAJOR_INFO[m].tr.toLocaleLowerCase('tr')}.`;
+  } else if (years > 4) {
+    en += ` ${cap1(yearsWord(years, 'en').replace('-year', ''))} years of it, if all goes well.`;
+    tr += ` Her şey yolunda giderse önünde ${yearsWord(years, 'tr')} bir yol var.`;
+  }
   if (c.p.gender === 'male' && !st.asker) {
     en += ' Your military service is deferred until you graduate.';
     tr += ' Okul bitene kadar askerliğin de tecil edildi.';
@@ -436,10 +425,19 @@ function enroll(c: Ctx, m: MajorId, vakif: boolean): string {
   return c.t(en, tr);
 }
 
+const cap1 = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+/** "Medicine (6 years)" / "Tıp (6 yıl)": every tercih choice shows how long the degree takes. */
+const withYears = (c: Ctx, m: MajorId, prep = false) => {
+  const n = classYearsFor(m);
+  return prep
+    ? c.t(`${MAJOR_INFO[m].en} in English (prep year + ${n} years)`, `${MAJOR_INFO[m].tr}, İngilizce (hazırlık + ${n} yıl)`)
+    : c.t(`${MAJOR_INFO[m].en} (${n} years)`, `${MAJOR_INFO[m].tr} (${n} yıl)`);
+};
+
 function majorChoice(m: MajorId): ChoiceDef {
   return {
     id: `m_${m}`,
-    label: (c) => c.t(MAJOR_INFO[m].en, MAJOR_INFO[m].tr),
+    label: (c) => withYears(c, m),
     hidden: (c) => !offered(c).includes(m),
     resolve: (c) => enroll(c, m, false),
     tone: 'good',
@@ -482,7 +480,11 @@ const tercih: EventDef = {
     // a paid place a little above the score: the most selective major within 60 points
     const paid = MAJOR_IDS.filter((m) => !open.includes(m) && MAJOR_INFO[m].minScore <= score + 60).sort((a, b) => MAJOR_INFO[b].minScore - MAJOR_INFO[a].minScore);
     c.vars.vm = paid[0] ?? '';
-    const n = c.vars.vm ? 2 : 3;
+    // the top major may also be on offer in English, with a prep year (fixed per city, major and year; no rng);
+    // it takes one of the three major slots, as the paid place does, so the list stays at five choices
+    const first = open[0] ?? '';
+    c.vars.pm = first && hasPrepProgramme(c.p.city, first, c.s.year) ? first : '';
+    const n = Math.max(1, 3 - (c.vars.vm ? 1 : 0) - (c.vars.pm ? 1 : 0));
     for (let i = 0; i < 3; i++) c.vars[`m${i}`] = i < n ? (open[i] ?? '') : '';
   },
   title: (c) =>
@@ -498,6 +500,14 @@ const tercih: EventDef = {
   },
   choices: [
     ...MAJOR_IDS.map(majorChoice),
+    {
+      // round 6: about three programmes in ten are taught in English, with a prep year (hazırlık) first
+      id: 'prep',
+      label: (c) => (MAJOR_INFO[String(c.vars.pm) as MajorId] ? withYears(c, String(c.vars.pm) as MajorId, true) : ''),
+      hidden: (c) => !MAJOR_INFO[String(c.vars.pm) as MajorId],
+      resolve: (c) => enroll(c, String(c.vars.pm) as MajorId, false, true),
+      tone: 'good',
+    },
     {
       id: 'vakif',
       label: (c) => {

@@ -1,5 +1,5 @@
 import type { GameState } from './types';
-import type { Rng } from './rng';
+import { createRng, type Rng } from './rng';
 import { getCountry } from './world';
 import { PACKS, enabledPacks, packNetWorth } from '../content/registry';
 import { fmtMoney } from './context';
@@ -16,6 +16,11 @@ export interface GoalDef {
   available?: (s: GameState) => boolean;
   /** How well this goal fits the life so far (default 1); goals are drawn in proportion. */
   weight?: (s: GameState) => number;
+  /**
+   * The part of life this goal belongs to (round 6): 'mid' goals (30-50) and 'late' goals (50+) are what a new chapter
+   * of life adds, so a pack owner always has something to chase after the young goals are done or out of reach.
+   */
+  stage?: 'young' | 'mid' | 'late';
 }
 
 export const GOAL_REWARD = 200;
@@ -68,6 +73,7 @@ export const BASE_GOALS: GoalDef[] = [
  */
 const PACK_GATES: Record<string, (s: GameState) => boolean> = {
   crime_reformed: (s) => s.player.criminalRecord > 0,
+  crime_heist: (s) => age(s) < 60,
   campus_honors: (s) => s.player.school === 'university' || (age(s) < 20 && s.player.education !== 'university'),
   campus_phd: (s) => age(s) < 40,
   boss_founder: (s) => age(s) < 65,
@@ -94,23 +100,94 @@ const OVERLAPS: string[][] = [
   ['crime_heist', 'crime_reformed'],
 ];
 
+const isPackGoal = (s: GameState, id: string) => enabledPacks(s.enabledPacks).some((p) => (p.goals ?? []).some((g) => g.id === id));
+
+/** One weighted pick from the pool (exactly one rng call); removes the pick and its overlap group from the pool. */
+function drawOne(pool: GoalDef[], s: GameState, rng: Rng, from?: (g: GoalDef) => boolean): GoalDef {
+  const w = pool.map((x) => (from && !from(x) ? 0 : Math.max(0, x.weight?.(s) ?? 1)));
+  const total = w.reduce((a, b) => a + b, 0);
+  let r = rng.next() * total;
+  let k = 0;
+  if (total > 0) while (k < pool.length - 1 && (r >= w[k] || w[k] === 0)) r -= w[k++];
+  const g = pool.splice(k, 1)[0];
+  const group = OVERLAPS.find((o) => o.includes(g.id));
+  if (group) for (let i = pool.length - 1; i >= 0; i--) if (group.includes(pool[i].id)) pool.splice(i, 1);
+  return g;
+}
+
+/** Ages at which a new chapter of life tops up the goals (round 6, item 1). */
+export const GOAL_CHAPTERS = [30, 50];
+const chapterFlag = (n: number) => `goalch:${n}`;
+
 export function assignGoals(s: GameState, rng: Rng): void {
   const pool = [...BASE_GOALS, ...enabledPacks(s.enabledPacks).flatMap((p) => p.goals ?? [])].filter((g) => goalAvailable(g, s) && !g.check(s));
   const picked: GoalDef[] = [];
   while (picked.length < GOALS_PER_LIFE && pool.length) {
-    // weighted by fit; one rng call per pick, as before
-    const w = pool.map((x) => Math.max(0, x.weight?.(s) ?? 1));
-    let r = rng.next() * w.reduce((a, b) => a + b, 0);
-    let k = 0;
-    while (k < pool.length - 1 && r >= w[k]) r -= w[k++];
-    const g = pool.splice(k, 1)[0];
-    picked.push(g);
-    const group = OVERLAPS.find((o) => o.includes(g.id));
-    if (group) for (let i = pool.length - 1; i >= 0; i--) if (group.includes(pool[i].id)) pool.splice(i, 1);
+    // weighted by fit; one rng call per pick, as before. A pack owner whose first picks were all base goals gets a
+    // pack goal as the last pick, when one fits the life (round 6: "a pack owner always has something to chase").
+    const last = picked.length === GOALS_PER_LIFE - 1;
+    const needPack = last && !picked.some((g) => isPackGoal(s, g.id)) && pool.some((g) => isPackGoal(s, g.id) && (g.weight?.(s) ?? 1) > 0);
+    picked.push(drawOne(pool, s, rng, needPack ? (g) => isPackGoal(s, g.id) : undefined));
   }
   s.player.goals = picked.map((g) => ({ id: g.id, done: false }));
+  // chapters already behind this player (an heir who takes over at 45) are not replayed
+  for (const n of GOAL_CHAPTERS) if (age(s) >= n) s.player.flags[chapterFlag(n)] = s.year;
   const list = picked.map((g) => lowerFirst(goalLabel(g, s.lang, s), s.lang)).join(', ');
   s.player.log.push({ age: age(s), year: s.year, text: s.lang === 'tr' ? `Hayat hedeflerin: ${list}.` : `Life goals: ${list}.` });
+}
+
+/**
+ * A new chapter of life (age 30 and 50; the engine calls this once a year, at the birthday): goals that can no longer happen are retired, and each one is replaced by a
+ * goal that fits the life now; a pack owner with no open pack goal gets one more from the packs, preferring goals made
+ * for this stage. No call on the game's rng: the draw uses its own generator seeded from the game state, so adding
+ * chapters changes no life that was already being played, in either language.
+ */
+export function goalChapter(s: GameState): void {
+  if (s.dead || !s.player.goals) return;
+  const a = age(s);
+  const n = [...GOAL_CHAPTERS].reverse().find((x) => a >= x && !(chapterFlag(x) in s.player.flags));
+  if (n === undefined) return;
+  for (const x of GOAL_CHAPTERS) if (x <= n) s.player.flags[chapterFlag(x)] = s.year;
+  const stage = n >= 50 ? 'late' : 'mid';
+  const rng = createRng((s.rng ^ Math.imul(s.year, 0x9e3779b1) ^ (n * 7919)) >>> 0);
+  const held = new Set(s.player.goals.map((g) => g.id));
+  const kept = s.player.goals.filter((g) => {
+    if (g.done) return true;
+    const def = goalDef(g.id);
+    return !!def && goalAvailable(def, s);
+  });
+  const retired = s.player.goals.length - kept.length;
+  const pool = [...BASE_GOALS, ...enabledPacks(s.enabledPacks).flatMap((p) => p.goals ?? [])].filter((g) => !held.has(g.id) && goalAvailable(g, s) && !g.check(s));
+  // the overlap groups of goals already held stay closed
+  for (const id of held) {
+    const group = OVERLAPS.find((o) => o.includes(id));
+    if (group) for (let i = pool.length - 1; i >= 0; i--) if (group.includes(pool[i].id)) pool.splice(i, 1);
+  }
+  // this stage's goals count double; goals of a stage already past are not drawn
+  const fits = (g: GoalDef) => g.stage === undefined || g.stage === stage || (stage === 'late' && g.stage === 'mid');
+  const staged = pool.filter(fits);
+  const weightOf = (g: GoalDef) => (g.weight?.(s) ?? 1) * (g.stage === stage ? 2 : 1);
+  const added: GoalDef[] = [];
+  const draw = (only?: (g: GoalDef) => boolean) => {
+    const cand = staged.filter((g) => (!only || only(g)) && weightOf(g) > 0);
+    if (!cand.length) return;
+    const g = rng.weighted(cand, weightOf)!;
+    added.push(g);
+    const group = OVERLAPS.find((o) => o.includes(g.id)) ?? [g.id];
+    for (let i = staged.length - 1; i >= 0; i--) if (group.includes(staged[i].id)) staged.splice(i, 1);
+  };
+  for (let i = 0; i < retired; i++) draw();
+  const openPack = [...kept.filter((g) => !g.done).map((g) => g.id), ...added.map((g) => g.id)].some((id) => isPackGoal(s, id));
+  if (!openPack) draw((g) => isPackGoal(s, g.id));
+  if (!added.length && !retired) return;
+  s.player.goals = [...kept, ...added.map((g) => ({ id: g.id, done: false }))];
+  if (!added.length) return;
+  const list = added.map((g) => lowerFirst(goalLabel(g, s.lang, s), s.lang));
+  const tr = s.lang === 'tr';
+  const text = tr
+    ? `Hayat hedeflerin: yeni bir dönem başladı. ${list.length > 1 ? 'Yeni hedeflerin' : 'Yeni hedefin'}: ${list.join(', ')}.`
+    : `Life goals: a new chapter begins. New ${list.length > 1 ? 'goals' : 'goal'}: ${list.join(', ')}.`;
+  s.player.log.push({ age: a, year: s.year, text });
 }
 
 /** Marks newly completed goals, logs them and pays out legacy. */

@@ -3,6 +3,7 @@ import type { AppApi } from '../app-state';
 import type { Gender } from '../../engine/types';
 import { COUNTRIES, getCountry, firstNames } from '../../engine/world';
 import { newGame } from '../../engine/game';
+import { cityName } from '../../engine/places';
 import { Logo, Scene, Wordmark } from '../brand/Brand';
 import { T } from '../../i18n/ui';
 import { DailyCard } from './Daily';
@@ -119,11 +120,13 @@ export function NewLife({ app }: { app: AppApi }) {
                 setCity(getCountry(id).cities[0]);
               }}
             >
-              {COUNTRIES.map((c) => (
-                <option value={c.id} key={c.id}>
-                  {app.lang === 'tr' ? c.nameTr : c.name}
-                </option>
-              ))}
+              {[...COUNTRIES]
+                .sort((a, b) => (app.lang === 'tr' ? a.nameTr : a.name).localeCompare(app.lang === 'tr' ? b.nameTr : b.name, app.lang))
+                .map((c) => (
+                  <option value={c.id} key={c.id}>
+                    {app.lang === 'tr' ? c.nameTr : c.name}
+                  </option>
+                ))}
             </select>
           </div>
           <div class="field grow">
@@ -131,7 +134,7 @@ export function NewLife({ app }: { app: AppApi }) {
             <select id="city" value={city} onChange={(e) => setCity(e.currentTarget.value)}>
               {country.cities.map((c) => (
                 <option value={c} key={c}>
-                  {c}
+                  {cityName(c, app.lang)}
                 </option>
               ))}
             </select>

@@ -352,7 +352,7 @@ describe('round 2 people fixes', () => {
 });
 
 describe('strangers never borrow a close relative\'s name (playtest 3 §2.15)', () => {
-  it('nameClashesWithFamily sees the player and living close family, not the dead or friends', async () => {
+  it('nameClashesWithFamily sees the player and close family (also the recently dead), not friends', async () => {
     const { nameClashesWithFamily } = await import('../src/engine/context');
     const s = newGame(
       { firstName: 'Ada', lastName: 'Yılmaz', gender: 'female', countryId: 'tr', city: 'Zonguldak', seed: 4 },
@@ -362,7 +362,8 @@ describe('strangers never borrow a close relative\'s name (playtest 3 §2.15)', 
     expect(nameClashesWithFamily(s, 'Ada')).toBe(true);
     expect(nameClashesWithFamily(s, father.firstName)).toBe(true);
     father.deathYear = s.year;
-    expect(nameClashesWithFamily(s, father.firstName)).toBe(false);
+    // round 6 (item 2): a close relative who died within the last two generations still counts
+    expect(nameClashesWithFamily(s, father.firstName)).toBe(true);
     const c = makeCtx(s);
     const friend = c.h.newPerson({ age: 1 });
     c.h.addRelation(friend, 'friend', 50);

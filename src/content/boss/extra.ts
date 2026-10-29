@@ -1637,6 +1637,7 @@ export const moreEvents: EventDef[] = [
           c.h.flag(`heir:${c.vars.pid}`);
           co(c)!.heirId = String(c.vars.pid);
           c.h.closeness(String(c.vars.pid), 8);
+          c.h.achieve('successor');
           return c.t(
             `You told the board: when the time comes, ${nm(c)} runs ${co(c)!.name}. ${nm(c)} pretended not to be thrilled.`,
             `Yönetim kuruluna söyledin: Vakti gelince ${gen(co(c)!.name)} başına ${nm(c)} geçecek. ${nm(c)} pek sevinmemiş gibi yaptı.`,
@@ -1718,6 +1719,7 @@ export const moreActivities: ActivityDef[] = [
       hype(comp, 6);
       morale(comp, 5);
       c.h.stat('happiness', 6);
+      c.h.achieve('charity_firm');
       return `${c.t(`You gave ${c.h.fmt(cost)} of company money to a good cause.`, `Şirket kasasından iyi bir amaç için ${c.h.fmt(cost)} ayırdın.`)} ${sayWith(c, 'boss_charity', CHARITY, comp.name)}`;
     },
   },
@@ -1827,6 +1829,7 @@ function jubilee(c: Ctx, comp: Company) {
   hype(comp, age >= 50 ? 20 : 10);
   morale(comp, 15);
   c.h.stat('happiness', age >= 50 ? 10 : 6);
+  if (age === 25) c.h.achieve('jubilee25');
   if (age === 50) c.h.achieve('half_century');
   c.h.log(tidy(c.t(en, tr)), 'big');
 }

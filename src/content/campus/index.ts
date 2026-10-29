@@ -8,6 +8,8 @@ import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
 import { isCoastal } from '../../engine/places';
 import { say, sayWith, type Pair } from '../base/lines';
 import { grandmaAlive, motherAlive } from '../fame/util';
+import { uniYearLabel } from '../../engine/degree';
+import { campusLaterActivities, campusLaterEvents, campusLaterGoals, campusLaterYear, campusSchedule } from './later';
 import {
   CLUBS,
   HONORS,
@@ -285,7 +287,7 @@ const CITIES: [string, string][] = [
 ];
 
 /** Exchange cities that are not abroad for players from that country. */
-const CITY_COUNTRY: Record<string, string> = { de: 'Berlin' };
+const CITY_COUNTRY: Record<string, string> = { de: 'Berlin', nl: 'Amsterdam', es: 'Barcelona', it: 'Bologna' };
 
 const cityChoice = (i: number): ChoiceDef => ({
   id: `city${i}`,
@@ -1464,8 +1466,8 @@ export const campusPack: ContentPack = {
   description: 'University life: pick a major, chase a 4.0, join clubs, land internships, study abroad and go all the way to a PhD.',
   rating: 'all',
   entitlement: CAMPUS_ENTITLEMENT,
-  events,
-  activities,
+  events: [...events, ...campusLaterEvents],
+  activities: [...activities, ...campusLaterActivities],
   jobs: [
     {
       id: 'academic',
@@ -1488,7 +1490,11 @@ export const campusPack: ContentPack = {
       packId: 'campus',
     },
   ],
-  onYear,
+  onYear: (c) => {
+    onYear(c);
+    campusLaterYear(c);
+  },
+  schedule: campusSchedule,
   lifeTiles: (s) => {
     const p = s.player;
     const st = peekCampus(p);
@@ -1497,7 +1503,8 @@ export const campusPack: ContentPack = {
       return [
         { label: tr ? 'Bölüm' : 'Major', value: st?.major ? majorName(s.lang, st.major) : tr ? 'Seçilmedi' : 'Undeclared' },
         { label: tr ? 'Ortalama' : 'GPA', value: st?.startYear ? fmtGpa(st.gpa, s.lang) : '—' },
-        { label: tr ? 'Sınıf' : 'Year', value: `${Math.min(4, p.schoolYears + 1)}/4` },
+        // round 6: six years of medicine, five of dentistry, an English prep year first (engine/degree.ts)
+        { label: tr ? 'Sınıf' : 'Year', value: uniYearLabel(p, s.lang ?? 'en') },
       ];
     }
     if (!st) return [];
@@ -1516,6 +1523,7 @@ export const campusPack: ContentPack = {
   goals: [
     { id: 'campus_honors', label: 'Graduate with honors', labelTr: 'Onur derecesiyle mezun ol', check: (s) => s.player.achievements.includes('honors') },
     { id: 'campus_phd', label: 'Earn a PhD', labelTr: 'Doktoranı tamamla', check: (s) => s.player.achievements.includes('phd') },
+    ...campusLaterGoals,
   ],
   ribbons: [
     {

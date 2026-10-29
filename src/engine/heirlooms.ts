@@ -1,4 +1,21 @@
-export type HeirloomIcon = 'clock' | 'ring' | 'music' | 'quilt' | 'book' | 'trophy' | 'painting';
+export type HeirloomIcon =
+  | 'clock'
+  | 'ring'
+  | 'music'
+  | 'quilt'
+  | 'book'
+  | 'trophy'
+  | 'painting'
+  // round 6: drawn for the heirlooms added in round 4 (ui/icons.tsx)
+  | 'camera'
+  | 'letters'
+  | 'teaset'
+  | 'sewing'
+  | 'radio'
+  | 'kilim'
+  | 'typewriter'
+  | 'backgammon'
+  | 'toolbox';
 
 export interface HeirloomDef {
   id: string;

@@ -478,7 +478,7 @@ export const moreFameEvents: EventDef[] = [
             if (score >= 55) {
               const g = gainFans(c, f, f.fans * 0.12 + 20000);
               c.h.stat('happiness', 4);
-              const europe = ['tr', 'uk', 'de'].includes(c.p.countryId);
+              const europe = ['tr', 'uk', 'de', 'fr', 'es', 'it', 'nl'].includes(c.p.countryId);
               return europe
                 ? c.t(`You finished in the top ten. Respectable. ${compact(c, g)} new fans across Europe.`, `İlk ona girdin. Gayet saygın bir derece. Avrupa'nın dört bir yanından ${compact(c, g)} yeni hayran.`)
                 : c.t(`You finished in the top ten. Respectable. ${compact(c, g)} new fans around the world.`, `İlk ona girdin. Gayet saygın bir derece. Dünyanın dört bir yanından ${compact(c, g)} yeni hayran.`);

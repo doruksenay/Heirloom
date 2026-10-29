@@ -82,6 +82,14 @@ export interface Player extends Person {
   education: Education;
   school: null | 'primary' | 'highschool' | 'university';
   schoolYears: number;
+  /**
+   * Round 6: years this university place takes, the prep year included (engine/degree.ts): set when the place is
+   * taken (the Türkiye tercih, or a base enrolment that has a prep year). Unset: the major decides (medicine 6,
+   * dentistry, pharmacy and vet 5, others 4). Older saves: unset.
+   */
+  degreeYears?: number;
+  /** Round 6: the first university year is an English prep year (hazırlık), which does not count as a class year. */
+  prepYear?: boolean;
   jobId: string | null;
   jobLevel: number;
   jobYears: number;
@@ -163,6 +171,18 @@ export interface Dynasty {
   lineMemory?: Record<string, number[]>;
   /** Random event id -> index of the life (dynasty.lives.length at the time) in which it last fired (game.ts). */
   eventMemory?: Record<string, number>;
+  /**
+   * Where the family came from, set when a life first moves abroad (content/base/abroad.ts): the home country and
+   * city, and the generation that left. The children of that life grow up between two countries; the grandchildren
+   * are locals. Older saves have none.
+   */
+  roots?: { countryId: string; city: string; generation: number };
+  /**
+   * Round 6 (naming): first names of each generation's close family (parents, grandparents, siblings, partners,
+   * children, living or dead), by generation, so a new person is never named after a relative from the last two
+   * generations who is no longer in the heir's own relations (engine/context.ts freshFirstNames). Older saves have none.
+   */
+  closeNames?: Record<string, string[]>;
 }
 
 export interface PendingChoice {
@@ -200,6 +220,32 @@ export interface Profile {
   introSeen?: boolean; // first-launch "how it works" pages
   tips?: string[]; // one-time coaching tips already dismissed
   daily?: DailyProfile; // Daily Challenge streak and results (see engine/daily.ts)
+  cloud?: CloudProfile; // opt-in cloud save, Daily leaderboard and gift codes (see platform/cloud.ts)
+}
+
+/** The cloud side of the profile. Never uploaded itself; nothing here is personal. */
+export interface CloudProfile {
+  /** Cloud save consent ("Bulut kaydı"). */
+  on?: boolean;
+  /** Daily leaderboard consent. */
+  board?: boolean;
+  /** Random install id and secret made on this phone (the server keeps only the secret's hash). */
+  id?: string;
+  secret?: string;
+  /** Family code (HLM-XXXX-XXXX) and PIN, shown so the player can move the family to a new phone. */
+  code?: string;
+  pin?: string;
+  /** Optional name on the leaderboard. */
+  nickname?: string;
+  /** Entitlements the server grants (admin or gift codes), and which of them the cloud itself added to the profile. */
+  grants?: string[];
+  added?: string[];
+  /** Last successful upload (ms). */
+  syncedAt?: number;
+  /** The server no longer accepts this phone's secret: the family was restored on another phone. */
+  moved?: boolean;
+  /** "You beat X% of players" per Daily date: category id -> percent, plus the player count. */
+  ranks?: Record<string, { pct: Record<string, number>; n: number }>;
 }
 
 /** A finished Daily Challenge, kept on the profile. */

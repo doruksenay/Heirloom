@@ -20,6 +20,7 @@ import { cityName } from '../../engine/places';
 import { T, fmtInt } from '../../i18n/ui';
 import { Icon } from '../icons';
 import { track } from '../../platform/analytics';
+import { cloudConfigured, fetchBoard, myTag, setBoard, submitDaily, type Board } from '../../platform/cloud';
 
 const MEDAL = ['', '🥉', '🥈', '🥇'];
 const PACK_NAMES: Record<string, [string, string]> = { fame: ['Fame', 'Şöhret'], boss: ['Boss', 'Patron'], campus: ['Campus', 'Kampüs'] };
@@ -190,6 +191,7 @@ export function Daily({ app }: { app: AppApi }) {
           ))}
         </div>
       )}
+      <TopPlayers app={app} />
       <p class="muted small" style={{ margin: 0, lineHeight: 1.5 }}>
         {T('Medals compare you with thousands of simulated lives. Only your first try each day counts.')}
       </p>
@@ -233,6 +235,17 @@ export function DailyEnd({ app }: { app: AppApi }) {
       track('daily_end', { date, points: medalPoints(fresh), age: g.dead?.age ?? 0 });
     }
   }, []);
+  // real players (opt-in cloud leaderboard): "better than X%" per category; the first try is what gets sent
+  const boardOn = cloudConfigured() && app.profile.cloud?.board === true;
+  const [rank, setRank] = useState(() => app.profile.cloud?.ranks?.[date] ?? null);
+  useEffect(() => {
+    if (!boardOn) return;
+    let live = true;
+    void submitDaily(recorded ?? fresh).then((r) => live && r && setRank(r));
+    return () => {
+      live = false;
+    };
+  }, [boardOn]);
   const r = recorded ?? fresh;
   const big = dailyMoments(g, 8);
   return (
@@ -266,6 +279,7 @@ export function DailyEnd({ app }: { app: AppApi }) {
                     ? T('{medal} at {v}', { medal: MEDAL[m + 1], v: fmtScore(cat, next, g.player.countryId, app.lang) })
                     : T('Top medal')}
                 </span>
+                {boardOn && rank?.pct[id] !== undefined && <span class="small" style={{ color: 'var(--accent)', fontWeight: 600 }}>{T('Better than {n}% of players', { n: rank.pct[id] })}</span>}
               </span>
               <span class="num daily-value">{fmtScore(cat, fresh.scores[id], g.player.countryId, app.lang)}</span>
               <span class="daily-medal">{MEDAL[m] || '·'}</span>
@@ -273,6 +287,16 @@ export function DailyEnd({ app }: { app: AppApi }) {
           );
         })}
       </div>
+      {boardOn && rank && (
+        <p class="muted small" style={{ margin: 0 }}>
+          {rank.n > 1 ? T('{n} players today', { n: fmtInt(rank.n) }) : T('You are the first player today. Check back later to see how you rank.')}
+        </p>
+      )}
+      {cloudConfigured() && !boardOn && (
+        <button type="button" class="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setBoard(true)}>
+          {T('Compare with real players')}
+        </button>
+      )}
       {!counted && (
         <p class="muted small" style={{ margin: 0 }}>
           {T('Only your first life today counts. Your recorded score: {n} medal points.', { n: medalPoints(r) })}
@@ -306,6 +330,63 @@ export function DailyEnd({ app }: { app: AppApi }) {
       <div class="muted small" style={{ textAlign: 'center' }}>
         {T('Next life in {t}', { t: untilNext() })}
       </div>
+    </div>
+  );
+}
+
+/** Today's best real players (opt-in cloud leaderboard). Hidden without CLOUD_URL or consent. */
+function TopPlayers({ app }: { app: AppApi }) {
+  const on = cloudConfigured() && app.profile.cloud?.board === true;
+  const today = todayKey();
+  const [board, setBoardData] = useState<Board | null>(null);
+  const [me, setMe] = useState('');
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    void fetchBoard(today).then((b) => live && setBoardData(b));
+    const id = app.profile.cloud?.id;
+    if (id) void myTag(id).then((t) => live && setMe(t));
+    return () => {
+      live = false;
+    };
+  }, [on, today]);
+  if (!on || !board || board.top.length === 0) return null;
+  const countryId = dailyPlan(today).countryId;
+  return (
+    <div class="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div class="row between">
+        <h2 class="title-l">{T("Today's top players")}</h2>
+        <span class="muted small">{T('{n} players today', { n: fmtInt(board.n) })}</span>
+      </div>
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {board.top.map((p, i) => (
+          <li
+            key={p.tag + i}
+            class="daily-cat"
+            style={p.tag === me ? { outline: '2px solid var(--accent)' } : undefined}
+          >
+            <span class="num muted" style={{ minWidth: '1.6em', textAlign: 'right' }}>
+              {i + 1}
+            </span>
+            <span class="grow">
+              <b>{p.tag === me ? T('You') : p.name ?? T('Player {tag}', { tag: p.tag.slice(0, 4).toUpperCase() })}</b>
+              <span class="muted small">
+                {board.categories
+                  .map((id) => {
+                    const cat = categoryById(id);
+                    return cat && p.scores[id] !== undefined ? `${cat.emoji} ${fmtScore(cat, p.scores[id], countryId, app.lang)}` : '';
+                  })
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </span>
+            <span class="num">{p.score}</span>
+          </li>
+        ))}
+      </ol>
+      <p class="muted small" style={{ margin: 0 }}>
+        {T('Ranked by the average share of players beaten in today’s categories.')}
+      </p>
     </div>
   );
 }
