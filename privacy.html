@@ -23,12 +23,23 @@
 <body>
 <main>
   <h1>Heirloom: Life Simulator — Privacy Policy</h1>
-  <p class="muted">Effective date: October 23, 2026 · <a href="#tr">Türkçe</a></p>
+  <p class="muted">Effective date: October 29, 2026 · <a href="#tr">Türkçe</a></p>
 
-  <p>Heirloom is a single-player game made by [DEVELOPER NAME] ("we"). This policy explains what information the game uses and why. The short version: your game lives on your phone, we do not run accounts, and we do not sell your data. Ads and purchases are handled by Google, Apple and RevenueCat, who receive the information they need to do that.</p>
+  <p>Heirloom is a single-player game made by [DEVELOPER NAME] ("we"). This policy explains what information the game uses and why. The short version: your game lives on your phone, we do not run accounts, and we do not sell your data. If you turn on the optional cloud features, a copy of your game is kept on our server, without your name or contact details. Ads and purchases are handled by Google, Apple and RevenueCat, who receive the information they need to do that.</p>
 
   <h2>What stays on your device</h2>
-  <p>Your saves, settings, ribbons and the names you type in the game are stored only on your device. We do not receive them. Deleting the app deletes them.</p>
+  <p>Your saves, settings, ribbons and the names you type in the game are stored only on your device. We do not receive them unless you turn on Cloud save (below). Deleting the app deletes them.</p>
+
+  <h2 id="cloud">Optional cloud features</h2>
+  <p>These are off until you turn them on in Settings. We run them ourselves on Cloudflare (Cloudflare Workers and the D1 database, stored in Western Europe).</p>
+  <ul>
+    <li><strong>Cloud save and family code:</strong> a copy of your game (your family, today's Daily Challenge life and your game settings) so you can move it to a new phone with a family code and PIN. The game may contain names of characters you typed in, so do not use real people's names if you would rather not.</li>
+    <li><strong>Daily leaderboard:</strong> your Daily Challenge scores for the day and, if you choose one, a nickname. Other players see the nickname, the scores and a short random tag, never your install ID.</li>
+    <li><strong>Gift codes:</strong> the code you entered and what it unlocked.</li>
+  </ul>
+  <p>To do this the server keeps a random install ID made by the game (not the advertising ID and not the analytics ID), a hashed secret that proves the ID is yours, your family code, a hashed PIN, the time you were last seen, your family's generation number and which packs you own or were given. We do not collect names, e-mail addresses, phone numbers, contacts or location. Your IP address is used briefly to stop abuse (too many tries): we store it only as a keyed hash inside counters that expire within a day.</p>
+  <p><strong>How long we keep it:</strong> Daily leaderboard entries for 90 days. Everything else until you delete it, or automatically 18 months after the app last connected.</p>
+  <p><strong>How to delete it:</strong> Settings → Delete my cloud data removes your family code, online save, leaderboard entries and gift code records from our server at once. Turning cloud save off stops new uploads. You can also write to us at [CONTACT EMAIL] with your family code.</p>
 
   <h2>Services we use</h2>
   <div class="wrap">
@@ -38,14 +49,16 @@
     <tr><td>RevenueCat</td><td>Processing and restoring in-app purchases</td><td>An anonymous app user ID, purchase history, device type, country</td></tr>
     <tr><td>PostHog (EU servers)</td><td>Anonymous usage statistics, <strong>only if you agree</strong> (for example, which screens are opened and where players stop)</td><td>A random install ID created by the game, app version, platform, language, and game events such as "started a life" or "bought a pack". No names, no save contents, no advertising ID.</td></tr>
     <tr><td>Sentry</td><td>Crash reports, <strong>only if you agree</strong></td><td>The error message and technical details of the crash, app version, platform and the same random install ID.</td></tr>
+    <tr><td>Cloudflare (our cloud server)</td><td>Cloud save, Daily leaderboard and gift codes, <strong>only if you turn them on</strong></td><td>See "Optional cloud features" above. Cloudflare processes the data on our behalf.</td></tr>
     <tr><td>Apple App Store / Google Play</td><td>Payments and app delivery</td><td>Governed by Apple's and Google's own privacy policies</td></tr>
   </table>
   </div>
-  <p>Links: <a href="https://policies.google.com/privacy">Google</a>, <a href="https://www.revenuecat.com/privacy">RevenueCat</a>, <a href="https://posthog.com/privacy">PostHog</a>, <a href="https://sentry.io/privacy/">Sentry</a>, <a href="https://www.apple.com/legal/privacy/">Apple</a>.</p>
+  <p>Links: <a href="https://policies.google.com/privacy">Google</a>, <a href="https://www.revenuecat.com/privacy">RevenueCat</a>, <a href="https://posthog.com/privacy">PostHog</a>, <a href="https://sentry.io/privacy/">Sentry</a>, <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare</a>, <a href="https://www.apple.com/legal/privacy/">Apple</a>.</p>
 
   <h2>Your choices</h2>
   <ul>
     <li>Usage statistics and crash reports are off until you say yes on first launch. You can turn them on or off any time in Settings → Share anonymous usage data.</li>
+    <li>Cloud save and the Daily leaderboard are off until you turn them on in Settings, and you can delete what they stored at any time (Settings → Delete my cloud data).</li>
     <li>Ads are optional. You only see one if you choose to watch it. Heirloom+ removes ads.</li>
     <li>On iPhone, the game asks for permission before using the advertising identifier. You can change this in Settings → Privacy &amp; Security → Tracking.</li>
     <li>In the EU, EEA, UK and Switzerland, a consent form from Google lets you choose whether ads may be personalized.</li>
@@ -56,7 +69,7 @@
   <p>Heirloom is not directed at children under 13, and its optional "Crime World" expansion is for adults only. We do not knowingly collect personal information from children. If you believe a child has used a service in the game in a way that shared their information, contact us and we will help.</p>
 
   <h2>Data deletion and requests</h2>
-  <p>Because we do not hold your game data, deleting the app removes it. For purchase records held by RevenueCat or ad data held by Google, contact us at [CONTACT EMAIL] and we will pass on your request or tell you how to make it directly.</p>
+  <p>Unless you turned on the cloud features, we do not hold your game data, and deleting the app removes it. If you did, use Settings → Delete my cloud data before deleting the app (or write to us with your family code). For purchase records held by RevenueCat or ad data held by Google, contact us at [CONTACT EMAIL] and we will pass on your request or tell you how to make it directly.</p>
 
   <h2>Changes</h2>
   <p>If this policy changes, we will update the date at the top and, for important changes, mention it in the app's update notes.</p>
@@ -68,21 +81,33 @@
 
   <section id="tr" lang="tr">
     <h1>Heirloom: Life Simulator — Gizlilik Politikası</h1>
-    <p class="muted">Yürürlük tarihi: 23 Ekim 2026</p>
-    <p>Heirloom, [GELİŞTİRİCİ ADI] tarafından yapılmış tek oyunculu bir oyundur. Kısaca: oyun kaydınız telefonunuzda kalır, hesap sistemi yoktur ve verilerinizi satmayız. Reklamları ve satın almaları Google, Apple ve RevenueCat yönetir; bu hizmetler işlerini yapmak için gereken bilgileri alır.</p>
+    <p class="muted">Yürürlük tarihi: 29 Ekim 2026</p>
+    <p>Heirloom, [GELİŞTİRİCİ ADI] tarafından yapılmış tek oyunculu bir oyundur. Kısaca: oyun kaydınız telefonunuzda kalır, hesap sistemi yoktur ve verilerinizi satmayız. İsteğe bağlı bulut özelliklerini açarsanız oyununuzun bir kopyası adınız ya da iletişim bilgileriniz olmadan sunucumuzda saklanır. Reklamları ve satın almaları Google, Apple ve RevenueCat yönetir; bu hizmetler işlerini yapmak için gereken bilgileri alır.</p>
     <h2>Cihazınızda kalanlar</h2>
-    <p>Kayıtlarınız, ayarlarınız, rozetleriniz ve oyunda yazdığınız isimler yalnızca cihazınızda saklanır. Biz bunları almayız. Uygulamayı silmek onları da siler.</p>
+    <p>Kayıtlarınız, ayarlarınız, rozetleriniz ve oyunda yazdığınız isimler yalnızca cihazınızda saklanır. Bulut kaydını açmadığınız sürece biz bunları almayız. Uygulamayı silmek onları da siler.</p>
+    <h2 id="bulut">İsteğe bağlı bulut özellikleri</h2>
+    <p>Bunlar siz Ayarlar'dan açana kadar kapalıdır. Sunucuyu kendimiz, Cloudflare üzerinde işletiriz (Cloudflare Workers ve D1 veritabanı, Batı Avrupa'da saklanır).</p>
+    <ul>
+      <li><strong>Bulut kaydı ve aile kodu:</strong> Oyununuzun bir kopyası (aileniz, günün hayatı ve oyun ayarlarınız). Böylece aileyi aile kodu ve PIN ile yeni bir telefona taşıyabilirsiniz. Kayıtta oyunda yazdığınız karakter isimleri bulunabilir; istemiyorsanız gerçek kişilerin adlarını kullanmayın.</li>
+      <li><strong>Günün Hayatı sıralaması:</strong> O günkü puanlarınız ve seçerseniz bir takma ad. Diğer oyuncular takma adı, puanları ve kısa rastgele bir etiketi görür; kurulum kimliğinizi asla görmez.</li>
+      <li><strong>Hediye kodları:</strong> Girdiğiniz kod ve neyi açtığı.</li>
+    </ul>
+    <p>Bunun için sunucu şunları tutar: oyunun oluşturduğu rastgele bir kurulum kimliği (reklam kimliği ya da analitik kimliği değildir), kimliğin size ait olduğunu kanıtlayan gizli anahtarın geri çözülemeyen özeti (hash), aile kodunuz, PIN'in özeti, en son bağlandığınız zaman, ailenizin kuşak sayısı ve sahip olduğunuz ya da hediye edilen paketler. İsim, e-posta adresi, telefon numarası, rehber ya da konum toplamayız. IP adresiniz yalnızca kötüye kullanımı (çok fazla deneme) önlemek için kısa süre kullanılır; bir gün içinde silinen sayaçlarda yalnızca anahtarlı hash olarak saklanır.</p>
+    <p><strong>Saklama süresi:</strong> Sıralama kayıtları 90 gün. Geri kalan her şey siz silene kadar ya da uygulama en son bağlandıktan 18 ay sonra otomatik olarak silinir.</p>
+    <p><strong>Nasıl silinir:</strong> Ayarlar → Bulut verilerimi sil; aile kodunuzu, internetteki kaydı, sıralama sonuçlarını ve hediye kodu kayıtlarını sunucumuzdan hemen siler. Bulut kaydını kapatmak yeni yüklemeleri durdurur. Aile kodunuzla [İLETİŞİM E-POSTASI] adresine de yazabilirsiniz.</p>
     <h2>Kullandığımız hizmetler</h2>
     <ul>
       <li><strong>Google AdMob:</strong> İsteğe bağlı ödüllü reklamlar için. Reklam kimliği, cihaz bilgisi, IP adresi, yaklaşık konum ve reklam etkileşimleri toplanabilir.</li>
       <li><strong>RevenueCat:</strong> Uygulama içi satın almaları işlemek ve geri yüklemek için. Anonim bir kullanıcı kimliği, satın alma geçmişi, cihaz türü ve ülke toplanabilir.</li>
       <li><strong>PostHog (AB sunucuları):</strong> Yalnızca <strong>izin verirseniz</strong> anonim kullanım istatistikleri için. Oyunun oluşturduğu rastgele bir kurulum kimliği, uygulama sürümü, platform, dil ve "hayata başladı", "paket satın aldı" gibi oyun olayları. İsim, kayıt içeriği veya reklam kimliği yoktur.</li>
       <li><strong>Sentry:</strong> Yalnızca <strong>izin verirseniz</strong> çökme raporları için. Hata mesajı ve teknik ayrıntılar, uygulama sürümü, platform ve aynı rastgele kurulum kimliği.</li>
+      <li><strong>Cloudflare (bulut sunucumuz):</strong> Yalnızca <strong>siz açarsanız</strong> bulut kaydı, günün hayatı sıralaması ve hediye kodları için. Ayrıntılar yukarıda, "İsteğe bağlı bulut özellikleri" bölümünde. Cloudflare verileri bizim adımıza işler.</li>
       <li><strong>App Store / Google Play:</strong> Ödemeler ve uygulamanın dağıtımı; Apple ve Google'ın kendi gizlilik politikalarına tabidir.</li>
     </ul>
     <h2>Seçimleriniz</h2>
     <ul>
       <li>Kullanım istatistikleri ve çökme raporları, ilk açılışta evet demediğiniz sürece kapalıdır. Ayarlar → Anonim kullanım verisi paylaş bölümünden istediğiniz zaman açıp kapatabilirsiniz.</li>
+      <li>Bulut kaydı ve günün hayatı sıralaması siz Ayarlar'dan açana kadar kapalıdır; sakladıklarını istediğiniz zaman silebilirsiniz (Ayarlar → Bulut verilerimi sil).</li>
       <li>Reklamlar isteğe bağlıdır; yalnızca siz izlemeyi seçerseniz gösterilir. Heirloom+ reklamları kaldırır.</li>
       <li>iPhone'da oyun, reklam kimliğini kullanmadan önce izin ister.</li>
       <li>AB, AEA, Birleşik Krallık ve İsviçre'de Google'ın onay formu, kişiselleştirilmiş reklamlara izin verip vermeyeceğinizi seçmenizi sağlar.</li>
@@ -90,7 +115,7 @@
     <h2>Çocuklar</h2>
     <p>Heirloom 13 yaş altındaki çocuklara yönelik değildir; isteğe bağlı "Crime World" genişlemesi yalnızca yetişkinler içindir. Çocuklardan bilerek kişisel bilgi toplamayız.</p>
     <h2>Silme ve talepler</h2>
-    <p>Oyun verilerinizi biz tutmadığımız için uygulamayı silmek bu verileri siler. RevenueCat veya Google'daki kayıtlarla ilgili talepler için [İLETİŞİM E-POSTASI] adresine yazın.</p>
+    <p>Bulut özelliklerini açmadıysanız oyun verilerinizi biz tutmayız ve uygulamayı silmek bu verileri siler. Açtıysanız uygulamayı silmeden önce Ayarlar'daki "Bulut verilerimi sil" düğmesine basın (ya da aile kodunuzla bize yazın). RevenueCat veya Google'daki kayıtlarla ilgili talepler için [İLETİŞİM E-POSTASI] adresine yazın.</p>
     <h2>İletişim</h2>
     <p>[GELİŞTİRİCİ ADI] · [İLETİŞİM E-POSTASI]</p>
   </section>
