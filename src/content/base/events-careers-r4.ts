@@ -381,7 +381,7 @@ const partA: EventDef[] = [
           }
           c.h.stat('happiness', -4);
           cash(c, -200);
-          return c.t('You could not fix it. The repairman came at nine, the queue at seven. A hard morning.', 'Tamir edemedin. Usta dokuzda geldi, kuyruk yedide. Zor bir sabahtı.');
+          return c.t('You could not fix it. The repairman came at nine; the queue had been there since seven. A hard morning.', 'Tamir edemedin. Usta dokuzda geldi; kuyruk yediden beri kapıdaydı. Zor bir sabahtı.');
         },
       },
       {
