@@ -5,13 +5,14 @@ import { createRng, randomSeed, type Rng } from './rng';
 import { getCountry } from './world';
 import { BASE_JOBS, EDUCATION_RANK, hireableIn, majorForJob, promotionOdds, salaryFor, stepRaisePct, titleFor } from './careers';
 import { abl, acc, dat, gen, gen as gen_, loc } from '../i18n/tr-grammar';
-import { furniture, hasGarden } from './home';
+import { currentTier, furniture, hasGarden } from './home';
 import { keepSkin, skinTone } from './skin';
 import { ribbonFor } from './ribbons';
 import { assignGoals, checkGoals, goalChapter } from './goals';
 import { highSchoolGradLine, highSchoolStartLine, primaryStartLine } from './common-lines';
 import { degreeYears } from './degree';
-import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, PENSION_AGE, homeEquity, inheritanceTax, payMortgage, safetyNet, tuitionFor, yearBudget } from './economy';
+import { yearlyStatDrift } from './stats';
+import { ESTATE_DRAWDOWN, ESTATE_FLOOR, HANDOVER_GIFT, HOME_GROWTH, PARENTS_HOME_AGE, PENSION_AGE, addServiceYear, homeEquity, inheritanceTax, payMortgage, safetyNet, tuitionFor, yearBudget } from './economy';
 import { babyOdds, bailoutHelpers, canHaveBaby } from '../content/base/events-scheduled';
 import { canAdopt } from '../content/base/adoption';
 import { cityName } from './places';
@@ -19,7 +20,10 @@ import { ensureGrandkids, type Grandkid } from '../content/base/events-elder';
 import { say, sayWith, type Pair } from '../content/base/lines';
 import { courtPending, isPetty, peekCrime } from '../content/base/street-law';
 import { MORE_LAST_WORDS } from '../content/base/heirloom-more';
+import { kidReadyForBaby } from '../content/base/kid-milestones';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
+import { logTap } from './context'; // round 7 continuity: event ids for the log tap (scripts/continuity-scan.ts)
+import { ANNIVERSARY_EVENTS, anniversaryDue, markAnniversary, markTravelled, stateAllows } from './continuity';
 
 export const START_YEAR = 2026;
 /** Free activities per year (review 5 §3.11: 4 felt stingy next to the ad card); Heirloom+ adds PLUS_EXTRA_ACTIVITIES. */
@@ -136,8 +140,8 @@ const FOUNDER_STORIES: Record<'clock' | 'ring' | 'quilt' | 'recipes', FounderSto
   ],
 };
 
-/** "Türkiye'de", "Almanya'da", but "Amerika Birleşik Devletleri'nde" (a compound name already ends in a possessive). */
-const countryLocTr = (name: string) => (/Devletleri$/.test(name) ? `${name}'nde` : loc(name));
+/** "İspanya'nın", "Birleşik Krallık'ın", "Amerika Birleşik Devletleri'nin" (round 7: "İspanya'nın Barselona şehrinde", review 6 §4.18). */
+const countryGenTr = (name: string) => gen(name);
 
 const txt = (t: string | ((c: Ctx) => string) | undefined, c: Ctx) => (typeof t === 'function' ? t(c) : t);
 
@@ -233,7 +237,7 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
       // a life in Türkiye does not name the country (review 5 §4.23: "İstanbul'da, Türkiye'de")
       opts.countryId === 'tr'
         ? `${loc(cityName(opts.city, 'tr'))} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`
-        : `${loc(cityName(opts.city, 'tr'))}, ${countryLocTr(country.nameTr)} ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
+        : `${countryGenTr(country.nameTr)} ${cityName(opts.city, 'tr')} şehrinde ${opts.gender === 'female' ? 'bir kız' : 'bir erkek'} bebek olarak dünyaya geldin.`,
     ),
     'big',
   );
@@ -247,12 +251,16 @@ export function newGame(opts: NewLifeOptions, profile: Profile): GameState {
   if (sibs.length) {
     sibs.sort((a, b) => a.birthYear - b.birthYear);
     const en = sibs.map((q) => `big ${q.gender === 'female' ? 'sister' : 'brother'} ${q.firstName} (${h.ageOf(q)})`);
-    const tr = sibs.map((q) => `${q.gender === 'female' ? 'ablan' : 'ağabeyin'} ${q.firstName} (${h.ageOf(q)})`);
-    const trList = tr.join(' ve ');
+    // round 7 (review 6 §4.21): "Ablaların Derya (7) ve Elif (6)", not "Ablan Derya (7) ve ablan Elif (6)"
+    const sameKind = sibs.length > 1 && sibs.every((q) => q.gender === sibs[0].gender);
+    const names = sibs.map((q) => `${q.firstName} (${h.ageOf(q)})`);
+    const trList = sameKind
+      ? `${sibs[0].gender === 'female' ? 'ablaların' : 'ağabeylerin'} ${names.slice(0, -1).join(', ')} ve ${names[names.length - 1]}`
+      : sibs.map((q, i) => `${q.gender === 'female' ? 'ablan' : 'ağabeyin'} ${names[i]}`).join(' ve ');
     h.log(
       c.t(
         `Your ${en.join(' and your ')} ${sibs.length > 1 ? 'were' : 'was'} waiting at the door to meet you.`,
-        `${trList[0].toLocaleUpperCase('tr')}${trList.slice(1)} seni kapıda ${sibs.length > 1 ? 'bekliyorlardı' : 'bekliyordu'}.`,
+        `${trList[0].toLocaleUpperCase('tr')}${trList.slice(1)} seni kapıda bekliyordu.`,
       ),
     );
   }
@@ -355,11 +363,17 @@ export function relocalizeHeirlooms(s: GameState): void {
  * Health moves the curve, but even perfect health only buys a few years: it can no longer push
  * the median toward 90 as it did before v0.8.
  */
-export function annualMortality(age: number, health: number, shift = 0): number {
+export function annualMortality(age: number, health: number, shift = 0, pivot = 80): number {
   const base = age < 1 ? 0.002 : 0.000012 * Math.exp(0.11 * age);
-  const healthFactor = Math.max(0.8, Math.min(2.5, 1 + (80 - health) / 50));
+  const healthFactor = Math.max(0.8, Math.min(2.5, 1 + (pivot - health) / 50));
   return Math.min(0.95, base * healthFactor * (1 + shift * 5) + 0.0002);
 }
+
+/**
+ * The player's health pivot (round 7): health now fades with age and neglect (stats.ts), so a well-kept 80-year-old
+ * has health near 60, not 100. Relatives keep their fixed health and the old pivot of 80.
+ */
+export const PLAYER_HEALTH_PIVOT = 50;
 
 /**
  * Causes of a natural death by age band, with weights (playtest 3: a car accident killed 15% of
@@ -413,7 +427,7 @@ const RELEASE_LINES: Pair[] = [
 const GRAD_PARENTS: Pair[] = [
   ['You graduated from university! Your parents sat in the front row and filmed the whole ceremony, sideways.', 'Üniversiteden mezun oldun! Annenle baban en ön sırada oturup bütün töreni yan tutulmuş telefonla çekti.'],
   ['You graduated from university! Your mom cried at the first speech, your dad at the last one.', 'Üniversiteden mezun oldun! Annen ilk konuşmada ağladı, baban son konuşmada.'],
-  ['You graduated from university! Your parents brought flowers, a flask of tea and their best clothes.', 'Üniversiteden mezun oldun! Annenle baban çiçekleri, bir termos çayı ve en güzel kıyafetlerini getirdi.'],
+  ['You graduated from university! Your parents brought flowers, home-made biscuits and their best clothes.', 'Üniversiteden mezun oldun! Annenle baban çiçekleri, ev yapımı kurabiyeleri ve en güzel kıyafetlerini getirdi.'],
   ['You graduated from university! Your dad shook hands with three professors as if he had taught them himself.', 'Üniversiteden mezun oldun! Baban üç hocanın elini, onları kendisi yetiştirmiş gibi sıktı.'],
   ['You graduated from university! Your parents framed the diploma before you had even seen it properly.', 'Üniversiteden mezun oldun! Annenle baban diplomayı sen daha doğru dürüst görmeden çerçeveletti.'],
   ['You graduated from university! Your mom told the photographer where to stand; your dad told him again.', 'Üniversiteden mezun oldun! Annen fotoğrafçıya nerede durması gerektiğini söyledi, baban bir daha söyledi.'],
@@ -429,7 +443,7 @@ const GRAD_ONE: ((k: [string, string]) => Pair)[] = [
 const GRAD_ALONE: Pair[] = [
   ['You graduated from university! You threw your cap in the air and caught somebody else\'s.', 'Üniversiteden mezun oldun! Kepini havaya attın, inerken eline başkasınınki geçti.'],
   ['You graduated from university! Your friends cheered your name as if it were a goal.', 'Üniversiteden mezun oldun! Arkadaşların adını gol olmuş gibi bağırdı.'],
-  ['You graduated from university! You walked across the stage and did not trip. A personal best.', 'Üniversiteden mezun oldun! Sahneden geçtin ve tökezlemedin. Kişisel rekor.'],
+  ['You graduated from university! You walked across the stage and did not trip. A personal best.', 'Üniversiteden mezun oldun! Sahneden geçerken tökezlemedin; bu bile bir başarı.'],
   ['You graduated from university! Your flatmates made a banner with your name spelled wrong. You kept it.', 'Üniversiteden mezun oldun! Ev arkadaşların adını yanlış yazdıkları bir pankart hazırladı. Sakladın.'],
   ['You graduated from university! You had your photo taken with the dean, who had no idea who you were.', 'Üniversiteden mezun oldun! Seni hiç tanımayan dekanla fotoğraf çektirdin.'],
   ['You graduated from university! Afterwards you sat on the steps in your gown and ate a simit. Perfect day.', 'Üniversiteden mezun oldun! Sonra cübbenle merdivenlere oturup bir simit yedin. Kusursuz bir gün.'],
@@ -449,11 +463,8 @@ function yearlyTick(c: Ctx): string | null {
   let scheduled: string | null = null;
 
   // --- stats drift
-  if (p.school) h.stat('smarts', rng.int(0, 2));
-  if (age > 40) h.stat('health', -rng.int(0, age > 70 ? 3 : age > 55 ? 2 : 1));
-  else h.stat('health', rng.int(0, 1));
-  if (age >= 12 && age <= 22) h.stat('looks', rng.int(-1, 2));
-  if (age > 45) h.stat('looks', -rng.int(0, 1));
+  // round 7: diminishing gains and decay with age and neglect (stats.ts)
+  yearlyStatDrift(p, age, s.year, rng);
   h.stat('happiness', Math.round((60 - p.stats.happiness) * 0.08) + rng.int(-3, 3));
   if (p.money < 0 && age >= 18) h.stat('happiness', -4);
 
@@ -519,6 +530,7 @@ function yearlyTick(c: Ctx): string | null {
     const peak = engineExt(p).peakJob;
     if (!job.partTime && (!peak || salary >= peak.salary)) engineExt(p).peakJob = { id: job.id, level: p.jobLevel, salary };
     p.jobYears++;
+    if (!job.partTime) addServiceYear(p, age); // round 7: the pension follows the years of service (economy.ts)
     // ranked jobs (soldier, officer) climb by years of service in their own yearly logic instead.
     // Round 5: performance-driven, after a minimum stay that grows toward the top (context.minYearsAtLevel)
     const perf = driftPerformance(p);
@@ -530,6 +542,12 @@ function yearlyTick(c: Ctx): string | null {
         h.stat('happiness', 6);
       }
     }
+  }
+  // round 7: a minor's overspending is the parents' to pay, and so is a small overdraft of a young adult still living
+  // with them; nobody starts adult life with a teenager's debt
+  if (p.money < 0 && parentsCover(c)) {
+    if (age > 18) h.log(c.t(`Your parents quietly covered your ${h.fmt(-p.money)} overdraft. Nobody mentioned it at dinner.`, `Ailen ${h.fmt(-p.money)} tutarındaki eksi bakiyeni sessizce kapattı. Akşam yemeğinde kimse lafını etmedi.`));
+    p.money = 0;
   }
   if (age >= 18) {
     const kids = h.relatives('child').filter((k) => h.ageOf(k.person) < 18).length + raisedGrandkids(s).filter((g) => ageOf(s, g) < 18).length;
@@ -581,7 +599,9 @@ function yearlyTick(c: Ctx): string | null {
     if (!person || person.deathYear !== undefined) continue;
     const pa = ageOf(s, person);
     if (rel.kind !== 'child') rel.closeness = clamp(rel.closeness - rng.int(0, 2) + (h.hasHeirloom('recipes') ? 1 : 0));
-    if (rel.kind === 'child' && pa >= 24 && pa <= 42 && rng.chance(0.07)) {
+    // round 7 (content-fix): no grandchild before the player has seen the child marry or move in (kid-milestones.ts);
+    // the check comes after the rng call, so the rng sequence is unchanged
+    if (rel.kind === 'child' && pa >= 24 && pa <= 42 && rng.chance(0.07) && kidReadyForBaby(c, person)) {
       // "You're a grandparent!" only for the first grandchild; later ones are "another" (playtest 2)
       const firstGrandkid = ensureGrandkids(c).length === 0;
       const again = (person.kids ?? 0) > 0;
@@ -732,9 +752,26 @@ function lifeNudge(c: Ctx, costOfLiving: number): string | null {
  * The first time the money goes below zero (age 16+), one plain warning with the ways out (review item 6).
  * Called after every year, choice and activity. Once per life; no RNG.
  */
+/** Round 7: the first-debt warning waits until the overdraft passes this share of a year's living costs. */
+export const DEBT_WARN_MIN = 0.05;
+
+/**
+ * Round 7: who pays a small debt. Under 18 the parents always do; a young adult (up to PARENTS_HOME_AGE) who still lives
+ * with a living parent has an overdraft of up to half a year's living costs covered at the next birthday. No RNG.
+ */
+export function parentsCover(c: Ctx): boolean {
+  const { p } = c;
+  if (c.age <= 18) return true;
+  if (c.age >= PARENTS_HOME_AGE || p.home.owned || currentTier(p) !== 'parents' || p.retired) return false;
+  if (-p.money > 0.5 * getCountry(p.countryId).costOfLiving) return false;
+  return c.h.relatives(['mother', 'father']).length > 0;
+}
+
 export function watchDebt(c: Ctx): void {
   const { p } = c;
-  if (p.money >= 0 || c.age < 16) return;
+  if (p.money >= 0 || parentsCover(c)) return; // round 7: the parents pay, so no warning
+  // round 7: an overdraft of a couple of weeks' living costs is everyday life, not a warning
+  if (-p.money < DEBT_WARN_MIN * getCountry(p.countryId).costOfLiving) return;
   const eng = engineExt(p);
   if (eng.debtWarned) return;
   eng.debtWarned = true;
@@ -1000,7 +1037,9 @@ function eligible(c: Ctx, def: EventDef): boolean {
     // older saves have no counts: they start counting from now
     if ((p.eventCount?.[def.id] ?? 0) >= maxPerLife(def)) return false;
   }
-  if (p.jailYears > 0 && def.category !== 'crime') return false;
+  // round 7: prison (only events marked inJail fire inside) and the state an event needs (engine/continuity.ts);
+  // anniversaries are opened by the engine on their round years, never at random
+  if (ANNIVERSARY_EVENTS.has(def.id) || !stateAllows(c.s, def)) return false;
   return def.when ? def.when(c) : true;
 }
 
@@ -1030,6 +1069,16 @@ function pickRandomEvent(s: GameState): EventDef | undefined {
 
 /** Runs an event: applies it directly, or opens it as a pending choice. Returns true if a choice is pending. */
 export function openEvent(s: GameState, def: EventDef): boolean {
+  const prevSrc = logTap.src;
+  logTap.src = def.id;
+  try {
+    return openEventInner(s, def);
+  } finally {
+    logTap.src = prevSrc;
+  }
+}
+
+function openEventInner(s: GameState, def: EventDef): boolean {
   const c = makeCtx(s);
   def.setup?.(c);
   s.player.eventLastAge[def.id] = c.age;
@@ -1068,15 +1117,30 @@ export function ageUp(s: GameState): void {
   goalChapter(s); // round 6: new goals at 30 and 50 (goals.ts)
 
   const country = getCountry(s.player.countryId);
-  if (c.rng.chance(annualMortality(c.age, s.player.stats.health, country.mortalityShift))) {
+  if (c.rng.chance(annualMortality(c.age, s.player.stats.health, country.mortalityShift, PLAYER_HEALTH_PIVOT))) {
     s.player.deathCause = deathCause(c);
   }
   if (s.player.deathCause) return finishLife(s);
 
   if (scheduled) {
     const found = findEvent(scheduled);
+    if (found && !stateAllows(s, found.def)) {
+      // round 7: nothing from outside fires in prison (review 6: "the first weeks in Torino" while inside). A
+      // life-stage moment waits for the release; grief and the rest do not.
+      const eng = engineExt(s.player);
+      if (s.player.jailYears > 0 && !eng.deferred && !scheduled.startsWith('base.grief')) eng.deferred = scheduled;
+    }
     // a scheduled event may still check that its moment holds (a partner who died later the same year)
-    if (found && (!found.def.when || found.def.when(makeCtx(s))) && openEvent(s, found.def)) return;
+    else if (found && (!found.def.when || found.def.when(makeCtx(s))) && openEvent(s, found.def)) return;
+  }
+  // round 7: one anniversary system, on the round years of the current marriage, in order (engine/continuity.ts)
+  const anniv = anniversaryDue(s);
+  if (anniv) {
+    const found = findEvent(anniv.eventId);
+    if (found && stateAllows(s, found.def) && (!found.def.when || found.def.when(makeCtx(s)))) {
+      markAnniversary(s.player, anniv.spouseId, anniv.years);
+      if (openEvent(s, found.def)) return;
+    }
   }
   if (c.rng.chance(0.85)) {
     const ev = pickRandomEvent(s);
@@ -1103,9 +1167,16 @@ export function choose(s: GameState, choiceId: string): void {
   s.pending = null;
   const c = makeCtx(s, { ...pend.vars });
   const logStart = s.player.log.length;
-  const line = ch.resolve(c);
-  const tone = typeof ch.tone === 'function' ? ch.tone(c) : ch.tone;
-  if (line) c.h.log(line, tone);
+  const prevSrc = logTap.src;
+  logTap.src = pend.eventId;
+  try {
+    const line = ch.resolve(c);
+    const tone = typeof ch.tone === 'function' ? ch.tone(c) : ch.tone;
+    if (line) c.h.log(line, tone);
+  } finally {
+    logTap.src = prevSrc;
+  }
+  markTravelled(s.player, pend.eventId, choiceId, s.year); // round 7: a trip abroad unlocks the travel events
   // the event's title goes on the first line it wrote, so the log reads in context (review item 4)
   const first = s.player.log[logStart];
   if (first && pend.title && !first.title) first.title = pend.title;
@@ -1219,7 +1290,7 @@ const FINAL_WORDS: [string, string][] = [
   ["Don't fight over the furniture.", 'Eşyalar için kavga etmeyin.'],
   ['I regret nothing. Well, almost nothing.', 'Hiçbir şeyden pişman değilim. Yani, neredeyse hiçbir şeyden.'],
   ['Look after each other.', 'Birbirinize iyi bakın.'],
-  ['Tell them I was funny.', 'Herkese komik olduğumu söyleyin.'],
+  ['Tell them I was funny.', 'Herkese ne kadar komik olduğumu anlatın.'],
   ['Water the plants.', 'Çiçekleri sulayın.'],
   ['It went by so fast.', 'Ne çabuk geçti.'],
 ];
@@ -1864,7 +1935,7 @@ const QUIET: { max: number; lines: Line[] }[] = [
     max: 29,
     lines: [
       ['You learned to cook exactly three dishes and took turns with them.', 'Tam üç yemek yapmayı öğrendin, sırayla pişirip durdun.'],
-      ['You kept a houseplant alive for a whole year. Personal best.', 'Bir saksı çiçeğini koca bir yıl yaşattın. Kişisel rekor.'],
+      ['You kept a houseplant alive for a whole year. Personal best.', 'Bir saksı çiçeğini koca bir yıl yaşattın. Bu evde bir ilk.'],
       ['You went to bed too late every night, on purpose.', 'Her gece bile bile geç yattın.'],
       ['You bought a second-hand sofa and carried it up four flights of stairs.', 'İkinci el bir kanepe alıp dört kat merdivenden taşıdın.'],
       ['You started a hobby with great enthusiasm, then quietly stopped.', 'Büyük bir hevesle bir hobiye başladın, sonra sessizce bıraktın.'],
@@ -1882,7 +1953,7 @@ const QUIET: { max: number; lines: Line[] }[] = [
       ['The year went by in a blur of errands and small wins.', 'Yıl, ayak işleri ve küçük zaferler arasında su gibi geçti.'],
       ['You finally learned the names of all your neighbours.', 'Sonunda bütün komşularının adını öğrendin.'],
       ['You found a grey hair and pretended you had not.', 'Bir beyaz saç buldun ve görmemiş gibi yaptın.'],
-      ['You got strangely good at one card game.', 'Bir kâğıt oyununda tuhaf derecede iyi oldun.'],
+      ['You got strangely good at one card game.', 'Nedense bir kâğıt oyununda çok iyi oldun.'],
       ['You cleared out a drawer of cables for things you no longer own.', 'Artık sahip olmadığın şeylerin kablolarıyla dolu bir çekmeceyi boşalttın.'],
     ],
   },

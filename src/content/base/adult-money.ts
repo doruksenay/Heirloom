@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { gen, wage, wth } from './util';
-import { byCountry, inTr } from './events-flavour';
+import { byCountry, inTr, leftRentalRecently } from './events-flavour';
 import { T, ch, num, nmv, noMourn, afford, working, deadParents, recentlyBereaved, siblings } from './adult-kit';
 
 // Round 4, ages 25+: money and the law. Small lawsuits, a tax inspection, a friend who never paid back,
@@ -132,7 +132,7 @@ export const moneyEvents: EventDef[] = [
     maxAge: 60,
     once: true,
     weight: 4,
-    when: (c) => !c.p.home.owned,
+    when: (c) => leftRentalRecently(c),
     setup: (c) => {
       c.vars.amt = wage(c, 1500);
     },

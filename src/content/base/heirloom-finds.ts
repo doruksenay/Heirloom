@@ -121,7 +121,7 @@ export const heirloomFindEvents: EventDef[] = [
       const ps = deadParents(c);
       c.vars.pid = c.rng.pick(ps).id;
     },
-    title: (c) => c.t(`Clearing out a cupboard, you find letters ${nmv(c)} kept all their life.`, `Bir dolabı boşaltırken ${gen(nmv(c))} bütün hayatı boyunca sakladığı mektupları buluyorsun.`),
+    title: (c) => c.t(`Clearing out a cupboard, you find letters ${nmv(c)} kept all their life.`, `Bir dolabı boşaltırken ${gen(nmv(c))} ömrü boyunca sakladığı mektupları buldun.`),
     text: T('A whole bundle, tied with a faded ribbon. Some are love letters. Some are just about the weather, which somehow makes them love letters too.', 'Solmuş bir kurdeleyle bağlanmış koca bir deste. Bazıları aşk mektubu. Bazıları sadece havadan bahsediyor; nedense onlar da birer aşk mektubu.'),
     choices: [
       ch(
@@ -424,7 +424,7 @@ export const heirloomFindEvents: EventDef[] = [
           const n = nmv(c);
           c.h.closeness(String(c.vars.pid), 5);
           c.h.addHeirloom('tavla', named(c, me(c), 'backgammon board', 'tavlası'), c.t(`Carved by ${me(c)}'s friend ${n} in ${yr(c)}, and kept for special days.`, `${yr(c)} yılında ${gen(me(c))} arkadaşı ${n} oydu; özel günler için saklandı.`));
-          return c.t('You put it somewhere safe and brought it out on holidays. Every game on it feels like an occasion.', 'Güvenli bir yere koydun ve bayramlarda çıkardın. Üstünde oynanan her oyun bir tören gibi.');
+          return c.t('You put it somewhere safe and brought it out on holidays. Every game on it feels like an occasion.', 'Güvenli bir yere koydun, yalnızca özel günlerde çıkardın. Üstünde oynanan her oyun bir tören gibi.');
         },
       ),
     ],

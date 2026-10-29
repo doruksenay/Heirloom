@@ -465,7 +465,7 @@ export const elderMoreEvents: EventDef[] = [
       }, { tone: 'good' }),
       ch('remember', 'Say you remember exactly', 'Tam olarak hatırladığını söyle', (c) => {
         c.h.closeness(String(c.vars.pid), 5);
-        return c.t(`You remembered exactly, and said so. It took an hour, an apology from each of you and a lot of silence. It was worth it.`, `Tam olarak hatırlıyordun ve söyledin. Bir saat, ikinizden de birer özür ve bolca sessizlik aldı. Değdi.`);
+        return c.t(`You remembered exactly, and said so. It took an hour, an apology from each of you and a lot of silence. It was worth it.`, `Tam olarak hatırlıyordun ve söyledin. Bir saat, ikinizden de birer özür ve bolca sessizlik aldı. Sonunda ikinizin de içi rahatladı.`);
       }),
       ch('cold', 'Keep it short', 'Kısa kes', (c) => {
         c.h.closeness(String(c.vars.pid), 2);
@@ -493,7 +493,7 @@ export const elderMoreEvents: EventDef[] = [
         c.h.closeness(String(c.vars.pid), 7);
         c.h.stat('happiness', 4);
         return c.t(`You and ${nmv(c)} were the best couple on the floor. You remembered steps you thought you had forgotten.`, `${wth(nmv(c))} pistin en iyi çiftiydiniz. Unuttuğunu sandığın adımları hatırladın.`);
-      }, { requires: partnered, requiresLabel: 'No opening' }),
+      }, { hidden: (c) => !partnered(c) }),
       ch('watch', 'Just sit and enjoy the music', 'Sadece oturup müziğin keyfini çıkar', (c) => {
         c.h.stat('happiness', 3);
         return c.t('You sat with tea and tapped your foot. Somebody asked you to dance anyway. You said yes.', 'Çayını alıp oturdun ve ayağınla tempo tuttun. Biri yine de dansa kaldırdı. Evet dedin.');

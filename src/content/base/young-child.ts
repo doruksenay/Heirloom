@@ -810,7 +810,7 @@ export const youngChildEvents: EventDef[] = [
         gamble(
           c,
           0.5,
-          (c) => out(c, { hap: 4 }, 'You saw the whole thing through your fingers. You did not sleep for three days. Worth it.', 'Bütün filmi parmaklarının arasından izledin. Üç gün uyuyamadın. Değdi.'),
+          (c) => out(c, { hap: 4 }, 'You saw the whole thing through your fingers. You did not sleep for three days. Worth it.', 'Bütün filmi parmaklarının arasından izledin. Üç gün uyuyamadın. Yine olsa yine izlerdin.'),
           (c) => out(c, { hap: -1 }, 'The usher sent you to the cartoon instead. It was about a talking sock. It was quite good.', 'Görevli sizi çizgi filme yolladı. Konuşan bir çorap hakkındaydı. Fena değildi.'),
         ),
       ),

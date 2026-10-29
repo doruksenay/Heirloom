@@ -725,6 +725,7 @@ export const streetCrimeEvents: EventDef[] = [
   {
     id: 'base.jail_class',
     category: 'crime',
+    inJail: 'only',
     when: inside,
     title: (c) => c.t('The prison library offers evening classes.', 'Cezaevi kütüphanesinde akşam kursları açılmış.'),
     text: (c) => c.t('A retired teacher volunteers every Tuesday.', 'Emekli bir öğretmen her salı gönüllü ders veriyor.'),
@@ -753,6 +754,7 @@ export const streetCrimeEvents: EventDef[] = [
   {
     id: 'base.jail_letters',
     category: 'crime',
+    inJail: 'only',
     cooldown: 3,
     when: (c) => inside(c) && c.h.relatives(LETTER_KINDS).some((r) => c.h.ageOf(r.person) >= 8),
     setup: (c) => {
@@ -794,6 +796,7 @@ export const streetCrimeEvents: EventDef[] = [
   {
     id: 'base.jail_visit',
     category: 'crime',
+    inJail: 'only',
     cooldown: 2,
     maxPerLife: 3,
     weight: 12,
@@ -844,6 +847,7 @@ export const streetCrimeEvents: EventDef[] = [
   {
     id: 'base.jail_talent',
     category: 'crime',
+    inJail: 'only',
     cooldown: 5,
     weight: 6,
     when: inside,

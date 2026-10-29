@@ -250,9 +250,13 @@ export const griefEvents: EventDef[] = [
     scheduled: true,
     setup: (c) => {
       c.vars.pid = lostId(c, ['child']) ?? '';
-      const minors = leftBehind(c, lost(c)).filter((q) => c.h.ageOf(q) < 18);
+      const all = leftBehind(c, lost(c));
+      const minors = all.filter((q) => c.h.ageOf(q) < 18);
+      // the youngest is the one the question is about; the count is every child they left (review 6 §3.12)
+      minors.sort((a, b) => b.birthYear - a.birthYear);
       c.vars.gid = minors[0]?.id ?? '';
       c.vars.gcount = minors.length;
+      c.vars.gall = all.length;
     },
     title: buriedTitle,
     text: (c) => {
@@ -260,16 +264,23 @@ export const griefEvents: EventDef[] = [
       const g = c.s.people[String(c.vars.gid)];
       if (!g) return c.t('The house is full of people, and nobody says a word.', 'Ev insan dolu ama kimse tek kelime etmiyor.');
       const mom = k.gender === 'female';
-      const many = Number(c.vars.gcount) > 1;
+      const n = Math.max(1, Number(c.vars.gall ?? c.vars.gcount) || 1);
+      const NUM_EN = ['', 'a child', 'two children', 'three children', 'four children', 'five children'];
+      const NUM_TR = ['', 'bir çocuk', 'iki çocuk', 'üç çocuk', 'dört çocuk', 'beş çocuk'];
+      const leftEn = n <= 5 ? NUM_EN[n] : `${n} children`;
+      const leftTr = n <= 5 ? NUM_TR[n] : `${n} çocuk`;
+      // with more than one child left, say which one this is: the youngest
+      const whoEn = n > 1 ? `The youngest, ${g.firstName},` : g.firstName;
+      const whoTr = n > 1 ? `Küçüğü ${g.firstName}` : g.firstName;
       const a = c.h.ageOf(g);
       return a < 10
         ? c.t(
-            `${k.firstName} left ${many ? 'children' : 'a child'} behind. ${g.firstName} is only ${a} and keeps asking, "When is ${mom ? 'Mom' : 'Dad'} coming home?"`,
-            `${k.firstName} geride ${many ? 'çocuklar' : 'bir çocuk'} bıraktı. ${g.firstName} daha ${a} yaşında; "${mom ? 'Annem' : 'Babam'} ne zaman gelecek?" diye sorup duruyor.`,
+            `${k.firstName} left ${leftEn} behind. ${whoEn} is only ${a} and keeps asking, "When is ${mom ? 'Mom' : 'Dad'} coming home?"`,
+            `${k.firstName} geride ${leftTr} bıraktı. ${whoTr} daha ${a} yaşında; "${mom ? 'Annem' : 'Babam'} ne zaman gelecek?" diye sorup duruyor.`,
           )
         : c.t(
-            `${k.firstName} left ${many ? 'children' : 'a child'} behind. ${g.firstName} is ${a}, has shut the bedroom door and will not talk to anyone.`,
-            `${k.firstName} geride ${many ? 'çocuklar' : 'bir çocuk'} bıraktı. ${g.firstName} ${a} yaşında; odasına kapanmış, kimseyle konuşmuyor.`,
+            `${k.firstName} left ${leftEn} behind. ${whoEn} is ${a}, has shut the bedroom door and will not talk to anyone.`,
+            `${k.firstName} geride ${leftTr} bıraktı. ${whoTr} ${a} yaşında; odasına kapanmış, kimseyle konuşmuyor.`,
           );
     },
     choices: [

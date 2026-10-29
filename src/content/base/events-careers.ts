@@ -1,8 +1,8 @@
 import type { Ctx, EventDef } from '../types';
-import { loc, wage } from './util';
+import { fullTimeStudent, loc, wage } from './util';
 import { promoteAnyway } from '../../engine/context';
 import { byCountry, cityOf, coastal, inTr, type ByCountry } from './events-flavour';
-import { canEnlist, canTryOut, isJob } from './activities-careers';
+import { canEnlist, canTryOut, isJob, ladderPromote } from './activities-careers';
 import { jobBoardEvents } from './job-board';
 import { careerEventsR4 } from './events-careers-r4';
 import { majorEvents } from './events-careers-majors';
@@ -14,7 +14,8 @@ const on = (id: string) => (c: Ctx) => isJob(c, id);
 
 /** Try a promotion; returns the sentence that announces it, or '' at the top of the ladder. */
 function promo(c: Ctx): string {
-  if (!c.h.promote()) return '';
+  // round 7: police and civil-service ranks come from years and rank exams, not from a lucky week
+  if (!ladderPromote(c)) return '';
   c.h.stat('happiness', 4);
   return c.t(` You were promoted to ${c.h.jobTitle()}.`, ` Terfi geldi: artık ${c.h.jobTitle()} oldun.`);
 }
@@ -378,7 +379,7 @@ export const careerEvents: EventDef[] = [
     maxAge: 62,
     once: true,
     weight: 60,
-    when: (c) => c.h.has('ex_athlete') && c.p.jobId !== 'coach' && c.p.jobId !== 'athlete' && !c.p.retired && c.p.jailYears === 0,
+    when: (c) => c.h.has('ex_athlete') && c.p.jobId !== 'coach' && c.p.jobId !== 'athlete' && !c.p.retired && c.p.jailYears === 0 && !fullTimeStudent(c),
     title: (c) => c.t('Your old club wants you back. On the bench.', 'Eski kulübün seni geri istiyor. Bu sefer kenarda.'),
     text: (c) =>
       c.t(

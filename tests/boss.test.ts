@@ -464,3 +464,31 @@ describe('boss round-3 playtest fixes (playtest 3 §2.9)', () => {
     expect(teamCapacity(50) - teamCapacity(49)).toBeLessThan(teamCapacity(1) - teamCapacity(0));
   });
 });
+
+// ---------------------------------------------------------------- round 7 (content-fix)
+import { abl as ablTr, acc as accTr, dat as datTr, gen as genTr, loc as locTr, isCompoundName } from '../src/i18n/tr-grammar';
+import { INDUSTRIES } from '../src/content/boss/state';
+
+describe('round 7: company names that end in a possessive compound', () => {
+  it('takes the pronominal n: Cumhuriyeti\'nde, Tası\'na, Kahvecisi\'ne, Altını\'nda', () => {
+    expect(locTr('Yaprak Cumhuriyeti')).toBe("Yaprak Cumhuriyeti'nde");
+    expect(accTr('Yaprak Cumhuriyeti')).toBe("Yaprak Cumhuriyeti'ni");
+    expect(datTr('Sefer Tası')).toBe("Sefer Tası'na");
+    expect(datTr('Mahalle Kahvecisi')).toBe("Mahalle Kahvecisi'ne");
+    expect(locTr('Rize Altını')).toBe("Rize Altını'nda");
+    expect(ablTr('Mahalle Kahvecisi')).toBe("Mahalle Kahvecisi'nden");
+    expect(genTr('Yaprak Cumhuriyeti')).toBe("Yaprak Cumhuriyeti'nin");
+    expect(locTr('Amerika Birleşik Devletleri')).toBe("Amerika Birleşik Devletleri'nde");
+  });
+  it('leaves ordinary names and plain company names alone', () => {
+    expect(locTr('Ayşe')).toBe("Ayşe'de");
+    expect(datTr('Mavi Kedi')).toBe("Mavi Kedi'ye");
+    expect(locTr('Sade Stüdyo')).toBe("Sade Stüdyo'da");
+    expect(datTr('Köşe Kahve')).toBe("Köşe Kahve'ye");
+    expect(locTr('Tavşan Kanı Çay')).toBe("Tavşan Kanı Çay'da");
+  });
+  it('knows every Turkish company name in the tables', () => {
+    const compound = Object.values(INDUSTRIES).flatMap((d) => [...d.names.tr, ...d.names.other].map((p) => p[1])).filter(isCompoundName);
+    expect(new Set(compound)).toEqual(new Set(['Mahalle Kahvecisi', 'Rize Altını', 'Yaprak Cumhuriyeti', 'Sefer Tası']));
+  });
+});

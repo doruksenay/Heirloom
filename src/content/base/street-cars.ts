@@ -67,7 +67,7 @@ const DRIVE: ((car: { en: string; tr: string }) => Pair)[] = [
   (k) => [`You drove your ${k.en} to the edge of town just to watch the sun go down.`, 'Sırf gün batımını izlemek için arabayla şehrin dışına kadar gittin.'],
   (k) => [`You washed your ${k.en} by hand, then drove it around the block so people would see.`, 'Arabanı elinle yıkadın, sonra herkes görsün diye mahallede bir tur attın.'],
   (k) => [`You took a long night drive in your ${k.en} and sang every song you know the words to.`, 'Gece arabanla uzun bir yola çıktın ve sözlerini bildiğin bütün şarkıları söyledin.'],
-  (k) => [`You drove your ${k.en} to a village bakery forty minutes away for one loaf. Worth it.`, 'Arabanla kırk dakika uzaktaki bir köy fırınına, tek bir ekmek için gittin. Değdi.'],
+  (k) => [`You drove your ${k.en} to a village bakery forty minutes away for one loaf. Worth it.`, 'Arabanla kırk dakika uzaktaki bir köy fırınına, tek bir ekmek için gittin. Dönüş yolunda yarısı bitmişti.'],
 ];
 
 export const carActivities: ActivityDef[] = [
@@ -453,7 +453,7 @@ export const carEvents: EventDef[] = [
         resolve: (c) => {
           c.h.closeness(String(c.vars.pid), 3);
           c.h.stat('health', -1);
-          return c.t(`You sat in the passenger seat and pressed an imaginary brake forty times. ${nm(c)} will never forget it, and not in a good way.`, `Yan koltukta oturdun ve hayali frene kırk kez bastın. ${nm(c)} bunu asla unutmayacak; iyi anlamda değil.`);
+          return c.t(`You sat in the passenger seat and pressed an imaginary brake forty times. ${nm(c)} will never forget it, and not in a good way.`, `Yan koltukta oturdun ve hayali frene kırk kez bastın. ${nm(c)} bunu asla unutmayacak, ama güzel bir anı olarak değil.`);
         },
       },
       {

@@ -185,7 +185,7 @@ export function highSchoolGradLine(c: Ctx): string {
   const pool: Builder[] = [
     () => (S ? [`You graduated from ${S[0]}!`, `${schoolAbl(S[1])} mezun oldun!`] : ['You graduated from high school!', 'Liseden mezun oldun!']),
     () => ['You graduated from high school! Everyone threw their caps; yours landed on the head teacher.', 'Liseden mezun oldun! Herkes kepini havaya attı, seninki müdürün başına düştü.'],
-    () => ['You graduated from high school. The yearbook says you are "most likely to be late to their own wedding".', 'Liseden mezun oldun. Yıllıkta senin için "kendi düğününe bile geç kalır" yazıyor.'],
+    () => ['You graduated from high school. The yearbook says you are "most likely to be late to their own wedding".', 'Liseden mezun oldun. Sınıf arkadaşların mezuniyet albümüne senin için "Kendi düğününe bile geç kalır" yazdı.'],
     () => ['You graduated from high school! You signed forty shirts and forgot to get yours signed.', 'Liseden mezun oldun! Kırk kişinin gömleğini imzaladın, kendininkini imzalatmayı unuttun.'],
     () => ['You graduated from high school! The last bell rang and, for a second, nobody moved.', 'Liseden mezun oldun! Son zil çaldı ve bir an kimse yerinden kıpırdamadı.'],
     () => [`You graduated from high school, and that night it felt as if all of ${cEn} was honking for your class.`, `Liseden mezun oldun. O gece bütün ${cTr} sizin sınıf için korna çalıyor gibiydi.`],

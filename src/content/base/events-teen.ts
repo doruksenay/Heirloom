@@ -1127,7 +1127,7 @@ export const teenEvents: EventDef[] = [
           const roll = c.rng.int(0, 2);
           if (roll === 0) {
             c.h.stat('health', -3);
-            return c.t('You got sunburned in the exact shape of your bag strap. Worth it.', 'Çantanın askısı şeklinde güneş yanığıyla döndün. Değdi.');
+            return c.t('You got sunburned in the exact shape of your bag strap. Worth it.', 'Çantanın askısı şeklinde güneş yanığıyla döndün. Yazdan kalan en güzel iz.');
           }
           if (roll === 1) {
             const friend = c.h.newPerson({ age: c.age + c.rng.int(-1, 3) });

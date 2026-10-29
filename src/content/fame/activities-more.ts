@@ -131,7 +131,7 @@ export const moreFameActivities: ActivityDef[] = [
           ? ['You did a live Q&A with your grandmother. She answered every question. You answered none.', 'Ninenle canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.']
           : motherAlive(c)
             ? ['You did a live Q&A with your mother. She answered every question, including three about your childhood nobody asked.', 'Annenle canlı soru-cevap yaptın. Bütün soruları o cevapladı; çocukluğunla ilgili kimsenin sormadığı üç soruyu da.']
-            : ["You did a live Q&A with your building's caretaker. He answered every question. You answered none.", 'Apartmanın kapıcısıyla canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.'],
+            : ["You did a live Q&A with the corner shopkeeper. He answered every question. You answered none.", 'Mahallenin bakkalıyla canlı soru-cevap yaptın. Bütün soruları o cevapladı. Sen hiçbirini.'],
         ['You tried to learn a song live with the chat as your teacher. Two thousand teachers, zero agreement.', 'Sohbet kısmını öğretmen yapıp canlı yayında şarkı öğrenmeye çalıştın. İki bin öğretmen, sıfır uzlaşma.'],
       ]);
       const gifts = wage(c, Math.min(20000, 20 + f.fans * 0.004));

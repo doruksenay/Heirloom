@@ -13,7 +13,10 @@ How to write events and activities. Read this before adding to `src/content/`.
   - 85% of years open one random event, sometimes two.
   - Picks are weighted by `weight`, default 10.
   - `cooldown` defaults to 4 years. `once: true` means once per life.
-  - Only `crime` category events fire while in prison.
+  - In prison only events marked `inJail: true` (inside and out) or `inJail: 'only'` (prison life) fire.
+  - `needs: ['trip' | 'cohabiting' | 'owner' | 'renter' | 'apartment' | 'house' | 'married' | 'single' | 'employed' | 'student' | 'abroad' | 'inTr' | 'parent' | 'grandparent' | 'sibling' | 'child' | …]` lists the state an event takes for granted; the engine checks it before opening the event (`src/engine/continuity.ts`). Use it instead of hand-written `when` checks for these.
+  - Anniversaries are opened by the engine on the round years of the current marriage; don't write random anniversary events.
+  - Before finishing, run `npx vite-node scripts/continuity-scan.ts` and read the ranked report for your event ids.
 
 ## Bilingual text (English + Turkish), always
 - Every player-visible string goes through `c.t('English', 'Türkçe')`.

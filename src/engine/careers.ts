@@ -89,9 +89,10 @@ export const BASE_JOBS: JobDef[] = [
   { id: 'miner', titles: ['Mine Worker', 'Shift Foreman', 'Mine Supervisor', 'Mine Manager'], titlesTr: ['Maden İşçisi', 'Vardiya Ustabaşı', 'Maden Şefi', 'Maden İşletme Müdürü'], education: 'highschool', minSmarts: 10, baseSalary: 38000, field: 'trade', req: { minAge: 18, health: 40 } },
   { id: 'electrician', titles: ['Apprentice Electrician', 'Electrician', 'Master Electrician', 'Electrical Contractor'], titlesTr: ['Çırak Elektrikçi', 'Elektrikçi', 'Usta Elektrikçi', 'Elektrik Müteahhidi'], education: 'highschool', minSmarts: 30, baseSalary: 36000, field: 'trade' },
   { id: 'chef', titles: ['Line Cook', 'Sous Chef', 'Head Chef', 'Executive Chef'], titlesTr: ['Aşçı', 'Şef Yardımcısı', 'Şef', 'Baş Şef'], education: 'highschool', minSmarts: 20, baseSalary: 30000, field: 'service' },
-  { id: 'police', titles: ['Police Officer', 'Sergeant', 'Lieutenant', 'Police Chief'], titlesTr: ['Polis Memuru', 'Komiser Yardımcısı', 'Komiser', 'Emniyet Müdürü'], education: 'highschool', minSmarts: 35, baseSalary: 45000, field: 'public', req: { minAge: 18, maxAge: 40, health: 50, cleanRecord: true } },
+  // round 7: the real Turkish police ranks; ranks rise by years of service and rank exams (activities-careers rankYear)
+  { id: 'police', titles: ['Police Officer', 'Sergeant', 'Lieutenant', 'Captain', 'Commander', 'Police Chief'], titlesTr: ['Polis Memuru', 'Komiser Yardımcısı', 'Komiser', 'Başkomiser', 'Emniyet Amiri', 'Emniyet Müdürü'], education: 'highschool', minSmarts: 35, baseSalary: 45000, field: 'public', req: { minAge: 18, maxAge: 40, health: 50, cleanRecord: true } },
   { id: 'nurse', titles: ['Nurse', 'Senior Nurse', 'Head Nurse', 'Director of Nursing'], titlesTr: ['Hemşire', 'Kıdemli Hemşire', 'Başhemşire', 'Hemşirelik Hizmetleri Müdürü'], education: 'university', minSmarts: 50, baseSalary: 58000, field: 'health' },
-  { id: 'teacher', titles: ['Teacher', 'Senior Teacher', 'Vice Principal', 'Principal'], titlesTr: ['Öğretmen', 'Kıdemli Öğretmen', 'Müdür Yardımcısı', 'Okul Müdürü'], education: 'university', minSmarts: 50, baseSalary: 46000, field: 'public' },
+  { id: 'teacher', titles: ['Teacher', 'Senior Teacher', 'Vice Principal', 'Principal'], titlesTr: ['Öğretmen', 'Uzman Öğretmen', 'Müdür Yardımcısı', 'Okul Müdürü'], education: 'university', minSmarts: 50, baseSalary: 46000, field: 'public' },
   { id: 'designer', titles: ['Junior Designer', 'Product Designer', 'Senior Product Designer', 'Design Director', 'Creative Director'], titlesTr: ['Asistan Tasarımcı', 'Ürün Tasarımcısı', 'Kıdemli Ürün Tasarımcısı', 'Tasarım Direktörü', 'Yaratıcı Direktör'], education: 'university', minSmarts: 55, baseSalary: 55000, field: 'creative' },
   { id: 'engineer', titles: ['Junior Engineer', 'Software Engineer', 'Senior Engineer', 'Staff Engineer', 'CTO'], titlesTr: ['Mühendis Adayı', 'Yazılım Mühendisi', 'Kıdemli Mühendis', 'Baş Mühendis', 'Teknoloji Direktörü'], education: 'university', minSmarts: 65, baseSalary: 72000, field: 'tech' },
   { id: 'accountant', titles: ['Junior Accountant', 'Accountant', 'Senior Accountant', 'Finance Director'], titlesTr: ['Stajyer Muhasebeci', 'Muhasebeci', 'Kıdemli Muhasebeci', 'Finans Direktörü'], education: 'university', minSmarts: 55, baseSalary: 52000, field: 'office' },
@@ -102,8 +103,8 @@ export const BASE_JOBS: JobDef[] = [
   // ---- v0.7: offered only by events and activities (scouts, trials, the recruitment office)
   { id: 'athlete', titles: ['Academy Player', 'Pro Footballer', 'First-Team Star', 'National Team Player'], titlesTr: ['Altyapı Oyuncusu', 'Profesyonel Futbolcu', 'As Oyuncu', 'Milli Futbolcu'], education: 'none', minSmarts: EVENT_ONLY, baseSalary: 30000, field: 'creative', eventOnly: true, requires: (c) => c.age >= 16 && c.age <= 22 && c.p.stats.health >= 70 },
   { id: 'coach', titles: ['Youth Coach', 'Assistant Coach', 'Head Coach', 'National Team Coach'], titlesTr: ['Altyapı Antrenörü', 'Yardımcı Antrenör', 'Teknik Direktör', 'Milli Takım Teknik Direktörü'], education: 'none', minSmarts: EVENT_ONLY, baseSalary: 34000, field: 'public', eventOnly: true },
-  { id: 'soldier', titles: ['Private', 'Corporal', 'Sergeant', 'Master Sergeant', 'Sergeant Major'], titlesTr: ['Sözleşmeli Er', 'Onbaşı', 'Uzman Çavuş', 'Başçavuş', 'Kıdemli Başçavuş'], education: 'highschool', minSmarts: EVENT_ONLY, baseSalary: 30000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 18 && c.age <= 32 && c.p.stats.health >= 40 },
-  { id: 'officer', titles: ['Lieutenant', 'Captain', 'Major', 'Colonel', 'General'], titlesTr: ['Teğmen', 'Yüzbaşı', 'Binbaşı', 'Albay', 'General'], education: 'university', minSmarts: EVENT_ONLY, baseSalary: 46000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 21 && c.age <= 32 && c.p.stats.health >= 40 },
+  { id: 'soldier', titles: ['Private', 'Corporal', 'Sergeant', 'Master Sergeant', 'Sergeant Major'], titlesTr: ['Sözleşmeli Er', 'Uzman Onbaşı', 'Uzman Çavuş', 'Astsubay Başçavuş', 'Astsubay Kıdemli Başçavuş'], education: 'highschool', minSmarts: EVENT_ONLY, baseSalary: 30000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 18 && c.age <= 32 && c.p.stats.health >= 40 },
+  { id: 'officer', titles: ['Second Lieutenant', 'First Lieutenant', 'Captain', 'Major', 'Lieutenant Colonel', 'Colonel', 'Brigadier General'], titlesTr: ['Teğmen', 'Üsteğmen', 'Yüzbaşı', 'Binbaşı', 'Yarbay', 'Albay', 'Tuğgeneral'], education: 'university', minSmarts: EVENT_ONLY, baseSalary: 46000, field: 'public', eventOnly: true, ranked: true, requires: (c) => c.age >= 21 && c.age <= 32 && c.p.stats.health >= 40 },
 
   // ---- v0.7: offered through the regular job listings
   { id: 'artist', titles: ['Struggling Painter', 'Working Artist', 'Gallery Artist', 'Renowned Painter'], titlesTr: ['Meteliksiz Ressam', 'Ressam', 'Galeri Sanatçısı', 'Ünlü Ressam'], education: 'none', minSmarts: 15, baseSalary: 13000, field: 'creative', freelance: true },
@@ -318,6 +319,8 @@ export function salaryFor(job: JobDef, level: number, wageFactor: number, years 
  * of a ladder are rare, and nobody under 30 gets the upper half (review 5 §3.2). No RNG.
  */
 export function promotionOdds(job: JobDef, level: number, perf: number, age: number): number {
+  // round 7: ranks of the police and the civil service come from years of service and rank exams (RANK_RULES)
+  if (RANK_RULES[job.id]) return 0;
   const steps = job.titles.length - 1;
   const frac = steps <= 1 ? 0 : level / (steps - 1); // 0 on the bottom rung, 1 on the rung before the top
   let odds = 0.06 + Math.max(0, perf - 35) / 220;
@@ -501,3 +504,42 @@ export function majorReason(job: JobDef | string, lang: 'en' | 'tr' = 'en'): str
   const en = MAJOR_INFO[m].en.toLowerCase();
   return `Needs ${/^[aeiou]/.test(en) ? 'an' : 'a'} ${en} degree`;
 }
+
+// ================================================================ round 7: Turkish public-sector realism
+
+/**
+ * Ranks that rise by years of service and rank exams, not by the engine's yearly performance roll (promotionOdds
+ * returns 0 for them; content/base/activities-careers.ts rankYear does the climbing). For each step up from rung i:
+ * `years` at the current rung, whether a rank exam decides it, and whether it needs a university degree.
+ * Police: Polis Memuru becomes Komiser Yardımcısı only with a degree and the PAEM exam (a high-school officer finishes
+ * an open-university degree first); then Komiser and Başkomiser by seniority, Emniyet Amiri and Emniyet Müdürü by exam.
+ * Civil service: Şef and Şube Müdürü by the görevde yükselme exam, the top posts by appointment.
+ */
+export interface RankStep {
+  years: number;
+  exam?: boolean;
+  degree?: boolean;
+  /** Appointment, not an exam: a yearly chance once the years are served. */
+  appoint?: number;
+}
+export const RANK_RULES: Record<string, RankStep[]> = {
+  police: [{ years: 3, exam: true, degree: true }, { years: 4 }, { years: 5 }, { years: 5, exam: true }, { years: 6, exam: true }],
+  civil_servant: [{ years: 3, exam: true }, { years: 4, exam: true, degree: true }, { years: 5, appoint: 0.2 }, { years: 6, appoint: 0.1 }],
+};
+
+/**
+ * Türkiye: state posts filled through the KPSS (memur, state teachers, bekçi, infaz koruma, orman muhafaza, posta,
+ * itfaiye, kütüphane, sosyal hizmet, diplomacy). Value = the lowest KPSS score (0–100) that gets an appointment.
+ */
+export const KPSS_JOBS: Record<string, number> = {
+  civil_servant: 70,
+  teacher: 72,
+  diplomat: 85,
+  social_worker: 70,
+  librarian: 65,
+  prison_officer: 60,
+  bekci: 60,
+  ranger: 60,
+  postal: 60,
+  firefighter: 60,
+};

@@ -1,7 +1,7 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
-import { MAJOR_IDS, MAJOR_INFO, majorsFor, setMajor, type MajorId } from '../../engine/careers';
+import { MAJOR_IDS, MAJOR_INFO, setMajor, type MajorId } from '../../engine/careers';
 import { houseState } from '../../engine/home';
-import { wage } from '../base/util';
+import { PART_TIME_JOBS, atAcademy, wage } from '../base/util';
 import type { Pair } from '../base/lines';
 import { renameHighSchool } from '../../engine/common-lines';
 import { classYearsFor, hasPrepProgramme, yearsWord } from '../../engine/degree';
@@ -38,15 +38,27 @@ export function sunnetAge(birthYear: number, firstName: string): number {
 
 // ------------------------------------------------------------------ scores
 
+/*
+ * Round 7 (balance): realistic spreads. Smarts move a score by 7 points each, the exam day by up to 65 either way, and
+ * how you studied and which high school you went to on top. With the round-7 stats (median smarts at 13 about 68,
+ * at 17 about 73) the LGS median is near 300 with about one in twenty at a fen lisesi, and the YKS median is near 300
+ * with about one in ten at 450+ and only the top few percent reaching medicine (480).
+ * Bot numbers: scratchpad/round7-balance/.
+ */
 /** LGS on a 0–500 scale. One rng call. */
 function lgsScore(c: Ctx, bonus: number): number {
-  return clamp(Math.round(150 + c.p.stats.smarts * 3 + bonus + c.rng.int(-30, 30)), 100, 500);
+  return clamp(Math.round(285 + smartsPoints(c.p.stats.smarts - 68) + bonus + c.rng.int(-65, 65)), 100, 500);
 }
-const LISE_BONUS: Record<Lise, number> = { fen: 35, anadolu: 15, mahalle: 0 };
+/** 7 points per point of smarts above the typical pupil, 5 below (a weak year still scores something). */
+const smartsPoints = (d: number) => (d >= 0 ? 7 * d : 5 * d);
+/** LGS score a high school takes (fen lisesi, Anadolu lisesi; below that the neighbourhood lise). */
+export const LGS_FEN = 470;
+export const LGS_ANADOLU = 360;
+const LISE_BONUS: Record<Lise, number> = { fen: 60, anadolu: 25, mahalle: 0 };
 /** YKS on the ÖSYM 0–560 scale: smarts, the high school, how you studied and the day itself. One rng call. */
 export function yksScore(c: Ctx, bonus: number): number {
   const lise = peekTr(c.p)?.lise;
-  return clamp(Math.round(100 + c.p.stats.smarts * 3.1 + (lise ? LISE_BONUS[lise] : 0) + bonus + c.rng.int(-30, 30)), 100, 560);
+  return clamp(Math.round(280 + smartsPoints(c.p.stats.smarts - 73) + (lise ? LISE_BONUS[lise] : 0) + bonus + c.rng.int(-65, 65)), 100, 560);
 }
 
 // ------------------------------------------------------------------ schedule
@@ -216,7 +228,7 @@ const LGS_REACT: Record<Lise, { any: Pair[]; parent: Pair[] }> = {
 function lgsResult(c: Ctx, bonus: number, clause: Pair): string {
   const st = trState(c.p);
   const score = lgsScore(c, bonus);
-  const lise: Lise = score >= 470 ? 'fen' : score >= 400 ? 'anadolu' : 'mahalle';
+  const lise: Lise = score >= LGS_FEN ? 'fen' : score >= LGS_ANADOLU ? 'anadolu' : 'mahalle';
   st.lgs = score;
   st.lise = lise;
   if (lise === 'fen') c.h.flag('tr_fen_lisesi');
@@ -289,13 +301,8 @@ const lgs: EventDef = {
 
 // ------------------------------------------------------------------ YKS
 
-function yksVerdict(score: number): Pair {
-  if (score >= 480) return ['That is medicine territory.', 'Bu puanla tıp bile yazılır.'];
-  if (score >= 400) return ['Engineering is within reach.', 'Mühendislik rahat gelir.'];
-  if (score >= 300) return ['Enough for a solid degree.', 'Sağlam bir bölüme yeter.'];
-  if (score >= 200) return ['Enough for a university place, if you choose carefully.', 'Dikkatli tercih yaparsan bir üniversiteye yeter.'];
-  return ['That will be hard to place anywhere.', 'Bu puanla bir yere yerleşmek zor.'];
-}
+/** Round 7 (tr-careers): the verdict comes from the tercih's own lists, so it never promises a major the list lacks. */
+const yksVerdict = (score: number): Pair => yksVerdictFor(score);
 
 function yksResult(c: Ctx, bonus: number, clause: Pair): string {
   const st = trState(c.p);
@@ -326,7 +333,7 @@ const yks: EventDef = {
         if (!parents) c.h.money(-wage(c, 1200));
         return yksResult(
           c,
-          30,
+          35,
           parents
             ? ['Your family tightened their belts for the prep school, and you did practice exams day and night.', 'Ailen dershane için kemerleri sıktı, sen de gece gündüz deneme çözdün.']
             : ['You paid for the prep school out of your own savings and did practice exams day and night.', 'Dershane parasını kendi birikiminden ödedin ve gece gündüz deneme çözdün.'],
@@ -352,7 +359,7 @@ const yks: EventDef = {
       label: (c) => c.t('Trust your luck', 'Şansına güven'),
       resolve: (c) => {
         c.h.stat('happiness', 4);
-        return yksResult(c, -15, ['You trusted your luck.', 'Şansına güvendin.']);
+        return yksResult(c, -25, ['You trusted your luck.', 'Şansına güvendin.']);
       },
     },
   ],
@@ -375,8 +382,35 @@ const ENROLL: Record<MajorId, Pair> = {
   arts: ['You got into fine arts. Your family asks what you will do with it; you show them your sketchbook.', 'Güzel sanatları kazandın. Ailen bununla ne yapacağını soruyor; sen eskiz defterini gösteriyorsun.'],
 };
 
-/** The majors offered as choices this tercih (set in setup), most selective first. */
-const offered = (c: Ctx): string[] => [c.vars.m0, c.vars.m1, c.vars.m2].filter((x): x is string => typeof x === 'string' && x !== '');
+/** Round 7: every major the score reaches (state universities), most selective first, set in setup. */
+const offered = (c: Ctx): string[] =>
+  (c.vars.open !== undefined ? String(c.vars.open).split(',') : [c.vars.m0, c.vars.m1, c.vars.m2].map((x) => String(x ?? ''))).filter((x) => x !== ''); // older saves: m0..m2
+/** Round 7: the private (vakıf) places a little above the score: every other major within VAKIF_REACH points. */
+const offeredPaid = (c: Ctx): string[] => String(c.vars.paid ?? c.vars.vm ?? '').split(',').filter((x) => x !== ''); // older saves: vm
+/** How far above the score a private (vakıf) university still takes you. */
+export const VAKIF_REACH = 60;
+
+/** The tercih lists, from the score alone (no rng): state majors open to it, and the vakıf places above it. */
+export function tercihLists(score: number): { open: MajorId[]; paid: MajorId[] } {
+  const open = MAJOR_IDS.filter((m) => MAJOR_INFO[m].minScore <= score).sort((a, b) => MAJOR_INFO[b].minScore - MAJOR_INFO[a].minScore);
+  const paid = MAJOR_IDS.filter((m) => !open.includes(m) && MAJOR_INFO[m].minScore <= score + VAKIF_REACH).sort((a, b) => MAJOR_INFO[b].minScore - MAJOR_INFO[a].minScore);
+  return { open, paid };
+}
+
+/**
+ * The YKS result's verdict, from the same lists as the tercih (review 6 §3.6: "engineering is within reach", then no
+ * engineering on the list). Names the most selective major the score opens.
+ */
+export function yksVerdictFor(score: number): Pair {
+  const { open } = tercihLists(score);
+  const top = open[0];
+  if (!top) return ['That will be hard to place anywhere.', 'Bu puanla bir yere yerleşmek zor.'];
+  if (top === 'medicine') return ['That is medicine territory.', 'Bu puanla tıp bile yazılır.'];
+  const en = MAJOR_INFO[top].en.toLowerCase();
+  const tr = MAJOR_INFO[top].tr.toLocaleLowerCase('tr');
+  if (open.length === 1) return [`Only ${en} takes it.`, `Bu puanla yalnızca ${tr} bölümüne yerleşebilirsin.`];
+  return [`The most selective major it reaches: ${en}.`, `Bu puanla yazabileceğin en iddialı bölüm ${tr}.`];
+}
 
 function enroll(c: Ctx, m: MajorId, vakif: boolean, prep = false): string {
   const st = trState(c.p);
@@ -392,6 +426,9 @@ function enroll(c: Ctx, m: MajorId, vakif: boolean, prep = false): string {
   const info = MAJOR_INFO[m];
   let en: string;
   let tr: string;
+  // round 7: no full-time job alongside a full-time degree (review 6 §3.7: a pro footballer studying medicine)
+  const left = c.p.jobId && !c.p.retired && !PART_TIME_JOBS.has(c.p.jobId) ? c.h.jobTitle() : null;
+  if (left) c.h.setJob(null);
   if (vakif) {
     const mom = hasMom(c);
     const dad = hasDad(c);
@@ -422,6 +459,10 @@ function enroll(c: Ctx, m: MajorId, vakif: boolean, prep = false): string {
     en += ' Your military service is deferred until you graduate.';
     tr += ' Okul bitene kadar askerliğin de tecil edildi.';
   }
+  if (left) {
+    en += ` You left your job as ${left}: a full-time degree leaves no room for it.`;
+    tr += ` Örgün eğitime tam zamanlı iş sığmayacağı için ${left} olarak çalıştığın işten ayrıldın.`;
+  }
   return c.t(en, tr);
 }
 
@@ -444,16 +485,51 @@ function majorChoice(m: MajorId): ChoiceDef {
   };
 }
 
-/** What a YKS score opens, in the words of the relatives (thresholds from careers.ts MAJOR_INFO). */
+/** A private (vakıf) place: one choice per major in reach above the score. */
+function vakifChoice(m: MajorId): ChoiceDef {
+  return {
+    id: `v_${m}`,
+    label: (c) => c.t(`${MAJOR_INFO[m].en} at a private university (${classYearsFor(m)} years)`, `Vakıf üniversitesinde ${MAJOR_INFO[m].tr.toLocaleLowerCase('tr')} (${classYearsFor(m)} yıl)`),
+    badge: 'Costs more',
+    hidden: (c) => !offeredPaid(c).includes(m),
+    requires: (c) => hasMom(c) || hasDad(c) || c.p.money >= vakifFee(c) * 4,
+    requiresLabel: 'Not enough money',
+    resolve: (c) => enroll(c, m, true),
+  };
+}
+
+/** In the order the choices show them. */
+const inListOrder = (ms: MajorId[]) => MAJOR_IDS.filter((m) => ms.includes(m));
+const listTr = (ms: MajorId[]) => inListOrder(ms).map((m) => MAJOR_INFO[m].tr).join(', ');
+const listEn = (ms: MajorId[]) => inListOrder(ms).map((m) => MAJOR_INFO[m].en).join(', ');
+
+/**
+ * What a YKS score opens, read from the very lists the choices show (round 7): how many majors, the most selective
+ * one, the next one up that the score misses, and the private places above it.
+ */
 function tercihNote(score: number): Pair {
-  if (score >= 480) return ['Every door is open, medicine included. The relatives are already saying "write medicine."', 'Tıp dahil bütün kapılar açık. Akrabalar şimdiden "Tıp yaz" diyor.'];
-  if (score >= 430) return ['Law and pharmacy are open; medicine is a little short.', 'Hukuk ve eczacılık açık; tıp için biraz kısa kaldın.'];
-  if (score >= 400) return ['Engineering and architecture are open; law is a little short.', 'Mühendislik ve mimarlık açık; hukuk için biraz kısa kaldın.'];
-  if (score >= 370) return ['Psychology and veterinary medicine are open; engineering is a little short.', 'Psikoloji ve veterinerlik açık; mühendislik için biraz kısa kaldın.'];
-  if (score >= 320) return ['Teaching and nursing are open. The tercih robot worked all night.', 'Öğretmenlik ve hemşirelik açık. Tercih robotu sabaha kadar çalıştı.'];
-  if (score >= 300) return ['Nursing is open, and business. The tercih robot worked all night.', 'Hemşirelik de işletme de açık. Tercih robotu sabaha kadar çalıştı.'];
-  if (score >= 200) return ['Business or fine arts will take you. The other doors need another year.', 'İşletme ya da güzel sanatlar seni alır. Diğer kapılar için bir yıl daha gerek.'];
-  return ['No four-year degree takes this score. Another year of study, or another road.', 'Bu puanı alan dört yıllık bir bölüm yok. Ya bir yıl daha hazırlık ya da başka bir yol.'];
+  const { open, paid } = tercihLists(score);
+  const near = MAJOR_IDS.filter((m) => !open.includes(m)).sort((a, b) => MAJOR_INFO[a].minScore - MAJOR_INFO[b].minScore)[0];
+  let en: string;
+  let tr: string;
+  if (!open.length) {
+    en = 'No four-year degree takes this score. Another year of study, or another road.';
+    tr = 'Bu puanı alan dört yıllık bir bölüm yok. Ya bir yıl daha hazırlık ya da başka bir yol.';
+  } else if (!near) {
+    en = 'Every door is open, medicine included. The relatives are already saying "write medicine."';
+    tr = 'Tıp dahil bütün kapılar açık. Akrabalar şimdiden "Tıp yaz" diyor.';
+  } else if (open.length === 1) {
+    en = `Only ${MAJOR_INFO[open[0]].en.toLowerCase()} takes this score; ${MAJOR_INFO[near].en.toLowerCase()} is a little short.`;
+    tr = `Bu puanla yalnızca ${MAJOR_INFO[open[0]].tr.toLocaleLowerCase('tr')} açık; ${MAJOR_INFO[near].tr.toLocaleLowerCase('tr')} için biraz kısa kaldın.`;
+  } else {
+    en = `Your score opens ${open.length} majors, up to ${MAJOR_INFO[open[0]].en.toLowerCase()}; ${MAJOR_INFO[near].en.toLowerCase()} is a little short.`;
+    tr = `Puanın ${open.length} bölüme yetiyor, en yükseği ${MAJOR_INFO[open[0]].tr.toLocaleLowerCase('tr')}; ${MAJOR_INFO[near].tr.toLocaleLowerCase('tr')} için biraz kısa kaldın.`;
+  }
+  if (paid.length) {
+    en += ` Private (vakıf) universities, for a fee: ${listEn(paid)}.`;
+    tr += ` Vakıf üniversitelerinde ücretli olarak: ${listTr(paid)}.`;
+  }
+  return [en, tr];
 }
 
 const tercihKind = (c: Ctx) => String(c.vars.kind ?? 'first');
@@ -462,7 +538,8 @@ const tercih: EventDef = {
   id: 'tr.tercih',
   category: 'milestone',
   scheduled: true,
-  when: (c) => inTR(c) && c.p.school === null && c.p.education === 'highschool' && c.p.jailYears === 0,
+  // round 7: not from the police school (PMYO), which is full-time study of its own
+  when: (c) => inTR(c) && c.p.school === null && c.p.education === 'highschool' && c.p.jailYears === 0 && !atAcademy(c),
   setup: (c) => {
     const st = trState(c.p);
     const retake = st.retake !== undefined;
@@ -476,16 +553,13 @@ const tercih: EventDef = {
     } else c.vars.kind = 'first';
     const score = st.yks!;
     c.vars.score = score;
-    const open = majorsFor(c, score);
-    // a paid place a little above the score: the most selective major within 60 points
-    const paid = MAJOR_IDS.filter((m) => !open.includes(m) && MAJOR_INFO[m].minScore <= score + 60).sort((a, b) => MAJOR_INFO[b].minScore - MAJOR_INFO[a].minScore);
-    c.vars.vm = paid[0] ?? '';
-    // the top major may also be on offer in English, with a prep year (fixed per city, major and year; no rng);
-    // it takes one of the three major slots, as the paid place does, so the list stays at five choices
+    // round 7 (review 6 §3.6): every major the score reaches, and every private (vakıf) place within reach above it
+    const { open, paid } = tercihLists(score);
+    c.vars.open = open.join(',');
+    c.vars.paid = paid.join(',');
+    // the top major may also be on offer in English, with a prep year (fixed per city, major and year; no rng)
     const first = open[0] ?? '';
     c.vars.pm = first && hasPrepProgramme(c.p.city, first, c.s.year) ? first : '';
-    const n = Math.max(1, 3 - (c.vars.vm ? 1 : 0) - (c.vars.pm ? 1 : 0));
-    for (let i = 0; i < 3; i++) c.vars[`m${i}`] = i < n ? (open[i] ?? '') : '';
   },
   title: (c) =>
     tercihKind(c) === 'retake'
@@ -508,18 +582,7 @@ const tercih: EventDef = {
       resolve: (c) => enroll(c, String(c.vars.pm) as MajorId, false, true),
       tone: 'good',
     },
-    {
-      id: 'vakif',
-      label: (c) => {
-        const m = String(c.vars.vm) as MajorId;
-        return MAJOR_INFO[m] ? c.t(`${MAJOR_INFO[m].en} at a private university`, `Vakıf üniversitesinde ${MAJOR_INFO[m].tr.toLocaleLowerCase('tr')}`) : '';
-      },
-      badge: 'Costs more',
-      hidden: (c) => !MAJOR_INFO[String(c.vars.vm) as MajorId],
-      requires: (c) => hasMom(c) || hasDad(c) || c.p.money >= vakifFee(c) * 4,
-      requiresLabel: 'Not enough money',
-      resolve: (c) => enroll(c, String(c.vars.vm) as MajorId, true),
-    },
+    ...MAJOR_IDS.map(vakifChoice),
     {
       id: 'retake',
       label: (c) => c.t('Study one more year and sit it again', 'Mezuna kal, bir yıl daha hazırlan'),

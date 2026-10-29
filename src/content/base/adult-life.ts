@@ -36,7 +36,7 @@ export const lifeEvents: EventDef[] = [
     setup: (c) => {
       c.vars.tc = c.rng.int(0, TRIPS.length - 1);
     },
-    title: (c) => c.t(`You landed in ${trip(c)[0]}. Your suitcase did not.`, `${trip(c)[1]} uçağından indin. Bavulun inmedi.`),
+    title: (c) => c.t(`You landed in ${trip(c)[0]}. Your suitcase did not.`, `${dat(trip(c)[1])} indin; bavulun inmedi.`),
     text: T('The airline says it is "somewhere in the system". You are wearing the clothes you slept in.', 'Havayolu "sistemde bir yerlerde" olduğunu söylüyor. Üstünde uyuduğun kıyafetler var.'),
     choices: [
       ch('shop', 'Buy a whole new wardrobe', 'Baştan aşağı yeni kıyafet al', (c) => {
@@ -370,7 +370,7 @@ export const lifeEvents: EventDef[] = [
         c.h.money(-wage(c, 500));
         c.h.stat('happiness', 5);
         c.h.relatives('friend').forEach((f) => c.h.closeness(f.person.id, 3));
-        return c.t('Everyone came. Someone brought a cake shaped like a tombstone. You danced until one, which is late now.', 'Herkes geldi. Biri mezar taşı şeklinde bir pasta getirdi. Saat bire kadar dans ettin; artık bu geç sayılıyor.');
+        return c.t('Everyone came. Someone brought a cake shaped like a tombstone. You danced until one, which is late now.', 'Herkes geldi. Biri pastaya "39+1" yazdırmış. Saat bire kadar dans ettin; artık bu geç sayılıyor.');
       }, { tone: 'good' }),
       ch('quiet', 'A quiet dinner with the people you love', 'Sevdiklerinle sakin bir akşam yemeği', (c) => {
         c.h.stat('happiness', 4);
@@ -427,7 +427,7 @@ export const lifeEvents: EventDef[] = [
       ch('note', 'Leave a polite note', 'Kibar bir not bırak', (c) => {
         if (c.rng.chance(0.5)) return c.t(`${nmv(c)} left a note back, apologising, with a little drawing of a car. You are pen pals now.`, `${nmv(c)} özür dileyen bir notla karşılık verdi; yanına küçük bir araba resmi çizmiş. Artık mektup arkadaşısınız.`);
         c.h.stat('happiness', -2);
-        return c.t(`${nmv(c)} left a note back that was not polite. The notes are now very long. The building is following the story.`, `${nmv(c)} hiç de kibar olmayan bir notla karşılık verdi. Notlar artık çok uzun. Bütün apartman hikâyeyi takip ediyor.`);
+        return c.t(`${nmv(c)} left a note back that was not polite. The notes are now very long. The whole street is following the story.`, `${nmv(c)} hiç de kibar olmayan bir notla karşılık verdi. Notlar artık çok uzun. Bütün sokak hikâyeyi takip ediyor.`);
       }, { badge: 'Risky' }),
       ch('cones', 'Buy traffic cones', 'Trafik konisi al', (c) => {
         c.h.money(-wage(c, 30));

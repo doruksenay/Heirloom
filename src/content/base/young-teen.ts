@@ -317,7 +317,7 @@ export const youngTeenEvents: EventDef[] = [
         { badge: 'Risky' },
       ),
       opt('roof', ['Watch from your own roof', 'Kendi damından izle'], (c) =>
-        out(c, { hap: 5 }, 'You watched from the roof with a blanket and a flask of tea. Fewer stars, zero trouble.', 'Bir battaniye ve bir termos çayla damdan izledin. Daha az yıldız, sıfır bela.'),
+        out(c, { hap: 5 }, 'You watched from the roof with a blanket and a flask of tea. Fewer stars, zero trouble.', 'Bir battaniye ve sıcak bir termosla damdan izledin. Daha az yıldız, sıfır bela.'),
       ),
       opt('ask', ['Ask to go, with a parent driving', 'Bir büyük götürsün diye izin iste'], (c) => {
         allParents(c, 4);
@@ -568,7 +568,8 @@ export const youngTeenEvents: EventDef[] = [
     minAge: 13,
     maxAge: 16,
     once: true,
-    title: tt('An anonymous card is in your locker.', 'Dolabında imzasız bir kart var.'),
+    // round 7: Turkish schools have desks (sıra), not lockers
+    title: (c) => (inTr(c) ? c.t('Someone left an anonymous note on your desk.', 'Sırana imzasız bir not bırakılmış.') : c.t('An anonymous card is in your locker.', 'Dolabında imzasız bir kart var.')),
     text: tt('"I like how you laugh." No name. Just a drawing of a cat.', '"Gülüşünü seviyorum." İsim yok. Sadece bir kedi çizimi.'),
     choices: [
       opt('investigate', ['Compare handwriting with the whole class', 'Bütün sınıfın el yazısıyla karşılaştır'], (c) =>
@@ -578,7 +579,7 @@ export const youngTeenEvents: EventDef[] = [
         out(c, { hap: 5, loo: 1 }, 'You kept the card in your wallet for years. It turned up when you moved house, and you smiled again.', 'Kartı yıllarca cüzdanında taşıdın. Taşınırken ortaya çıktı ve yine gülümsedin.'),
         { tone: 'good' },
       ),
-      opt('reply', ['Leave a reply card on your locker', 'Dolabına bir cevap kartı bırak'], (c) =>
+      opt('reply', (c) => (inTr(c) ? c.t('Leave a reply on your desk', 'Sırana bir cevap notu bırak') : c.t('Leave a reply card on your locker', 'Dolabına bir cevap kartı bırak')), (c) =>
         out(c, { hap: 4 }, 'You left a card: "Thanks. I like your cat." The next day someone had drawn the cat a hat.', 'Bir kart bıraktın: "Teşekkürler. Kedini sevdim." Ertesi gün biri kediye şapka çizmişti.'),
       ),
     ],

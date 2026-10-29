@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import { acc, cap, dat, gen, wage, wth } from './util';
-import { byCountry, he, him, his, inTr } from './events-flavour';
+import { byCountry, he, him, his, inTr, thinWalls, trHome } from './events-flavour';
 import { say, type Pair } from './lines';
 import { T, ch, num, nmv, pv, noMourn, pickKid, hasKidAged, afford, partnered, setPartner } from './adult-kit';
 
@@ -291,13 +291,18 @@ export const parentingEvents: EventDef[] = [
       c.vars.amt = wage(c, 500);
     },
     title: (c) => c.t(`${kid(c)} wants a drum kit. Desperately.`, `${kid(c)} bir davul seti istiyor. Hem de deli gibi.`),
-    text: T('You live in a building with thin walls and a neighbour who already complains about footsteps.', 'İnce duvarlı bir apartmanda oturuyorsun ve komşun ayak seslerinden bile şikâyetçi.'),
+    text: (c) =>
+      thinWalls(c)
+        ? c.t('You live in a building with thin walls and a neighbour who already complains about footsteps.', 'İnce duvarlı bir apartmanda oturuyorsun ve komşun ayak seslerinden bile şikâyetçi.')
+        : c.t('The house has room for it. Your nerves may not.', 'Evde yer var. Senin sinirlerinde var mı, orası belli değil.'),
     choices: [
       ch('buy', 'Buy the drums', 'Davulu al', (c) => {
         c.h.money(-num(c));
         c.h.closeness(kidId(c), 8);
         c.h.stat('happiness', -1);
-        return c.t(`The drums arrived. So did a letter from the building manager. ${kid(c)} is actually getting good.`, `Davul geldi. Apartman yöneticisinden bir mektup da geldi. ${kid(c)} gerçekten iyi çalmaya başlıyor.`);
+        return thinWalls(c)
+          ? c.t(`The drums arrived. So did a letter from the building manager. ${kid(c)} is actually getting good.`, `Davul geldi. Apartman yöneticisinden bir mektup da geldi. ${kid(c)} gerçekten iyi çalmaya başlıyor.`)
+          : c.t(`The drums arrived. The neighbours two gardens away now know every song ${kid(c)} is learning. ${kid(c)} is actually getting good.`, `Davul geldi. İki bahçe ötedeki komşular bile ${gen(kid(c))} öğrendiği her şarkıyı biliyor. ${kid(c)} gerçekten iyi çalmaya başlıyor.`);
       }, { requires: (c) => afford(c, num(c)), requiresLabel: 'Not enough money' }),
       ch('electric', 'Electric drums with headphones', 'Kulaklıklı elektronik davul', (c) => {
         c.h.money(-Math.round(num(c) * 1.4));
@@ -480,7 +485,7 @@ export const parentingEvents: EventDef[] = [
           return c.t(`${kid(c)} listened, thought about it and broke up with ${nmv(c, 'kp')} a month later. You were careful not to look pleased.`, `${kid(c)} dinledi, düşündü ve bir ay sonra ${wth(nmv(c, 'kp'))} ayrıldı. Sevindiğini belli etmemeye dikkat ettin.`);
         }
         c.h.closeness(kidId(c), -9);
-        return c.t(`${kid(c)} took it badly and defended ${nmv(c, 'kp')} fiercely. Christmas, birthdays and every holiday since have had a chill.`, `${kid(c)} çok kötü karşıladı ve ${acc(nmv(c, 'kp'))} hararetle savundu. O günden beri her bayramda, her doğum gününde bir soğukluk var.`);
+        return c.t(`${kid(c)} took it badly and defended ${nmv(c, 'kp')} fiercely. Christmas, birthdays and every holiday since have had a chill.`, `${kid(c)} çok kötü karşıladı ve ${acc(nmv(c, 'kp'))} hararetle savundu. O günden beri her ${trHome(c) ? 'bayramda' : 'yılbaşında'}, her doğum gününde bir soğukluk var.`);
       }, { badge: 'Risky' }),
       ch('silent', 'Keep quiet and be polite', 'Sus ve kibar ol', (c) => {
         c.h.stat('happiness', -1);
@@ -547,7 +552,7 @@ export const parentingEvents: EventDef[] = [
     setup: (c) => {
       c.vars.gp = c.rng.pick(c.h.relatives(['mother', 'father'])).person.id;
     },
-    title: (c) => c.t(`${kid(c)} came back from a weekend with your ${pGP(c)} on a sugar high, with a new bike.`, `${kid(c)}, ${pGPtr(c)} yanında geçen bir hafta sonundan şekerden uçmuş hâlde ve yeni bir bisikletle döndü.`),
+    title: (c) => c.t(`${kid(c)} came back from a weekend with your ${pGP(c)} on a sugar high, with a new bike.`, `${kid(c)}, ${pGPtr(c)} yanında geçen bir hafta sonundan şekeri fazla kaçırmış, yerinde duramaz hâlde ve yeni bir bisikletle döndü.`),
     text: T('The rules you set apparently do not apply "at Grandma and Grandpa\'s".', 'Koyduğun kuralların "babaannenin, dedenin evinde" geçerli olmadığı anlaşılıyor.'),
     choices: [
       ch('let', 'Let them have their fun', 'Bırak keyiflerini sürsünler', (c) => {
@@ -617,34 +622,7 @@ export const parentingEvents: EventDef[] = [
     ],
   }),
 
-  kidEvent('base.ad_kid_wedding_cost', 24, 38, {
-    setup: (c) => {
-      c.vars.amt = wage(c, c.rng.int(5000, 12000));
-    },
-    title: (c) => c.t(`${kid(c)} is getting married, and the question of who pays has come up.`, `${kid(c)} evleniyor ve masrafları kimin karşılayacağı meselesi açıldı.`),
-    text: (c) =>
-      inTr(c)
-        ? c.t(`The wedding hall alone is ${c.h.fmt(num(c))}. Both families have opinions about the menu and the gold.`, `Sadece düğün salonu ${c.h.fmt(num(c))}. İki ailenin de menü ve takılar hakkında fikirleri var.`)
-        : c.t(`The venue alone is ${c.h.fmt(num(c))}. Both families have opinions about the menu and the band.`, `Sadece mekân ${c.h.fmt(num(c))}. İki ailenin de menü ve müzik hakkında fikirleri var.`),
-    choices: [
-      ch('pay', 'Pay for the whole thing', 'Hepsini sen öde', (c) => {
-        c.h.money(-num(c));
-        c.h.closeness(kidId(c), 8);
-        c.h.stat('happiness', 5);
-        return c.t(`It was a beautiful wedding. You danced with ${kid(c)} and forgot every number on every invoice.`, `Çok güzel bir düğündü. ${wth(kid(c))} dans ettin ve bütün faturalardaki bütün rakamları unuttun.`);
-      }, { tone: 'good', requires: (c) => afford(c, num(c)), requiresLabel: 'Not enough savings' }),
-      ch('split', 'Split it with the other family', 'Öbür aileyle bölüşün', (c) => {
-        c.h.money(-Math.round(num(c) / 2));
-        c.h.closeness(kidId(c), 4);
-        return c.t('You split it. The negotiations over the seating plan were harder than any job you have ever had.', 'Bölüştünüz. Oturma planı pazarlıkları şimdiye kadar yaptığın her işten zordu.');
-      }),
-      ch('small', 'Suggest a small wedding', 'Küçük bir düğün öner', (c) => {
-        c.h.money(-Math.round(num(c) / 5));
-        c.h.closeness(kidId(c), -2);
-        return c.t(`A small wedding in a garden, thirty people, one long table. ${kid(c)} sulked about it for a month and calls it the best day of their life.`, `Bir bahçede, otuz kişilik, tek uzun masalı küçük bir düğün. ${kid(c)} bir ay surat astı; şimdi hayatının en güzel günü diyor.`);
-      }),
-    ],
-  }),
+  // base.ad_kid_wedding_cost moved to kid-milestones.ts (round 7): it now marks the child as married
 ];
 
 /** "her" / "him" as the object of "teach ___ to drive". */

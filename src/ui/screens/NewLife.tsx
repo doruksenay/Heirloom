@@ -9,9 +9,17 @@ import { T } from '../../i18n/ui';
 import { DailyCard } from './Daily';
 import { deviceLang } from '../app-state';
 import { LangSwitch } from './Intro';
+import { countRandomLife, randomLifeCountry, randomLivesStarted } from '../../engine/new-life';
+import { setDailyRegion } from '../../engine/daily';
 import { Icon } from '../icons';
 
+// a Turkish phone plays the Türkiye daily plan, even when the family screen (not this one) opens first
+setDailyRegion(deviceLang() === 'tr' ? 'tr' : 'global');
+
 export function NewLife({ app }: { app: AppApi }) {
+  // round 7: a Turkish phone gets the Türkiye daily on some days (engine/daily.ts dailyPlan)
+  const trDevice = deviceLang() === 'tr' || app.lang === 'tr';
+  setDailyRegion(trDevice ? 'tr' : 'global');
   const [gender, setGender] = useState<Gender>('female');
   // a new life starts where the player is likely to be: Türkiye on a Turkish phone, the US otherwise
   const [countryId, setCountry] = useState(() => (deviceLang() === 'tr' || app.lang === 'tr' ? 'tr' : 'us'));
@@ -40,7 +48,9 @@ export function NewLife({ app }: { app: AppApi }) {
   /** One tap to a fresh random family: the quickest way into the game. */
   const quickStart = () => {
     const g: Gender = Math.random() < 0.5 ? 'female' : 'male';
-    const c = app.lang === 'tr' && Math.random() < 0.6 ? getCountry('tr') : COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
+    // round 7: the first random life on a Turkish phone is in Türkiye, later ones about 80% of the time
+    const c = getCountry(randomLifeCountry(trDevice, randomLivesStarted() === 0 && !app.family, Math.random(), Math.random()));
+    countRandomLife();
     const fn = firstNames(c.id, g);
     app.start(
       newGame(

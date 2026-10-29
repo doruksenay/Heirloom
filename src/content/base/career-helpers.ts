@@ -1,6 +1,6 @@
 import type { Ctx } from '../types';
 import { wage, workKind } from './util';
-import { isJob } from './activities-careers';
+import { isJob, ladderPromote } from './activities-careers';
 
 // Small helpers for the round 4 career events (events-careers-r4*.ts).
 
@@ -15,7 +15,8 @@ export const onAny =
 
 /** Try a promotion; returns the sentence that announces it (with a leading space), or '' when it is not due. */
 export function promo(c: Ctx): string {
-  if (!c.h.promote()) return '';
+  // round 7: police and civil-service ranks come from years and rank exams, not from a lucky week
+  if (!ladderPromote(c)) return '';
   c.h.stat('happiness', 4);
   return c.t(` You were promoted to ${c.h.jobTitle()}.`, ` Terfi geldi: artık ${c.h.jobTitle()} oldun.`);
 }

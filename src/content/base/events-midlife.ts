@@ -4,7 +4,7 @@ import { salaryFor, titleFor } from '../../engine/careers';
 import { getCountry } from '../../engine/world';
 import { abl, acc, cap, dat, eligibleJobs, employee, gen, kin, loc, nm, single, wage, who, wth, officeJob, workKind, quietInMourning } from './util';
 import { divorceTerms, divorcedLine } from './relationships';
-import { ABROAD_CITIES, abroadCity, bringHome, byCountry, cityOf, didFor, foreignCityIdx, he, He, him, his, His, inTr, isAbroad, markFor, sendAbroad, type ByCountry } from './events-flavour';
+import { ABROAD_CITIES, abroadCity, bringHome, byCountry, cityOf, didFor, foreignCityIdx, he, He, him, his, His, inFlat, inTr, isAbroad, trHome, markFor, sendAbroad, type ByCountry } from './events-flavour';
 
 // Ages 25–64: work, kids, love, money, health and the small absurdities of the middle of life.
 
@@ -974,7 +974,7 @@ export const midlifeEvents: EventDef[] = [
           if (c.rng.chance(0.3)) {
             c.h.closeness(pid(c), -4);
             c.h.stat('happiness', 3);
-            return c.t(`The guilt worked. ${nm(c)} stayed, and mentions it every holiday.`, `Vicdan azabı işe yaradı. ${nm(c)} kaldı ve her bayram bunu hatırlatıyor.`);
+            return c.t(`The guilt worked. ${nm(c)} stayed, and mentions it every holiday.`, `Vicdan azabı işe yaradı. ${nm(c)} kaldı ve her ${trHome(c) ? 'bayram' : 'yılbaşı'} bunu hatırlatıyor.`);
           }
           c.h.closeness(pid(c), -10);
           sendAbroad(c, pid(c), amt(c, 'city'));
@@ -2053,7 +2053,7 @@ export const midlifeEvents: EventDef[] = [
     },
     title: (c) =>
       c.t(
-        `Your ${c.vars.years}-year high school reunion is this Saturday.`,
+        `Your ${c.vars.years}-year school reunion is this Saturday.`,
         `Bu cumartesi liseden sınıfça buluşuyorsunuz. Mezun olalı tam ${c.vars.years} yıl olmuş.`,
       ),
     text: (c) => c.t('Someone made a group chat. The class clown is now a dentist.', 'Biri mesaj grubu kurdu. Sınıfın şakacısı artık diş hekimi.'),
@@ -2173,6 +2173,7 @@ export const midlifeEvents: EventDef[] = [
     maxAge: 64,
     weight: 4,
     cooldown: 8,
+    when: (c) => inFlat(c),
     title: (c) => c.t('Building meeting tonight. Attendance "mandatory."', 'Bu akşam apartman toplantısı var. Katılım "zorunlu".'),
     text: (c) =>
       c.t(

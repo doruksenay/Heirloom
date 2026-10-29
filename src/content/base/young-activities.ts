@@ -6,6 +6,14 @@ import { inTr } from './events-flavour';
 // Round 4: everyday activities for children, teens and young adults (outside school).
 // Every repeatable line goes through `say`, so a line does not come back until most of its pool has been seen.
 
+// round 7: the grandmother lines only when a grandmother is alive on record; otherwise a line in the same slot (same rng)
+const GRAN_DRAW: Pair = ['You drew a portrait of your grandmother. She framed it and put it above the TV, next to the wedding photo.', 'Büyükanneni çizdin. Çerçeveletip televizyonun üstüne, düğün fotoğrafının yanına astı.'];
+const GRAN_DRAW_ALT: Pair = ['You drew the whole street, with every cat on it. It went on the fridge, next to the bills.', 'Bütün sokağı, içindeki bütün kedilerle birlikte çizdin. Buzdolabına, faturaların yanına asıldı.'];
+const GRAN_COOK: Pair = ['You followed your grandmother\'s recipe over the phone. She kept saying "a bit" instead of numbers. It worked.', 'Büyükannenin tarifini telefonda takip ettin. Ölçü yerine hep "azıcık" dedi. Oldu.'];
+const GRAN_COOK_ALT: Pair = ['You followed a recipe from a video. The cook kept saying "a pinch" instead of numbers. It worked.', 'Bir videodaki tarifi takip ettin. Aşçı ölçü yerine hep "bir tutam" dedi. Oldu.'];
+const granAlive = (c: Ctx) => c.p.relations.some((r) => r.kind === 'grandparent' && c.s.people[r.personId]?.gender === 'female' && c.s.people[r.personId]?.deathYear === undefined);
+const withGran = (c: Ctx, pool: Pair[], line: Pair, alt: Pair) => (granAlive(c) ? pool : pool.map((x) => (x === line ? alt : x)));
+
 const DRAW: Pair[] = [
   ['You drew your whole family as potatoes with legs. It went straight on the fridge.', 'Bütün aileni bacaklı patatesler olarak çizdin. Doğruca buzdolabına asıldı.'],
   ['You drew a horse. Everyone said "what a lovely dog". You let them believe it.', 'Bir at çizdin. Herkes "Ne güzel köpek" dedi. İnanmalarına izin verdin.'],
@@ -14,7 +22,7 @@ const DRAW: Pair[] = [
   ['You drew a comic strip about the cat. The cat was not consulted.', 'Kedi hakkında bir çizgi roman çizdin. Kediye danışılmadı.'],
   ['You coloured inside the lines the whole time. You felt powerful and slightly bored.', 'Baştan sona çizgilerin içinde kaldın. Kendini güçlü ve biraz sıkılmış hissettin.'],
   ['You painted with your fingers and then, for some reason, your elbows.', 'Parmaklarınla boyadın, sonra nedense dirseklerinle.'],
-  ['You drew a portrait of your grandmother. She framed it and put it above the TV, next to the wedding photo.', 'Büyükanneni çizdin. Çerçeveletip televizyonun üstüne, düğün fotoğrafının yanına astı.'],
+  GRAN_DRAW,
   ['You designed your dream house. It has a slide instead of stairs and a room just for snacks.', 'Hayalindeki evi tasarladın. Merdiven yerine kaydırak ve sadece atıştırmalık için bir oda var.'],
   ['You drew forty cars in a row, each one faster than the last. You can tell by the lines behind them.', 'Art arda kırk araba çizdin; her biri bir öncekinden hızlı. Arkalarındaki çizgilerden belli.'],
 ];
@@ -58,7 +66,7 @@ const NIGHT_OUT: Pair[] = [
   ['You went bowling and discovered you are terrible at it but excellent at celebrating other people\'s strikes.', 'Bowlinge gittin ve bu işte berbat olduğunu ama başkalarının strike\'larını kutlamakta harika olduğunu keşfettin.'],
   ['A friend\'s birthday dinner turned into a long walk by the water, talking about where your lives are going.', 'Bir arkadaşının doğum günü yemeği, hayatlarınızın nereye gittiği üzerine konuşarak su kenarında uzun bir yürüyüşe dönüştü.'],
   ['You went to an open-air cinema and spent the film trying to keep moths out of your popcorn.', 'Açık hava sinemasına gittin ve bütün filmi patlamış mısırından pervaneleri uzak tutmaya çalışarak geçirdin.'],
-  ['You went dancing at a wedding of someone you barely knew. Somehow you led the conga line.', 'Pek tanımadığın birinin düğününde dans ettin. Nasıl olduysa halayı sen çektin.'],
+  ['You went dancing at a wedding of someone you barely knew. Somehow you led the conga line.', 'Pek tanımadığın birinin düğününde dans ettin. Nasıl olduysa pistte herkesi peşinden sürükleyen sen oldun.'],
 ];
 
 const LANGUAGE: Pair[] = [
@@ -102,7 +110,7 @@ const VOLUNTEER: Pair[] = [
 
 const COOK: Pair[] = [
   ['You cooked a real meal from scratch. It took two hours and was gone in eight minutes. That is cooking.', 'Sıfırdan gerçek bir yemek pişirdin. İki saat sürdü, sekiz dakikada bitti. Yemek pişirmek budur.'],
-  ['You followed your grandmother\'s recipe over the phone. She kept saying "a bit" instead of numbers. It worked.', 'Büyükannenin tarifini telefonda takip ettin. Ölçü yerine hep "azıcık" dedi. Oldu.'],
+  GRAN_COOK,
   ['You made bread. It was a brick, but a delicious brick.', 'Ekmek yaptın. Bir tuğlaydı ama lezzetli bir tuğla.'],
   ['You cooked a big pot of soup and ate it for four days. On day four it was the best.', 'Kocaman bir tencere çorba yaptın ve dört gün yedin. Dördüncü gün en güzeliydi.'],
   ['You tried a recipe from a country you have never visited. Now you want to visit it.', 'Hiç gitmediğin bir ülkenin yemek tarifini denedin. Şimdi oraya gitmek istiyorsun.'],
@@ -126,7 +134,7 @@ export const youngActivities: ActivityDef[] = [
     run: (c) => {
       c.h.stat('happiness', 3);
       c.h.stat('smarts', 1);
-      return say(c, 'young.draw', DRAW);
+      return say(c, 'young.draw', withGran(c, DRAW, GRAN_DRAW, GRAN_DRAW_ALT));
     },
   },
   {
@@ -227,7 +235,7 @@ export const youngActivities: ActivityDef[] = [
       c.h.stat('health', 2);
       c.h.stat('happiness', 2);
       c.h.stat('smarts', 1);
-      return say(c, 'young.cook', COOK);
+      return say(c, 'young.cook', withGran(c, COOK, GRAN_COOK, GRAN_COOK_ALT));
     },
   },
 ];

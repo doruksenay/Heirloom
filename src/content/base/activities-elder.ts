@@ -99,7 +99,7 @@ const BACKGAMMON_LOSE: Pair[] = [
   ['You were winning until you started explaining why you were winning.', 'Neden kazandığını anlatmaya başlayana kadar kazanıyordun.'],
   ['You lost to a ten-year-old visiting her grandfather. She was very polite about it, which was worse.', 'Dedesini ziyarete gelmiş on yaşında bir kıza yenildin. Çok kibardı; bu daha da kötüydü.'],
   ['You lost, demanded a rematch and lost the rematch. You are now planning a re-rematch.', 'Kaybettin, rövanş istedin, rövanşı da kaybettin. Şimdi rövanşın rövanşını planlıyorsun.'],
-  ['Your opponent rolled doubles four times in a row. You are filing a complaint with the universe.', 'Rakibin dört kez üst üste çift attı. Evrene resmi şikâyette bulunuyorsun.'],
+  ['Your opponent rolled doubles four times in a row. You are filing a complaint with the universe.', 'Rakibin dört kez üst üste çift attı. Bu işte bir hile var, kimseye söylemesen de biliyorsun.'],
   ['You lost, but you won the argument afterwards about whether you really lost.', 'Kaybettin ama ardından gerçekten kaybedip kaybetmediğin tartışmasını kazandın.'],
   ['The onlookers gave you advice on every move. You ignored all of it and lost anyway.', 'Seyirciler her hamlende akıl verdi. Hiçbirini dinlemedin ve yine de kaybettin.'],
   ['You lost to your oldest rival. You shook hands, then complained about it to the pigeons.', 'En eski rakibine yenildin. El sıkıştınız, sonra durumu güvercinlere şikâyet ettin.'],
@@ -122,7 +122,7 @@ const VOLUNTEER: Pair[] = [
 
 const FLEA: ((amt: string) => Pair)[] = [
   (a) => [`You sold a box of old cassettes for ${a}. You bought a lamp on the way home.`, `Bir kutu eski kaseti ${a} karşılığında sattın. Dönüşte bir lamba aldın.`],
-  (a) => [`You haggled over a teapot all day and went home with ${a}. Worth it.`, `Bütün gün bir çaydanlık için pazarlık ettin ve eve ${a} ile döndün. Değdi.`],
+  (a) => [`You haggled over a teapot all day and went home with ${a}. Worth it.`, `Bütün gün bir çaydanlık için pazarlık ettin ve eve ${a} ile döndün. Pazarlık da alışverişin tadı.`],
   (a) => [`You sold your old encyclopedias for ${a}. A student bought them to use as a monitor stand.`, `Eski ansiklopedilerini ${a} karşılığında sattın. Bir öğrenci onları monitör altlığı yapmak için aldı.`],
   (a) => [`You sold a box of old records for ${a} and told the buyer the story of each one, free of charge.`, `Bir kutu eski plağı ${a} karşılığında sattın ve alıcıya her birinin hikâyesini bedavaya anlattın.`],
   (a) => [`You made ${a} and spent most of it at the stall next to yours.`, `Tezgâhından ${a} kazandın ve çoğunu yan tezgâhta harcadın.`],

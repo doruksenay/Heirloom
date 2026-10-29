@@ -55,6 +55,7 @@ export const campusLaterEvents: EventDef[] = [
         id: 'speech',
         label: (c) => c.t('Give a speech about failure', 'Başarısızlık üzerine konuş'),
         resolve: (c) => {
+          offered(c);
           c.h.achieve('honorary');
           c.h.stat('happiness', 10);
           return c.t(
@@ -68,6 +69,7 @@ export const campusLaterEvents: EventDef[] = [
         id: 'short',
         label: (c) => c.t('Keep it short and go to lunch', 'Kısa kes, yemeğe geç'),
         resolve: (c) => {
+          offered(c);
           c.h.achieve('honorary');
           c.h.stat('happiness', 7);
           return c.t(
@@ -81,7 +83,8 @@ export const campusLaterEvents: EventDef[] = [
         id: 'decline',
         label: (c) => c.t('Politely decline', 'Kibarca reddet'),
         resolve: (c) =>
-          (c.h.flag('_honorary_asked'),
+          (offered(c),
+          c.h.flag('_honorary_asked'),
           c.t(
             'You said that you had not earned it. The rector said that was exactly why you had. You still said no.',
             'Bunu hak etmediğini söyledin. Rektör tam da bu yüzden hak ettiğini söyledi. Sen yine de kabul etmedin.',
@@ -91,14 +94,32 @@ export const campusLaterEvents: EventDef[] = [
   },
 ];
 
-/** The honorary doctorate is a scheduled moment from 55, for a graduate with something to show (or a donor). */
+/**
+ * The honorary doctorate is a scheduled moment from 55, for a graduate with something to show (or a donor).
+ * Round 7 (review 6 §3.14: 45 doctorates in 40 dynasties): it needs two notable achievements or a scholarship,
+ * comes at a few percent a year, and never to two generations in a row of one family.
+ */
+const HONORARY = 'campus.honorary';
+const notableCount = (s: GameState) => NOTABLE.filter((a) => has(s, a)).length;
 export function campusSchedule(c: Ctx, current: string | null): string | null {
   if (current || c.age < 55 || c.p.jailYears > 0) return current;
   const s = c.s;
   if (has(s, 'honorary') || '_honorary_asked' in c.p.flags) return current;
   if (!notable(s)) return current;
-  return c.rng.chance(has(s, 'scholarship_fund') ? 0.3 : 0.15) ? 'campus.honorary' : current;
+  const last = s.dynasty.eventMemory?.[HONORARY];
+  // the same rng call as before whenever the old rules reached it, so seeds stay close; the new gates only say no
+  // a life that has the honorary-doctorate goal gets a fair chance at it; everyone else rarely (no extra rng call)
+  const goal = s.player.goals?.some((g) => g.id === 'campus_honorary' && !g.done) ?? false;
+  const roll = c.rng.chance(goal ? 0.15 : has(s, 'scholarship_fund') ? 0.06 : 0.02);
+  if (last !== undefined && s.dynasty.lives.length - last < 2) return current;
+  if (notableCount(s) < 2 && !has(s, 'scholarship_fund')) return current;
+  return roll ? HONORARY : current;
 }
+
+/** Remembers which life of the dynasty was offered the doctorate (dynasty.eventMemory, as game.ts does for random events). */
+const offered = (c: Ctx) => {
+  (c.s.dynasty.eventMemory ??= {})[HONORARY] = c.s.dynasty.lives.length;
+};
 
 /** Yearly: a full professorship counts even after the player changes jobs. */
 export function campusLaterYear(c: Ctx): void {

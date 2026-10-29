@@ -2,6 +2,7 @@ import type { Ctx } from '../types';
 import type { Pair } from './lines';
 import { PART_TIME_JOBS, isPupil, ownsWork, workKind, type WorkKind } from './util';
 import { COMMUNITY, COMMUNITY_JOBS, JOB_R4, PART_TIME } from './work-lines-r4';
+import { trHome } from './events-flavour';
 
 // Work lines by the kind of working day (playtest 3, problem 1: a miner answering emails on a Sunday, a fire
 // chief zeroing the inbox). `workPool(c)` gives the kind's pool plus a few lines written for the exact job,
@@ -9,7 +10,7 @@ import { COMMUNITY, COMMUNITY_JOBS, JOB_R4, PART_TIME } from './work-lines-r4';
 
 /** Fits every kind of employed work: office, shifts, uniforms, classrooms. */
 const COMMON: Pair[] = [
-  ['You did the work of two people this month. The second person was also you, slightly more tired.', 'Bu ay iki kişinin işini yaptın. İkinci kişi de sendin, biraz daha yorgun hâlin.'],
+  ['You did the work of two people this month. The second person was also you, slightly more tired.', 'Bu ay iki kişilik iş çıkardın; ikincisi de sendin, sadece daha yorgunu.'],
   ['You came in on your day off because something needed doing. Something always needs doing.', 'Bir işin yapılması gerektiği için izin gününde geldin. Hep yapılması gereken bir iş vardır.'],
   ['You beat your own record this month. Nobody else keeps track. You do.', 'Bu ay kendi rekorunu kırdın. Kimse takip etmiyor. Sen ediyorsun.'],
   ['You came home too tired to talk, proud of a long, honest day. Then another. Then another.', 'Eve konuşamayacak kadar yorgun ama uzun ve dürüst bir günün gururuyla döndün. Sonra bir gün daha. Bir gün daha.'],
@@ -374,6 +375,20 @@ const partTimer = (c: Ctx) => PART_TIME_JOBS.has(c.p.jobId ?? '') && (isPupil(c)
 
 /** The "work extra hard" pool for the player's job: kind pool (or the owner's) plus the job's own lines. */
 export function workPool(c: Ctx): Pair[] {
+  // round 7: bayram is Türkiye's; elsewhere the same line is a public holiday (same pool size, so the same rng)
+  return trHome(c) ? workPoolAll(c) : workPoolAll(c).map(noBayram);
+}
+
+/** Turkish holiday lines for lives outside Türkiye: "Bayramda…" becomes "Resmî tatilde…". */
+const NO_BAYRAM: Record<string, string> = {
+  'Bayramda bile çalıştın. Biri sana bir tabak yemek getirip kahraman dedi.': 'Resmî tatilde bile çalıştın. Biri sana bir tabak yemek getirip kahraman dedi.',
+  'Bayramı on bin metre yükseklikte çalışarak geçirdin. Ekip plastik bıçakla kesilmiş bir pastayı paylaştı.': 'Resmî tatili on bin metre yükseklikte çalışarak geçirdin. Ekip plastik bıçakla kesilmiş bir pastayı paylaştı.',
+  'Bayramda bile görevdeydin. Biri sana bir tabak yemek getirip kahraman dedi. Bu sefer neredeyse doğruydu.': 'Resmî tatilde bile görevdeydin. Biri sana bir tabak yemek getirip kahraman dedi. Bu sefer neredeyse doğruydu.',
+  'Bayramda bile çalıştın; işin bayram nedir bilmiyor.': 'Resmî tatilde bile çalıştın; işin tatil nedir bilmiyor.',
+};
+const noBayram = (l: Pair): Pair => (NO_BAYRAM[l[1]] ? [l[0], NO_BAYRAM[l[1]]] : l);
+
+function workPoolAll(c: Ctx): Pair[] {
   const id = c.p.jobId ?? '';
   const extra = JOB[id] ?? JOB_R4[id] ?? [];
   if (ownsWork(c)) return [...OWNER, ...extra];

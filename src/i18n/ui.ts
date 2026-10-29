@@ -346,6 +346,7 @@ export const TR: Record<string, string> = {
   'A pocket watch, a ring, a piano. Heirlooms pass down with your home and your money, and each one has a power.':
     'Bir cep saati, bir yüzük, bir piyano. Yadigârlar evin ve paranla birlikte sonraki kuşağa geçer ve her birinin bir gücü vardır.',
   'Once per life, rewind one event': 'Her hayatta bir olayı geri al',
+  'Pocket watch: rewind one moment in each life': 'Cep saati: her hayatta bir anı geri sarar',
   'One question before you start': 'Başlamadan önce bir soru',
   'Can we collect anonymous usage data and crash reports? It shows us where players get stuck and what breaks. No names, no saves, nothing that identifies you. You can change this any time in Settings.':
     'Anonim kullanım verisi ve çökme raporu toplayabilir miyiz? Oyuncuların nerede takıldığını ve neyin bozulduğunu görmemizi sağlar. İsim yok, kayıt yok, seni tanıtan hiçbir şey yok. Bunu istediğin zaman Ayarlar’dan değiştirebilirsin.',
@@ -365,6 +366,8 @@ export const TR: Record<string, string> = {
   'This is where Heirloom begins. Continue as one of your children: they inherit the family home, the heirlooms and their share of your money.':
     'Heirloom asıl şimdi başlıyor. Çocuklarından biri olarak devam et: aile evi, yadigârlar ve paradan payı ona kalır.',
   'See the family tree': 'Soy ağacını gör',
+  'Generation {n}. {Kin} life is now part of the family tree, and everything they left behind is yours.':
+    '{n}. kuşak. {Kin} hayatı artık soy ağacında; geride bıraktığı her şey artık senin.',
   "Generation {n}. Your parent's life is now part of the family tree, and everything they left behind is yours.":
     '{n}. kuşak. Annenin ya da babanın hayatı artık soy ağacında; geride bıraktığı her şey artık senin.',
   // systems (round 4): the free street activities group and the dating preference setting

@@ -3,6 +3,7 @@ import type { Rng } from '../engine/rng';
 import type { JobDef } from '../engine/careers';
 import type { RibbonDef } from '../engine/ribbons';
 import type { GoalDef } from '../engine/goals';
+import type { Need } from '../engine/continuity';
 
 export type Category =
   | 'childhood'
@@ -106,6 +107,16 @@ export interface EventDef {
   /** For events without choices: apply effects; return value overrides the log text. */
   apply?: (c: Ctx) => string | void;
   tone?: Tone;
+  /**
+   * Round 7: state the event takes for granted (a trip, living together, owning, a job, a school, a living parent…).
+   * The engine checks every need before it opens the event at random or on schedule (engine/continuity.ts).
+   */
+  needs?: Need[];
+  /**
+   * Round 7: whether the event may fire while the player is in prison. Unset: never inside. `true`: inside and
+   * outside. `'only'`: only inside (prison life).
+   */
+  inJail?: boolean | 'only';
 }
 
 export type ActivityGroup = 'Mind & Body' | 'School' | 'Love' | 'Family' | 'Campus' | 'Career' | 'Business' | 'Fame' | 'Money' | 'Street' | 'Pets' | 'After dark';

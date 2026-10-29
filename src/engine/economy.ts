@@ -8,8 +8,10 @@ import { currentTier } from './home';
  * - Take-home pay is 75% of the gross salary.
  * - Living costs: the country's cost of living, shared with a partner, plus children, plus
  *   lifestyle: households spend part of whatever they earn above the basics.
- * - Retirees get a pension of half their last salary, between 60% and 90% of their living costs,
- *   so savings slowly shrink in old age instead of growing. From 70, care and medicine cost more each year.
+ * - Retirees get a pension by years of service and last salary (round 7, see pensionFor), never below a minimum
+ *   pension. From 70, care and medicine cost more each year.
+ * - Round 7: a household saves more while its savings are below a year of living costs; low pay is topped up to the
+ *   basic costs; a young adult with a wage in the parents' home chips in; mortgages carry the country's real rate.
  * - Safety net: an adult without a job who is already in debt gets enough help to cover the year,
  *   so debt does not snowball.
  * - On top (round 2, so fortunes do not snowball over generations): spending grows with savings
@@ -38,6 +40,13 @@ export const LIFESTYLE_SHARE = 0.85;
  * spare coin spent, 5% interest outgrew the repayments and a working life could sink for decades).
  */
 export const LIFESTYLE_SHARE_IN_DEBT = 0.45;
+/**
+ * The same share while savings are still below SAVINGS_CUSHION years of living costs (round 7): a household first puts
+ * money aside for a rainy day. With 85% of every spare coin spent, most households lived a few hundred dollars from
+ * zero, and any small bill tipped 81% of Turkish lives into a debt warning.
+ */
+export const LIFESTYLE_SHARE_SAVING = 0.6;
+export const SAVINGS_CUSHION = 1;
 /**
  * Lifestyle creep on savings: each year a household spends this share of its savings above a cushion of
  * WEALTH_CUSHION years of living costs (a bigger car, nicer holidays, helping the kids). Keeps family
@@ -90,21 +99,56 @@ export const livesWithParents = (p: Player, age: number, salary: number) =>
   !salary && age < PARENTS_HOME_AGE && !p.retired && !p.home.owned && currentTier(p) === 'parents';
 
 // ---- mortgages (review 5 §3.7: a home loan was only a negative balance, and a working owner was told to find a job)
-/** Interest over the whole loan per year of its term (20 years: 25% on top of the amount borrowed, as before). */
+/**
+ * Real yearly interest on a home loan by country (round 7: the old loan added a flat 1.25% a year, so a ₺1.2M studio
+ * cost 20 × ₺37K). Money in the game has no inflation, so these are real rates: 3–6% in most of Europe and North
+ * America, more where credit is dear (Türkiye, Brazil, Mexico), little in Japan.
+ */
+export const MORTGAGE_RATE: Record<string, number> = {
+  us: 0.055, ca: 0.05, uk: 0.045, de: 0.035, fr: 0.035, nl: 0.04, es: 0.035, it: 0.035, jp: 0.015, br: 0.09, mx: 0.085, tr: 0.1,
+};
+export const DEFAULT_MORTGAGE_RATE = 0.05;
+export const mortgageRate = (countryId?: string) => (countryId && MORTGAGE_RATE[countryId]) || DEFAULT_MORTGAGE_RATE;
+/** Kept for old callers: the flat rate the loans used before round 7. */
 export const MORTGAGE_INTEREST_PER_YEAR = 0.0125;
 export const MORTGAGE_TERM = 20;
 /** The last instalment falls before this age when the loan is taken late. */
 export const MORTGAGE_END_AGE = 70;
+/** A bank lends only while the yearly instalment stays within this share of take-home pay. */
+export const MORTGAGE_MAX_SHARE = 0.4;
 
-/** A new home loan of `principal` game dollars for a borrower of this age. No RNG. */
-export function newMortgage(principal: number, age: number): Mortgage {
-  const term = Math.max(5, Math.min(MORTGAGE_TERM, MORTGAGE_END_AGE - age));
-  const balance = Math.round(principal * (1 + MORTGAGE_INTEREST_PER_YEAR * term));
-  return { balance, payment: Math.ceil(balance / term), yearsLeft: term, term, principal: Math.round(principal) };
+const loanTerm = (age: number) => Math.max(5, Math.min(MORTGAGE_TERM, MORTGAGE_END_AGE - age));
+/** The yearly instalment that pays off `principal` over `term` years at `rate` (an annuity). */
+export const annuity = (principal: number, rate: number, term: number) => (rate > 0 ? (principal * rate) / (1 - Math.pow(1 + rate, -term)) : principal / term);
+
+/**
+ * A new home loan of `principal` game dollars for a borrower of this age, at the country's real rate: equal yearly
+ * instalments, and `balance` is what is still to pay, interest included (as before). No RNG.
+ */
+export function newMortgage(principal: number, age: number, countryId?: string): Mortgage {
+  const term = loanTerm(age);
+  const rate = mortgageRate(countryId);
+  const payment = Math.ceil(annuity(principal, rate, term));
+  return { balance: payment * term, payment, yearsLeft: term, term, principal: Math.round(principal), rate };
 }
 
-/** What the home is worth to its owner: its value minus what is still owed on it (0 when not owned). */
-export const homeEquity = (home: Home) => (home.owned ? Math.max(0, home.value - (home.loan?.balance ?? 0)) : 0);
+/** Whether a bank lends `amount` to this borrower: the instalment must fit in MORTGAGE_MAX_SHARE of take-home pay. */
+export function canBorrow(age: number, salary: number, amount: number, countryId?: string): boolean {
+  if (amount <= 0) return true;
+  if (!salary) return false;
+  return annuity(amount, mortgageRate(countryId), loanTerm(age)) <= MORTGAGE_MAX_SHARE * salary * NET_PAY;
+}
+
+/** What it takes to clear the loan today: the remaining instalments discounted at its rate (old loans: the balance). */
+export function mortgagePayoff(loan: Mortgage | undefined): number {
+  if (!loan) return 0;
+  if (!loan.rate || loan.yearsLeft <= 0) return loan.balance;
+  return Math.min(loan.balance, Math.round(annuityValue(loan.payment, loan.rate, loan.yearsLeft)));
+}
+const annuityValue = (payment: number, rate: number, years: number) => (payment * (1 - Math.pow(1 + rate, -years))) / rate;
+
+/** What the home is worth to its owner: its value minus what it would take to clear the loan (0 when not owned). */
+export const homeEquity = (home: Home) => (home.owned ? Math.max(0, home.value - mortgagePayoff(home.loan)) : 0);
 
 /** This year's mortgage instalment (0 without a loan). */
 export const mortgagePayment = (p: Player) => (p.home.owned && p.home.loan ? Math.min(p.home.loan.payment, p.home.loan.balance) : 0);
@@ -127,24 +171,59 @@ export function payMortgage(p: Player): boolean {
 export const HOME_GROWTH = 0.01;
 /** Owning your home cuts living costs (no rent). */
 export const OWNER_DISCOUNT = 0.7;
-export const PENSION_RATE = 0.5;
+/**
+ * Pensions (round 7): each year of service earns PENSION_ACCRUAL of the last gross salary, up to PENSION_MAX_RATE
+ * (40 years: 60% of the gross, about 80% of the take-home pay), never less than the minimum pension of PENSION_MIN of
+ * the household's basic living costs. A forty-year career no longer ends in a "final warning" from the bank.
+ */
+export const PENSION_ACCRUAL = 0.015;
+export const PENSION_MAX_RATE = 0.6;
 export const PENSION_MIN = 0.7;
-export const PENSION_MAX = 0.95;
+/** Kept for old callers: the pension before round 7 was half the last salary. */
+export const PENSION_RATE = 0.5;
 /** Age from which an adult without a job lives on a pension. */
 export const PENSION_AGE = 65;
+/** A young adult with a wage who still lives with the parents pays this share of the household's basic costs. */
+export const PARENTS_HOME_SHARE = 0.25;
+/**
+ * Low pay is topped up to this share of the household's basic costs (in-work benefits, round 7): a full-time job never
+ * leaves a household short of the basics, while the jobless get odd jobs and benefits and, in debt, the safety net.
+ */
+export const IN_WORK_FLOOR = 1;
 
 export interface Budget {
   /** Take-home pay this year. */
   pay: number;
   /** Living costs this year. */
   cost: number;
-  /** Pension, benefits or odd jobs this year (no job only). */
+  /** Pension, benefits or odd jobs this year, or the top-up of a low wage. */
   support: number;
 }
 
-/** Pension for a year whose living costs are `cost`. */
-export function pensionFor(lastSalary: number | undefined, cost: number): number {
-  return Math.min(PENSION_MAX * cost, Math.max(PENSION_MIN * cost, PENSION_RATE * (lastSalary ?? 0)));
+/** Economy bookkeeping on the player (p.ext.econ; optional, so old saves load). */
+interface EconExt {
+  /** Years in a full-time job (prison years and part-time jobs do not count). */
+  service?: number;
+}
+const econ = (p: Pick<Player, 'ext'>): EconExt => ((p.ext ??= {}).econ ??= {}) as EconExt;
+
+/** Years of service so far. Older saves and heirs who take over mid-career get an estimate from their age. */
+export function serviceYears(p: Pick<Player, 'ext' | 'jobId' | 'retired' | 'lastSalary' | 'birthYear'>, age: number): number {
+  const e = p.ext?.econ as EconExt | undefined;
+  if (e?.service !== undefined) return e.service;
+  return p.jobId || p.retired || p.lastSalary ? Math.round(Math.max(0, Math.min(40, age - 22)) * 0.85) : 0;
+}
+
+/** Books one more year of full-time work (game.ts yearlyTick). */
+export function addServiceYear(p: Player, age: number): void {
+  const e = econ(p);
+  e.service = (e.service ?? serviceYears(p, age)) + 1;
+}
+
+/** The yearly pension of a player of this age whose basic living costs are `basic`. */
+export function pensionFor(p: Pick<Player, 'ext' | 'jobId' | 'retired' | 'lastSalary' | 'birthYear'>, basic: number, age: number): number {
+  const earned = Math.min(PENSION_MAX_RATE, PENSION_ACCRUAL * serviceYears(p, age)) * (p.lastSalary ?? 0);
+  return Math.max(PENSION_MIN * basic, earned);
 }
 
 /**
@@ -153,32 +232,36 @@ export function pensionFor(lastSalary: number | undefined, cost: number): number
  */
 export function yearBudget(p: Player, age: number, salary: number, partner: boolean, kidsAtHome: number): Budget {
   const country = getCountry(p.countryId);
+  const col = country.costOfLiving;
   const pay = salary * NET_PAY;
   if (age < 18) return { pay, cost: 0, support: 0 };
-  let cost = country.costOfLiving * (partner ? 0.7 : 1) * (1 + kidsAtHome * 0.22);
-  const atHome = livesWithParents(p, age, salary);
-  if (atHome) cost = 0; // still living with the parents: no rent, no bills
+  if (p.jailYears > 0) return { pay: 0, cost: 0, support: 0 };
+  const basic = col * (partner ? 0.7 : 1) * (1 + kidsAtHome * 0.22);
+  let cost = basic;
+  // a young adult still in the parents' home: no rent; with a wage (a part-time job too) they chip in
+  const atParents = age < PARENTS_HOME_AGE && !p.retired && !p.home.owned && currentTier(p) === 'parents';
+  if (atParents) cost = salary ? basic * PARENTS_HOME_SHARE : 0;
   else if (p.school === 'university') cost *= 0.2; // student life
   else if (!salary && age < 23 && !p.retired) cost = 0; // between homes, still looked after
-  // the mortgage instalment comes first: the household spends from what is left after it
-  const instalment = mortgagePayment(p);
-  cost += (p.money < 0 ? LIFESTYLE_SHARE_IN_DEBT : LIFESTYLE_SHARE) * Math.max(0, pay - cost - instalment);
-  if (p.home.owned) cost *= OWNER_DISCOUNT;
-  cost += instalment;
-  if (age >= 70) cost += country.costOfLiving * Math.min(0.5, 0.03 * (age - 69)); // care and medicine
-  if ('debt_plan' in p.flags && p.money < 0) cost *= 0.9; // a repayment plan: fewer takeaways, no holidays
-  if (p.jailYears > 0) return { pay: 0, cost: 0, support: 0 };
   let support = 0;
   if (!salary) {
-    if (p.retired || age >= PENSION_AGE) support = pensionFor(p.lastSalary, cost);
-    else if (age >= 23 && !atHome) support = country.costOfLiving * 0.7; // odd jobs and benefits
-  }
-  // on top of the living costs the pension is measured against: spending that grows with savings, and interest
+    if (p.retired || age >= PENSION_AGE) support = pensionFor(p, basic, age);
+    else if (age >= 23 && !atParents) support = col * 0.7; // odd jobs and benefits
+  } else if (!atParents && p.school !== 'university') support = Math.max(0, IN_WORK_FLOOR * cost - pay);
+  // the mortgage instalment comes first: the household spends from what is left after it
+  const instalment = mortgagePayment(p);
+  const share = p.money < 0 ? LIFESTYLE_SHARE_IN_DEBT : p.money < SAVINGS_CUSHION * col ? LIFESTYLE_SHARE_SAVING : LIFESTYLE_SHARE;
+  cost += share * Math.max(0, pay + support - cost - instalment);
+  if (p.home.owned) cost *= OWNER_DISCOUNT;
+  cost += instalment;
+  if (age >= 70) cost += col * Math.min(0.5, 0.03 * (age - 69)); // care and medicine
+  if ('debt_plan' in p.flags && p.money < 0) cost *= 0.9; // a repayment plan: fewer takeaways, no holidays
+  // on top: spending that grows with savings, and interest
   if (age >= 23) {
-    cost += WEALTH_SPEND * Math.max(0, p.money - WEALTH_CUSHION * country.costOfLiving);
-    cost += RICH_SPEND * Math.max(0, p.money - RICH_CUSHION * country.costOfLiving);
+    cost += WEALTH_SPEND * Math.max(0, p.money - WEALTH_CUSHION * col);
+    cost += RICH_SPEND * Math.max(0, p.money - RICH_CUSHION * col);
   }
-  if (p.home.owned) cost += homeUpkeep(p.home.value, pay + support, country.costOfLiving);
+  if (p.home.owned) cost += homeUpkeep(p.home.value, pay + support, col);
   const unsecured = -p.money - homeEquity(p.home);
   if (p.money < 0 && unsecured > 0) cost += DEBT_RATE * unsecured;
   return { pay, cost, support };
@@ -195,5 +278,5 @@ export function safetyNet(p: Player, age: number, b: Budget): number {
 export function yearlyIncome(p: Player, salary: number): number {
   if (salary) return salary * NET_PAY;
   const country = getCountry(p.countryId);
-  return p.retired ? pensionFor(p.lastSalary, country.costOfLiving) : 0;
+  return p.retired ? pensionFor(p, country.costOfLiving, PENSION_AGE) : 0;
 }

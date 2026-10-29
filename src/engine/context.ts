@@ -1,9 +1,11 @@
 import type { Ctx, Helpers } from '../content/types';
-import type { Gender, GameState, Lang, Person, RelationKind, Tone } from './types';
+import type { Gender, GameState, Lang, LogEntry, Person, RelationKind, Tone } from './types';
 import { createRng } from './rng';
+import { changeStat } from './stats';
 import { familyNamePool, getCountry } from './world';
 import { allJobs } from '../content/registry';
-import { CAREER_TOP_MIN_LEVELS, titleFor } from './careers';
+import { CAREER_TOP_MIN_LEVELS, RANK_RULES, titleFor } from './careers';
+import { kinNamesTr } from '../content/base/kin-names';
 
 export const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(v)));
 
@@ -279,6 +281,13 @@ export function relocaliseJobs(s: GameState): void {
   for (const life of s.dynasty.lives) if (life.career) life.career = localTitle(s, life.career) ?? life.career;
 }
 
+/**
+ * Round 7 (continuity): a debug tap on every life-log line, for scripts/continuity-scan.ts and
+ * tests/continuity.test.ts. `src` is the event id the engine is running (openEvent / choose set it); scripts set it
+ * around activities and interactions. Unused in the app: no state, no RNG.
+ */
+export const logTap: { fn?: (s: GameState, e: LogEntry, src: string | undefined) => void; src?: string } = {};
+
 export function makeCtx(s: GameState, vars: Record<string, string | number> = {}): Ctx {
   const p = s.player;
   const rng = createRng(s.rng, (v) => (s.rng = v));
@@ -286,13 +295,15 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
 
   const h: Helpers = {
     stat(k, d) {
-      p.stats[k] = clamp(p.stats[k] + d);
+      changeStat(p, k, d, s.year); // round 7: diminishing gains near the top (stats.ts)
     },
     money(d) {
       p.money = Math.round(p.money + d);
     },
     log(text, tone?: Tone) {
-      p.log.push({ age: s.year - p.birthYear, year: s.year, text, tone });
+      const e = { age: s.year - p.birthYear, year: s.year, text, tone };
+      p.log.push(e);
+      logTap.fn?.(s, e, logTap.src);
     },
     flag(name) {
       p.flags[name] = s.year;
@@ -384,6 +395,8 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       // at most one promotion per calendar year, however many events, activities and yearly rolls ask
       const ext = extOf(p);
       if (ext.promotedYear === s.year) return false;
+      // ranked public ladders (police, civil service) move only through their rank rules (rankPromote) or a structural jump
+      if (RANK_RULES[j.id] && !rankPass && !structural) return false;
       // a few years at each level first; the year of a hire may still start you one rung up
       const hireStep = ext.hiredYear === s.year && p.jobLevel === 0;
       if (!j.ranked && !hireStep && yearsAtLevel(s) < minYearsAtLevel(p.jobLevel, j.titles.length)) return false;
@@ -422,7 +435,8 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
   };
 
   const lang = s.lang ?? 'en';
-  return { s, p, age, rng, vars, h, lang, t: (en, tr) => (lang === 'tr' ? tr : en) };
+  // round 7 (content-fix): Turkish lines call parents and grandparents annen/baban/deden, never by first name
+  return { s, p, age, rng, vars, h, lang, t: (en, tr) => (lang === 'tr' ? kinNamesTr(s, tr) : en) };
 }
 
 /**
@@ -433,6 +447,18 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
  */
 /** Set while promoteAnyway runs: structural jumps skip the top-rung age floor too. */
 let structural = false;
+/** Set while rankPromote runs: the rank rules decided this promotion. */
+let rankPass = false;
+
+/** Promotion on a ranked ladder (police, civil service), allowed only from the rank rules (activities-careers rankYear). */
+export function rankPromote(c: Ctx): boolean {
+  rankPass = true;
+  try {
+    return c.h.promote();
+  } finally {
+    rankPass = false;
+  }
+}
 
 export function promoteAnyway(c: Ctx): boolean {
   const ext = extOf(c.p);

@@ -6,7 +6,7 @@ import { acc, cap, dat, gen, kin, nm, single, wage, who, wth, quietInMourning } 
 import { catName } from '../../engine/pets';
 import { currentTier, homeTier, houseState } from '../../engine/home';
 import { tierPrice } from './activities-home';
-import { him, inTr, nearKids } from './events-flavour';
+import { him, inFlat, inTr, nearKids, trHome } from './events-flavour';
 import { nameOrOwn } from './heirloom-words';
 
 // Old age (58+): grandchildren, health, retirement life, love and loss, legacy.
@@ -575,7 +575,7 @@ export const elderEvents: EventDef[] = [
           if (c.rng.chance(0.25)) {
             c.h.stat('health', -5);
             c.h.stat('happiness', 4);
-            return c.t('You danced until your knee filed a formal complaint. Worth it.', `Dizin resmî şikâyet dilekçesi verene kadar ${inTr(c) ? 'halay çektin' : 'dans ettin'}. Değdi.`);
+            return c.t('You danced until your knee filed a formal complaint. Worth it.', `Dizin isyan edene kadar ${inTr(c) ? 'halay çektin' : 'dans ettin'}. Hiç pişman değilsin.`);
           }
           c.h.stat('happiness', 8);
           return c.t('You danced all night and were still going when the band packed up.', 'Bütün gece oynadın; orkestra toparlanırken sen hâlâ pistteydin.');
@@ -899,7 +899,7 @@ export const elderEvents: EventDef[] = [
           c.h.stat('happiness', 1);
           return c.t(
             'You smiled and nodded through a long conversation. Apparently you agreed to host the whole family for the holidays.',
-            'Uzun bir sohbet boyunca gülümseyip başını salladın. Anlaşılan bu bayram bütün aileyi sen ağırlayacaksın.',
+            `Uzun bir sohbet boyunca gülümseyip başını salladın. Anlaşılan bu ${trHome(c) ? 'bayram' : 'yılbaşı'} bütün aileyi sen ağırlayacaksın.`,
           );
         },
       },
@@ -1102,7 +1102,7 @@ export const elderEvents: EventDef[] = [
     choices: [
       {
         id: 'queue',
-        label: (c) => c.t('Queue all day with a thermos of tea', 'Bir termos çayla bütün gün sıra bekle'),
+        label: (c) => c.t('Queue all day with a thermos of tea', trHome(c) ? 'Bir termos çayla bütün gün sıra bekle' : 'Bir termos ve bir sandviçle bütün gün sıra bekle'),
         resolve: (c) => {
           c.h.money(Number(c.vars.amt));
           c.h.stat('happiness', -1);
@@ -1358,14 +1358,13 @@ export const elderEvents: EventDef[] = [
       },
       {
         id: 'share',
-        label: (c) => c.t('Share the harvest with the building', 'Mahsulü apartmanla paylaş'),
+        label: (c) => (inFlat(c) ? c.t('Share the harvest with the building', 'Mahsulü apartmanla paylaş') : c.t('Share the harvest with the street', 'Mahsulü bütün sokakla paylaş')),
         resolve: (c) => {
           c.h.stat('happiness', 4);
           children(c).forEach((k) => c.h.closeness(k.person.id, 2));
-          return c.t(
-            'You gave tomatoes to the whole building. You now receive soup in return, indefinitely.',
-            'Bütün apartmana domates dağıttın. Karşılığında artık sonu gelmeyen bir çorba akını var.',
-          );
+          return inFlat(c)
+            ? c.t('You gave tomatoes to the whole building. You now receive soup in return, indefinitely.', 'Bütün apartmana domates dağıttın. Karşılığında artık sonu gelmeyen bir çorba akını var.')
+            : c.t('You gave tomatoes to every house on the street. You now receive soup in return, indefinitely.', 'Sokaktaki bütün evlere domates dağıttın. Karşılığında artık sonu gelmeyen bir çorba akını var.');
         },
         tone: 'good',
       },
@@ -1538,7 +1537,7 @@ export const elderEvents: EventDef[] = [
           c.h.stat('happiness', 2);
           return c.t(
             'You kept the house. Someone has to host the holidays, and that someone is a house.',
-            'Evi satmadın. Bayramlarda birinin herkesi toplaması lazım; o biri de bu ev.',
+            `Evi satmadın. ${trHome(c) ? 'Bayramlarda' : 'Yılbaşlarında'} birinin herkesi toplaması lazım; o biri de bu ev.`,
           );
         },
         tone: 'good',
@@ -2020,7 +2019,7 @@ export const elderEvents: EventDef[] = [
     minAge: 58,
     maxAge: 63,
     once: true,
-    title: (c) => c.t('Your old high school class is having a reunion.', 'Lisedeki sınıfın yıllar sonra bir araya geliyor.'),
+    title: (c) => c.t('Your old school class is having a reunion.', 'Lisedeki sınıfın yıllar sonra bir araya geliyor.'),
     text: (c) =>
       c.t('The invitation says "dress code: as you were." Nobody is as they were.', 'Davetiyede "Kıyafet: eskisi gibi" yazıyor. Kimse eskisi gibi değil.'),
     choices: [
@@ -2049,10 +2048,9 @@ export const elderEvents: EventDef[] = [
         label: (c) => c.t('Go and show off a little', 'Git ve biraz hava at'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
-          return c.t(
-            'You brought up your garden, your pension and your knees, in that order. You won.',
-            'Lafı bahçene, emekli maaşına ve dizlerine, bu sırayla getirdin. Kazandın.',
-          );
+          return ['house', 'villa', 'farm'].includes(currentTier(c.p))
+            ? c.t('You brought up your garden, your pension and your knees, in that order. You won.', 'Lafı bahçene, emekli maaşına ve dizlerine, bu sırayla getirdin. Kazandın.')
+            : c.t('You brought up your balcony tomatoes, your pension and your knees, in that order. You won.', 'Lafı balkondaki domateslerine, emekli maaşına ve dizlerine, bu sırayla getirdin. Kazandın.');
         },
       },
       {
@@ -2174,6 +2172,8 @@ export const elderEvents: EventDef[] = [
     id: 'base.elder_memoir_done',
     category: 'heirloom',
     scheduled: true,
+    // round 7: the memoir activity works in a cell (pen and paper), so its last chapter may finish there too
+    inJail: true,
     setup: (c) => {
       c.vars.amt = wage(c, 300);
       c.vars.big = wage(c, c.rng.int(40, 120) * 100);

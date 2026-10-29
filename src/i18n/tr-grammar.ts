@@ -209,16 +209,30 @@ function v4(word: string): string {
 /** 2-way harmony vowel: a e */
 const v2 = (word: string) => (BACK.includes(lastVowel(spoken(word))) ? 'a' : 'e');
 
-/** Genitive: Ada'nın, Mehmet'in, Ayşe'nin */
+/**
+ * Round 7 (review 6 §3.14): a name that ends in a possessive compound (belirtisiz isim tamlaması) takes the
+ * pronominal n before a case suffix: Yaprak Cumhuriyeti'nde, Sefer Tası'na, Mahalle Kahvecisi'ne, Rize Altını'nda,
+ * Amerika Birleşik Devletleri'ni. Known last words are listed; besides them, a name of two or more words whose last
+ * word ends in a vowel + -sı/-si/-su/-sü (Kahvecisi, Bahçesi, Markası) counts. Single words never do (Ayşe, Lati).
+ */
+const COMPOUND_LAST = new Set(['Cumhuriyeti', 'Tası', 'Kahvecisi', 'Altını', 'Devletleri', 'Krallığı', 'Rallisi', 'Kanı', 'Evi', 'Sofrası', 'Bahçesi', 'Fırını', 'Atölyesi', 'Kulübü', 'Derneği', 'Vakfı', 'Pazarı', 'Çarşısı', 'Lokantası', 'Mutfağı']);
+export function isCompoundName(name: string): boolean {
+  const words = name.trim().split(/\s+/);
+  if (words.length < 2) return false;
+  const last = words[words.length - 1];
+  if (COMPOUND_LAST.has(last)) return true;
+  return /[aeıioöuü]s[ıiuü]$/.test(last);
+}
+/** Genitive: Ada'nın, Mehmet'in, Ayşe'nin (a compound already reads Cumhuriyeti'nin) */
 export const gen = (name: string) => `${name}'${endsWithVowel(name) ? 'n' : ''}${v4(name)}n`;
-/** Accusative: Ada'yı, Mehmet'i */
-export const acc = (name: string) => `${name}'${endsWithVowel(name) ? 'y' : ''}${v4(name)}`;
-/** Dative: Ada'ya, Mehmet'e */
-export const dat = (name: string) => `${name}'${endsWithVowel(name) ? 'y' : ''}${v2(name)}`;
-/** Locative: İzmir'de, Zonguldak'ta, Ada'da */
-export const loc = (name: string) => `${name}'${endsHard(name) ? 't' : 'd'}${v2(name)}`;
-/** Ablative: İzmir'den, Zonguldak'tan */
-export const abl = (name: string) => `${name}'${endsHard(name) ? 't' : 'd'}${v2(name)}n`;
+/** Accusative: Ada'yı, Mehmet'i, Yaprak Cumhuriyeti'ni */
+export const acc = (name: string) => (isCompoundName(name) ? `${name}'n${v4(name)}` : `${name}'${endsWithVowel(name) ? 'y' : ''}${v4(name)}`);
+/** Dative: Ada'ya, Mehmet'e, Sefer Tası'na */
+export const dat = (name: string) => (isCompoundName(name) ? `${name}'n${v2(name)}` : `${name}'${endsWithVowel(name) ? 'y' : ''}${v2(name)}`);
+/** Locative: İzmir'de, Zonguldak'ta, Ada'da, Rize Altını'nda */
+export const loc = (name: string) => (isCompoundName(name) ? `${name}'nd${v2(name)}` : `${name}'${endsHard(name) ? 't' : 'd'}${v2(name)}`);
+/** Ablative: İzmir'den, Zonguldak'tan, Mahalle Kahvecisi'nden */
+export const abl = (name: string) => (isCompoundName(name) ? `${name}'nd${v2(name)}n` : `${name}'${endsHard(name) ? 't' : 'd'}${v2(name)}n`);
 /** Comitative: Ada'yla, Mehmet'le (written as a suffix) */
 export const wth = (name: string) => `${name}'${endsWithVowel(name) ? 'y' : ''}l${v2(name)}`;
 

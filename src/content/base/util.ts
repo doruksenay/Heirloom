@@ -1,6 +1,6 @@
 import type { Ctx, EventDef } from '../types';
 import type { Person } from '../../engine/types';
-import { EDUCATION_RANK, EVENT_ONLY, PART_TIME_IDS, majorAllows, type JobDef } from '../../engine/careers';
+import { EDUCATION_RANK, EVENT_ONLY, KPSS_JOBS, PART_TIME_IDS, majorAllows, type JobDef } from '../../engine/careers';
 import { allJobs } from '../registry';
 import { getCountry } from '../../engine/world';
 import { familyFirstNames as familyNamesOf, inMourning } from '../../engine/context';
@@ -54,8 +54,58 @@ export function jobShown(c: Ctx, j: JobDef): boolean {
   return true;
 }
 
+// ------------------------------------------------------------------ round 7: Türkiye's public-sector rules
+
+/** Career state kept on the player (p.ext.careers; JSON only, older saves start empty). */
+export interface CareersExt {
+  /** Criminal record seen at the last yearly check (a new conviction costs a clean-record job). */
+  record?: number;
+  /** Latest KPSS score (0–100) and the year it was sat. A score counts for two years. */
+  kpss?: number;
+  kpssYear?: number;
+  /** Year the player started the two-year police school (PMYO); cleared at graduation. */
+  academy?: number;
+  /** Graduated from the police school. */
+  pmyo?: boolean;
+}
+export const careersExt = (c: Ctx) => ((c.p.ext ??= {}).careers ??= {}) as CareersExt;
+const peekCareers = (c: Ctx) => c.p.ext?.careers as CareersExt | undefined;
+
+/** Türkiye's rules apply: a life in Türkiye with the (free) Türkiye pack, which runs the askerlik and the YKS. */
+export const trRules = (c: Ctx) => c.p.countryId === 'tr' && c.s.enabledPacks.includes('culture_tr');
+
+/** Years a KPSS score stays valid. */
+export const KPSS_VALID_YEARS = 2;
+/**
+ * The player's valid KPSS score (0–100), or undefined. The Türkiye pack's KPSS event (tr.kpss) counts too:
+ * its score is read from smarts, without rng.
+ */
+export function kpssScore(c: Ctx): number | undefined {
+  const ext = peekCareers(c);
+  if (ext?.kpss !== undefined && ext.kpssYear !== undefined && c.s.year - ext.kpssYear <= KPSS_VALID_YEARS) return ext.kpss;
+  const ev = c.p.eventLastAge['tr.kpss'];
+  if (ev !== undefined && c.age - ev <= KPSS_VALID_YEARS) return Math.min(100, Math.round(40 + c.p.stats.smarts * 0.5));
+  return undefined;
+}
+
+/** At the two-year police school (PMYO): a full-time student. */
+export const atAcademy = (c: Ctx) => peekCareers(c)?.academy !== undefined;
+/** Full-time study (high school, university or the police school): no full-time job alongside it. */
+export const fullTimeStudent = (c: Ctx) => isPupil(c) || c.p.school === 'university' || atAcademy(c);
+
+/** State posts a man in Türkiye can only take after his military service (done, or postponed). */
+const STATE_POSTS = new Set([...Object.keys(KPSS_JOBS), 'police', 'judge', 'imam']);
+/** A man in Türkiye, 20 or older, who has neither served nor postponed his military service. */
+export function askerlikPending(c: Ctx): boolean {
+  if (!trRules(c) || c.p.gender !== 'male' || c.age < 20 || c.age > 41) return false;
+  const st = c.p.ext?.culture_tr as { asker?: string; tecilYear?: number } | undefined;
+  if (st?.asker) return false;
+  if (st?.tecilYear !== undefined && st.tecilYear >= c.s.year - 1) return false;
+  return true;
+}
+
 /** Why a shown job would not hire this player, most important first ([] = they qualify). No RNG. */
-export type JobGap = 'too_old' | 'too_young' | 'over_age' | 'student' | 'education' | 'major' | 'smarts' | 'health' | 'record' | 'other';
+export type JobGap = 'too_old' | 'too_young' | 'over_age' | 'student' | 'education' | 'major' | 'smarts' | 'health' | 'record' | 'kpss' | 'academy' | 'askerlik' | 'other';
 export function jobGaps(c: Ctx, j: JobDef): JobGap[] {
   const gaps: JobGap[] = [];
   const r = j.req ?? {};
@@ -63,15 +113,32 @@ export function jobGaps(c: Ctx, j: JobDef): JobGap[] {
   if (c.age > MAX_HIRE_AGE) gaps.push('too_old');
   if (c.age < Math.max(r.minAge ?? 0, j.partTime ? 14 : 16)) gaps.push('too_young');
   if (r.maxAge !== undefined && c.age > r.maxAge) gaps.push('over_age');
-  if (isPupil(c) && !PART_TIME_JOBS.has(j.id)) gaps.push('student');
+  // round 7: no full-time job alongside full-time study (school, university or the police school)
+  if (fullTimeStudent(c) && !PART_TIME_JOBS.has(j.id)) gaps.push('student');
   if (EDUCATION_RANK[j.education] > EDUCATION_RANK[p.education]) gaps.push('education');
   // round 5: doctors need a medicine degree, lawyers a law degree (careers.ts JOB_MAJORS)
   else if (!majorAllows(p, j)) gaps.push('major');
   if (j.minSmarts > p.stats.smarts + 10 || (r.smarts !== undefined && p.stats.smarts < r.smarts)) gaps.push('smarts');
   if (r.health !== undefined && p.stats.health < r.health) gaps.push('health');
   if (r.cleanRecord && p.criminalRecord > 0) gaps.push('record');
+  if (trRules(c)) {
+    // round 7: Türkiye's state posts: the police school (or a degree) for the police, a KPSS score for memur posts,
+    // and a man's military service first
+    if (j.id === 'police' && p.education !== 'university' && !peekCareers(c)?.pmyo) gaps.push('academy');
+    const need = KPSS_JOBS[j.id];
+    if (need !== undefined && (kpssScore(c) ?? 0) < need) gaps.push('kpss');
+    if (STATE_POSTS.has(j.id) && askerlikPending(c)) gaps.push('askerlik');
+  }
   if (!gaps.length && j.requires && !j.requires(c)) gaps.push('other');
   return gaps;
+}
+
+/**
+ * Round 7: the study and Türkiye public-sector gaps alone (full-time study, police school, KPSS, askerlik), for
+ * content that picks jobs without jobGaps (the Campus fair). True when one of them blocks the job.
+ */
+export function publicRulesBlock(c: Ctx, j: JobDef): boolean {
+  return jobGaps(c, j).some((g) => g === 'student' || g === 'kpss' || g === 'academy' || g === 'askerlik');
 }
 
 /** Jobs this player could realistically be hired for (offers, tips, headhunters). The job board lists more: see job-board.ts. */
@@ -137,11 +204,14 @@ export function ownsWork(c: Ctx): boolean {
 /** What kind of working day the player has (see WorkKind). 'none' without a job, when retired, or for an owner. */
 export function workKind(c: Ctx): WorkKind {
   if (!c.p.jobId || c.p.retired || ownsWork(c)) return 'none';
-  const id = c.p.jobId;
-  if (BY_ID[id]) return BY_ID[id];
+  return jobKind(c.p.jobId, c.h.job()?.field);
+}
+
+/** The working day a job has (see WorkKind), from its id and field; never 'none'. */
+export function jobKind(id: string, field?: string): Exclude<WorkKind, 'none'> {
+  if (BY_ID[id]) return BY_ID[id] as Exclude<WorkKind, 'none'>;
   if (OFFICE_EXTRA.has(id)) return 'office';
-  const field = c.h.job()?.field;
-  return (field && BY_FIELD[field]) || 'service';
+  return ((field && BY_FIELD[field]) || 'service') as Exclude<WorkKind, 'none'>;
 }
 
 /** Has a job with a boss above them (any kind of work), not retired, not the owner. */

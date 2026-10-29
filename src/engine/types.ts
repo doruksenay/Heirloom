@@ -73,6 +73,8 @@ export interface Mortgage {
   term: number;
   /** The amount borrowed, before interest. */
   principal: number;
+  /** Real yearly interest rate (round 7, economy.ts MORTGAGE_RATE). Older loans lack it (flat 1.25% a year). */
+  rate?: number;
 }
 
 export interface Player extends Person {

@@ -316,7 +316,8 @@ export const timesTr = (n: number) => TR_TIMES[Math.min(n, 6)];
  * mended three times and lent out once." / "Bu sürede iki kez az kalsın kayboldu, üç kez onarıldı, bir kez ödünç verildi."
  */
 export function throughLine(c: Ctx, item: HeirloomInstance): string {
-  const n = (k: HlKind) => entries(item, k).length;
+  // a refused loan ('no') is not a loan (round 7)
+  const n = (k: HlKind) => entries(item, k).filter((e) => !(k === 'lend' && e.m === 'no')).length;
   const en: string[] = [];
   const tr: string[] = [];
   if (n('scare')) (en.push(`nearly lost ${timesEn(n('scare'))}`), tr.push(`${timesTr(n('scare'))} az kalsın kayboldu`));

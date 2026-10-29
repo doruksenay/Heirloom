@@ -39,6 +39,7 @@ export const prisonEvents: EventDef[] = [
   {
     id: 'crime.prison_fight',
     category: 'crime',
+    inJail: 'only',
     when: inside,
     title: (c) => c.t('Your cellmate wants your dessert. Every day.', 'Koğuş arkadaşın tatlını istiyor. Her gün.'),
     text: (c) => c.t('Others are watching to see what you do.', 'Herkes ne yapacağını görmek için izliyor.'),
@@ -70,6 +71,7 @@ export const prisonEvents: EventDef[] = [
   {
     id: 'crime.parole',
     category: 'crime',
+    inJail: 'only',
     when: (c) => c.p.jailYears >= 2,
     title: (c) => c.t('Your parole hearing is today.', 'Bugün şartlı tahliye duruşman var.'),
     text: (c) => c.t('Three people behind a table will decide your next years.', 'Masanın arkasındaki üç kişi önümüzdeki yıllarına karar verecek.'),
@@ -96,6 +98,7 @@ export const prisonEvents: EventDef[] = [
   {
     id: 'crime.cellmate',
     category: 'crime',
+    inJail: 'only',
     cooldown: 6,
     when: inside,
     setup: (c) => {
@@ -136,6 +139,7 @@ export const prisonEvents: EventDef[] = [
   {
     id: 'crime.riot',
     category: 'crime',
+    inJail: 'only',
     weight: 5,
     cooldown: 8,
     when: inside,
@@ -188,6 +192,7 @@ export const prisonEvents: EventDef[] = [
   {
     id: 'crime.escape',
     category: 'crime',
+    inJail: 'only',
     weight: 4,
     cooldown: 10,
     when: (c) => c.p.jailYears >= 3,

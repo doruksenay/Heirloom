@@ -1,8 +1,9 @@
 import type { ActivityDef, Ctx } from '../types';
-import { PART_TIME_JOBS, wage, workKind, wth } from './util';
-import { majorOf } from '../../engine/careers';
+import { rankPromote } from '../../engine/context';
+import { PART_TIME_JOBS, atAcademy, careersExt, trRules, wage, workKind, wth } from './util';
+import { RANK_RULES, majorOf } from '../../engine/careers';
 import { say, sayWith } from './lines';
-import { addPerformance, promoteAnyway } from '../../engine/context';
+import { addPerformance, promoteAnyway, yearsAtLevel } from '../../engine/context';
 import { isCoastal, seaName } from '../../engine/places';
 
 // v0.7 careers: activities for getting and growing a career, plus the yearly logic for the
@@ -24,6 +25,12 @@ export function demote(c: Ctx): boolean {
 }
 
 const working = (c: Ctx) => !!c.p.jobId && !c.p.retired && c.p.jailYears === 0;
+
+/**
+ * Round 7: an ordinary promotion (an event, a course, networking). Ranks that come from years of service and
+ * rank exams (careers.ts RANK_RULES: the police, the civil service) never jump this way: false for them.
+ */
+export const ladderPromote = (c: Ctx): boolean => !RANK_RULES[c.p.jobId ?? ''] && c.h.promote();
 export const isJob = (c: Ctx, id: string) => c.p.jobId === id && working(c);
 
 /** Already in a career: any job except an after-school one (a barista can still try out; a surgeon is not scouted). */
@@ -40,6 +47,7 @@ export const canTryOut = (c: Ctx) =>
   c.p.jailYears === 0 &&
   !inCareer(c) &&
   c.p.school !== 'university' &&
+  !atAcademy(c) &&
   !c.h.has('ex_athlete');
 
 /** Who the recruitment office will take: not someone who already has a career (a national-team striker does not join as a private). */
@@ -47,6 +55,7 @@ export const canEnlist = (c: Ctx) =>
   c.age >= 18 &&
   c.age <= 32 &&
   c.p.school === null &&
+  !atAcademy(c) &&
   c.p.jailYears === 0 &&
   c.p.criminalRecord === 0 &&
   (c.p.education === 'highschool' || c.p.education === 'university') &&
@@ -191,7 +200,7 @@ export const careerActivities: ActivityDef[] = [
       c.h.money(-wage(c, 1200));
       c.h.stat('smarts', 2);
       c.h.stat('health', -1);
-      if (c.rng.chance(0.3) && c.h.promote()) {
+      if (c.rng.chance(0.3) && ladderPromote(c)) {
         c.h.stat('happiness', 5);
         return c.t(
           `You framed your certificate. Your boss noticed and promoted you to ${c.h.jobTitle()}.`,
@@ -221,7 +230,7 @@ export const careerActivities: ActivityDef[] = [
     run: (c) => {
       c.h.money(-wage(c, 150));
       const roll = c.rng.next();
-      if (roll < 0.15 && c.h.promote()) {
+      if (roll < 0.15 && ladderPromote(c)) {
         c.h.stat('happiness', 6);
         return c.t(
           `You shared a taxi with a director. By the end of the ride you had been promoted to ${c.h.jobTitle()}.`,
@@ -252,7 +261,8 @@ export const careerActivities: ActivityDef[] = [
 /** Years of service needed for each rank; the officer's last rank (General) is never automatic. */
 const RANK_YEARS: Record<string, number[]> = {
   soldier: [0, 3, 7, 12, 18],
-  officer: [0, 4, 9, 15, 999],
+  // round 7: Teğmen 3 years, Üsteğmen 3, Yüzbaşı 6, Binbaşı 5, Yarbay 3, then Albay; Tuğgeneral only by the board (Şûra)
+  officer: [0, 3, 6, 12, 17, 20, 999],
 };
 
 function retireAthlete(c: Ctx, why: 'age' | 'injury'): void {
@@ -352,7 +362,7 @@ function militaryYear(c: Ctx, ladder: number[]): void {
   }
   // a general's star: only for long-serving colonels, and rarely
   // a structural jump: not limited by the one-promotion-a-year rule
-  if (p.jobId === 'officer' && p.jobLevel === 3 && p.jobYears >= 20 && c.rng.chance(0.06 + p.stats.smarts / 1000) && promoteAnyway(c)) {
+  if (p.jobId === 'officer' && p.jobLevel === 5 && p.jobYears >= 24 && c.rng.chance(0.06 + p.stats.smarts / 1000) && promoteAnyway(c)) {
     c.h.achieve('general');
     c.h.stat('happiness', 10);
     c.h.log(
@@ -581,12 +591,7 @@ const FREELANCE_BAD: Lines = [
 ];
 
 /** Yearly career logic for base-game jobs (e.g. athletes retiring, military ranks). Called from the base pack's onYear. */
-/** Round 5 state this file keeps on the player (JSON-safe; older saves start empty). */
-interface CareersExt {
-  /** Criminal record seen at the last yearly check (a new conviction costs a clean-record job). */
-  record?: number;
-}
-const careersExt = (c: Ctx) => ((c.p.ext ??= {}).careers ??= {}) as CareersExt;
+// Round 5/7 state on the player: util.ts CareersExt (p.ext.careers).
 
 /** Lines for losing a clean-record job over a conviction, by work kind ([en, tr], `{t}` = the title). */
 const STRUCK_OFF: Record<string, [string, string]> = {
@@ -620,6 +625,7 @@ function careerChecks(c: Ctx): void {
 export function careerOnYear(c: Ctx): void {
   const { p } = c;
   careerChecks(c);
+  trPublicYear(c);
   if (!p.jobId || p.retired) return;
   // athletes retire on time even if something kept them off the pitch
   if (p.jobId === 'athlete' && p.jailYears === 0) return athleteYear(c);
@@ -640,6 +646,9 @@ export function careerOnYear(c: Ctx): void {
     case 'politician':
     case 'muhtar':
       return electionYear(c);
+    case 'police':
+    case 'civil_servant':
+      return rankYear(c);
     case 'writer':
     case 'photographer':
     case 'translator':
@@ -663,3 +672,213 @@ export function careerOnYear(c: Ctx): void {
       return;
   }
 }
+
+// ------------------------------------------------------------------ round 7: Türkiye's public sector
+
+const clamp01 = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+/** The Türkiye pack's askerlik record (p.ext.culture_tr), read and written without importing the pack. */
+const trAsker = (c: Ctx) => ((c.p.ext ??= {}).culture_tr ??= {}) as { asker?: string; tecilYear?: number };
+
+/**
+ * Yearly, before the job logic:
+ * - no full-time job alongside full-time study (review 6 §3.7: a pro footballer studying medicine): a student who
+ *   still holds one leaves it;
+ * - the two-year police school (PMYO) ends: the graduate starts as Polis Memuru;
+ * - in Türkiye a career in uniform (police, soldier, officer) settles the military service: no call-up papers later.
+ */
+function trPublicYear(c: Ctx): void {
+  const { p } = c;
+  const ext = careersExt(c);
+  if (p.jobId && !p.retired && !PART_TIME_JOBS.has(p.jobId) && (p.school === 'university' || ext.academy !== undefined)) {
+    const title = c.h.jobTitle() ?? '';
+    c.h.setJob(null);
+    c.h.log(
+      p.school === 'university'
+        ? c.t(`A full-time degree and a full-time job do not fit in one week. You left your job as ${title} to study.`, `Örgün eğitimle tam zamanlı iş aynı haftaya sığmadı. Okula odaklanmak için ${title} olarak çalıştığın işten ayrıldın.`)
+        : c.t(`You left your job as ${title} for the police school.`, `Polis okulu için ${title} olarak çalıştığın işten ayrıldın.`),
+    );
+  }
+  if (ext.academy !== undefined && c.s.year - ext.academy >= 2 && p.jailYears === 0) {
+    ext.academy = undefined;
+    ext.pmyo = true;
+    c.h.setJob('police');
+    c.h.stat('happiness', 8);
+    c.h.log(
+      c.t(
+        `Graduation day at the police school: caps in the air, and your first posting. You start as ${c.h.jobTitle()}.`,
+        `Polis okulunda mezuniyet günü: kepler havaya uçtu, ilk tayinin çıktı. ${c.h.jobTitle()} olarak göreve başlıyorsun.`,
+      ),
+      'big',
+    );
+  }
+  if (trRules(c) && p.gender === 'male' && p.jobId && ['police', 'soldier', 'officer'].includes(p.jobId)) {
+    const st = trAsker(c);
+    if (!st.asker) st.asker = p.jobId === 'officer' ? 'subay' : 'er';
+  }
+}
+
+/** Rank exams and appointments by job and language: [pass EN, pass TR, fail EN, fail TR]; `{t}` = the new title. */
+const RANK_EXAM: Record<string, [string, string, string, string]> = {
+  police_tr0: [
+    'You passed the officer-training exam (PAEM). After the course you pinned on your new rank: {t}.',
+    'PAEM sınavını kazandın. Eğitimin ardından yeni rütbeni taktın: {t}.',
+    'You sat the officer-training exam (PAEM) and missed the cut by a few points. Next year.',
+    "PAEM sınavına girdin, birkaç puanla kaçırdın. Seneye yine gireceksin.",
+  ],
+  police: [
+    'You passed the rank exam and the promotion board. New rank: {t}.',
+    'Rütbe terfi sınavını ve kurulu geçtin. Yeni rütben: {t}.',
+    'You sat the rank exam and fell short of the pass mark. Your file waits for next year.',
+    'Rütbe terfi sınavında baraj puanının altında kaldın. Dosyan seneye kaldı.',
+  ],
+  civil_servant: [
+    'You passed the internal promotion exam (görevde yükselme). You are now {t}.',
+    'Görevde yükselme sınavını kazandın. Artık {t} oldun.',
+    'You sat the internal promotion exam. Forty people, two posts; you were sixth.',
+    'Görevde yükselme sınavına girdin. Kırk kişi, iki kadro; sen altıncı oldun.',
+  ],
+};
+
+/**
+ * Police and civil-service ranks (careers.ts RANK_RULES): years at the rung first, then a rank exam, an appointment
+ * or plain seniority. In Türkiye a police officer needs a degree to become Komiser Yardımcısı: a high-school officer
+ * finishes an open-university degree (Açıköğretim) after some years. At most one rng call a year.
+ */
+function rankYear(c: Ctx): void {
+  const { p } = c;
+  const rules = RANK_RULES[p.jobId ?? ''];
+  const step = rules?.[p.jobLevel];
+  if (!step) return;
+  const yrs = yearsAtLevel(c.s);
+  if (yrs < step.years) return;
+  const tr = trRules(c);
+  const police = p.jobId === 'police';
+  if (step.degree && p.education !== 'university' && (tr || !police)) {
+    // the open-university route: one roll a year after five years at the rung
+    if (yrs >= 5 && c.rng.chance(0.12 + p.stats.smarts / 1000)) {
+      p.education = 'university';
+      if (!p.major) p.major = 'business';
+      c.h.stat('smarts', 2);
+      c.h.log(
+        c.t('Evenings and weekends paid off: you finished an open-university degree (Açıköğretim). The next rank is open to you now.', 'Akşamların ve hafta sonların boşa gitmedi: Açıköğretimden lisans diplomanı aldın. Bir üst rütbenin yolu artık açık.'),
+        'good',
+      );
+    }
+    return;
+  }
+  const odds = step.exam ? clamp01(0.3 + (p.stats.smarts - 50) / 100 + (yrs - step.years) * 0.05, 0.1, 0.85) : step.appoint !== undefined ? step.appoint + p.stats.smarts / 1000 : 1;
+  const pass = odds >= 1 || c.rng.chance(odds);
+  const key = police && tr && p.jobLevel === 0 ? 'police_tr0' : (p.jobId as string);
+  if (pass) {
+    if (!rankPromote(c)) return;
+    c.h.stat('happiness', 6);
+    const t = c.h.jobTitle() ?? '';
+    if (step.exam) {
+      const m = RANK_EXAM[key];
+      c.h.log(c.t(m[0].replace('{t}', t), m[1].replace('{t}', t)), 'good');
+    } else if (step.appoint !== undefined) {
+      c.h.log(c.t(`The ministry's decree came: you were appointed ${t}.`, `Bakanlık kararnamesi çıktı: ${t} olarak atandın.`), 'good');
+    } else {
+      c.h.log(c.t(`After ${yrs} years at your rank you were promoted to ${t}.`, `Rütbende ${yrs} yılı doldurdun ve ${t} rütbesine terfi ettin.`), 'good');
+    }
+    return;
+  }
+  // a failed exam is news the first time, then every other year
+  if (step.exam && (yrs - step.years) % 2 === 0) {
+    const m = RANK_EXAM[key];
+    c.h.stat('happiness', -2);
+    c.h.log(c.t(m[2], m[3]), 'bad');
+  }
+}
+
+/** The KPSS: a 0–100 score from smarts, a degree and practice; one rng call. */
+function kpssRun(c: Ctx): string {
+  const ext = careersExt(c);
+  const practice = ext.kpss !== undefined ? 4 : 0;
+  const score = clamp01(Math.round(28 + c.p.stats.smarts * 0.55 + (c.p.education === 'university' ? 6 : 0) + practice + c.rng.int(-8, 8)), 20, 99);
+  ext.kpss = score;
+  ext.kpssYear = c.s.year;
+  c.h.stat('smarts', 2);
+  c.h.stat('happiness', -2);
+  const v: [string, string] =
+    score >= 85
+      ? ['Every post is open, the foreign service included.', 'Dışişleri dahil bütün kadrolar açık.']
+      : score >= 72
+        ? ['Enough for civil-service (memur) and state teaching posts.', 'Memurluk ve öğretmenlik kadroları için yeterli.']
+        : score >= 60
+          ? ['Enough for posts such as bekçi, prison officer or the post office; a little short for memur.', 'Bekçilik, infaz koruma ve PTT gibi kadrolara yeter; memurluk için biraz kısa.']
+          : ['Not enough for a state post. You can sit it again next year.', 'Bu puanla kadro zor. Seneye yeniden girebilirsin.'];
+  return c.t(`You sat the KPSS and scored ${score}. ${v[0]} The score counts for two years.`, `KPSS'ye girdin ve ${score} puan aldın. ${v[1]} Puanın iki yıl geçerli.`);
+}
+
+const PMYO_FAIL: [string, string][] = [
+  ['You passed the written exam for the police school, then could not get over one wall on the fitness course. Next year.', 'Polis okulunun yazılı sınavını geçtin ama fiziki yeterlilik parkurunda bir duvarı aşamadın. Seneye yine denersin.'],
+  ['The police school took four hundred out of nine thousand applicants. You were not among them this year.', 'Polis okulu dokuz bin adaydan dört yüzünü aldı. Bu yıl aralarında yoktun.'],
+  ['You made it to the interview at the police school, and went blank when they asked why you wanted the job.', 'Polis okulunda mülakata kadar geldin; "Neden polis olmak istiyorsun?" sorusunda aklın durdu.'],
+];
+
+/** Türkiye's public-sector activities: the KPSS and the police school (PMYO). Registered with the career activities. */
+const trCareerActivities: ActivityDef[] = [
+  {
+    id: 'career_kpss',
+    label: (c) => c.t('Sit the civil service exam (KPSS)', "KPSS'ye gir"),
+    description: (c) => c.t('Memur and state teaching posts need it; a score counts for two years', 'Memurluk ve öğretmenlik kadroları için; puan iki yıl geçerli'),
+    group: 'Career',
+    minAge: 18,
+    maxAge: 50,
+    hideWhenUnavailable: true,
+    available: (c) => trRules(c) && c.p.jailYears === 0 && !c.p.retired && c.p.school === null && !atAcademy(c) && (c.p.education === 'highschool' || c.p.education === 'university'),
+    run: kpssRun,
+  },
+  {
+    id: 'career_police_school',
+    label: (c) => c.t('Apply to the police school (PMYO)', 'Polis okuluna (PMYO) başvur'),
+    description: (c) => c.t('Two years of training, then a post as a police officer (ages 18–25)', 'İki yıl eğitim, ardından polis memurluğu (18–25 yaş)'),
+    group: 'Career',
+    minAge: 18,
+    maxAge: 25,
+    hideWhenUnavailable: true,
+    available: (c) => {
+      const ext = c.p.ext?.careers as { academy?: number; pmyo?: boolean } | undefined;
+      return (
+        trRules(c) &&
+        c.p.jailYears === 0 &&
+        c.p.criminalRecord === 0 &&
+        c.p.school === null &&
+        c.p.education === 'highschool' &&
+        c.p.stats.health >= 50 &&
+        c.p.jobId !== 'police' &&
+        ext?.academy === undefined &&
+        !ext?.pmyo
+      );
+    },
+    run: (c) => {
+      const odds = clamp01(0.25 + (c.p.stats.smarts - 40) / 150 + (c.p.stats.health - 50) / 200, 0.1, 0.75);
+      if (!c.rng.chance(odds)) {
+        c.h.stat('happiness', -3);
+        return say(c, 'career.pmyo_fail', PMYO_FAIL);
+      }
+      const ext = careersExt(c);
+      ext.academy = c.s.year;
+      const left = c.p.jobId ? c.h.jobTitle() : null;
+      if (c.p.jobId) c.h.setJob(null);
+      c.h.stat('happiness', 6);
+      let en = 'You got into the police school (PMYO)! Two years of boarding, roll call at six and a uniform you will learn to iron.';
+      let tr = "Polis Meslek Yüksekokulu'nu kazandın! İki yıl yatılı eğitim, sabah altıda içtima ve ütülemeyi öğreneceğin bir üniforma seni bekliyor.";
+      if (left) {
+        en += ` You handed in your notice as ${left}.`;
+        tr += ` ${left} olarak çalıştığın işten ayrıldın.`;
+      }
+      const st = trAsker(c) as { asker?: string; tecilYear?: number; retake?: number };
+      st.retake = undefined; // no second YKS: the police school is the road taken
+      if (c.p.gender === 'male' && !st.asker) {
+        // a student's call-up waits until the school is over
+        st.tecilYear = Math.max(st.tecilYear ?? 0, c.s.year + 2);
+        en += ' Your military service is postponed while you study.';
+        tr += ' Okul süresince askerliğin ertelendi.';
+      }
+      return c.t(en, tr);
+    },
+  },
+];
+careerActivities.push(...trCareerActivities);

@@ -4,7 +4,7 @@ import type { JobDef } from '../../engine/careers';
 import { majorChoices } from '../base/events-careers-majors';
 import { isCareerUpgrade, majorOf, titleFor } from '../../engine/careers';
 import { allJobs } from '../registry';
-import { aOrAn, acc, loc, nm, single, wage } from '../base/util';
+import { aOrAn, acc, loc, nm, publicRulesBlock, single, wage } from '../base/util';
 import { isCoastal } from '../../engine/places';
 import { say, sayWith, type Pair } from '../base/lines';
 import { grandmaAlive, motherAlive } from '../fame/util';
@@ -238,7 +238,7 @@ function fairJobs(c: Ctx, leeway = 10): JobDef[] {
   // your own job at the next rung, from a rival employer (never the top rung: that one is earned in-house)
   const cur = c.p.jobId && !c.p.retired ? c.h.job() : undefined;
   if (cur && fitsMajor(st.major, cur.id) && c.p.jobLevel + 1 <= cur.titles.length - 2) jobs.unshift(cur);
-  return jobs.filter((j) => fitsMajor(st.major, j.id) && (st.fairCount?.[j.id] ?? 0) < FAIR_MAX_OFFERS && isCareerUpgrade(c, j, offerLevel(c, j)));
+  return jobs.filter((j) => !publicRulesBlock(c, j) && fitsMajor(st.major, j.id) && (st.fairCount?.[j.id] ?? 0) < FAIR_MAX_OFFERS && isCareerUpgrade(c, j, offerLevel(c, j)));
 }
 
 function startGrad(c: Ctx, prog: 'masters' | 'phd'): string {

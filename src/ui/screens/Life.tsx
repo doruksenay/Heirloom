@@ -202,6 +202,26 @@ export function Life({ app }: { app: AppApi }) {
 }
 
 /** First-life coaching, one card at a time: how to play → heirlooms → activities; and a welcome for generation 2. */
+/**
+ * The previous player as seen by the heir, in the genitive with a capital: "Your grandmother's" / "Anneannenin",
+ * "Babanın", "Teyzenin". Read from the heir's own relations (parent, grandparent with side); a niece or nephew heir
+ * has the old player as an aunt or uncle on the side of the parent who was their sibling.
+ */
+function heirKinOf(s: NonNullable<AppApi['game']>, lang: string): string {
+  const last = s.dynasty.lives[s.dynasty.lives.length - 1];
+  const tr = lang === 'tr';
+  if (!last) return tr ? 'Ailenin' : "Your family's";
+  const f = last.gender === 'female';
+  const rel = s.player.relations.find((r) => r.personId === last.personId);
+  if (rel?.kind === 'mother' || rel?.kind === 'father') return tr ? (f ? 'Annenin' : 'Babanın') : f ? "Your mother's" : "Your father's";
+  if (rel?.kind === 'grandparent')
+    return tr ? (f ? (rel.side === 'father' ? 'Babaannenin' : 'Anneannenin') : 'Dedenin') : f ? "Your grandmother's" : "Your grandfather's";
+  // a niece or nephew: the old player was the sibling of this heir's mother or father
+  const parent = s.player.relations.find((r) => (r.kind === 'mother' || r.kind === 'father') && !r.step);
+  const viaMother = parent?.kind === 'mother';
+  return tr ? (f ? (viaMother ? 'Teyzenin' : 'Halanın') : viaMother ? 'Dayının' : 'Amcanın') : f ? "Your aunt's" : "Your uncle's";
+}
+
 function LifeTip({ app, age }: { app: AppApi; age: number }) {
   const s = app.game!;
   if (s.pending || s.dead) return null;
@@ -215,9 +235,10 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
     );
   }
   if (s.dynasty.generation >= 2 && !seen('gen2')) {
+    // round 7: say who it was (review 6 §3.15: a grandchild heir read "your mother's or father's life")
     return (
       <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family tree'), run: () => app.go('family') }}>
-        {T("Generation {n}. Your parent's life is now part of the family tree, and everything they left behind is yours.", { n: s.dynasty.generation })}
+        {T('Generation {n}. {Kin} life is now part of the family tree, and everything they left behind is yours.', { n: s.dynasty.generation, Kin: heirKinOf(s, app.lang) })}
       </Tip>
     );
   }

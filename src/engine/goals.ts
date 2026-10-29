@@ -4,6 +4,8 @@ import { getCountry } from './world';
 import { PACKS, enabledPacks, packNetWorth } from '../content/registry';
 import { fmtMoney } from './context';
 import { homeEquity } from './economy';
+import { peekFame } from '../content/base/fame-state';
+import { companyOf } from '../content/boss/state';
 
 /** Life goals: each life gets three. Completing one adds legacy; all three earns the Overachiever ribbon. */
 export interface GoalDef {
@@ -21,6 +23,12 @@ export interface GoalDef {
    * of life adds, so a pack owner always has something to chase after the young goals are done or out of reach.
    */
   stage?: 'young' | 'mid' | 'late';
+  /**
+   * Round 7: whether a goal already held stays open at a new chapter (default: `available`). Stat goals are drawn only
+   * below their bar, so without this a player close to the bar lost the goal at 30 or 50, and "Health at 50" was
+   * always retired at 50 itself, before it could be checked (0% in the bots).
+   */
+  keep?: (s: GameState) => boolean;
 }
 
 export const GOAL_REWARD = 200;
@@ -58,12 +66,16 @@ export const BASE_GOALS: GoalDef[] = [
   { id: 'new_heirloom', label: 'Add a new heirloom to the family', labelTr: 'Aileye yeni bir yadigâr kazandır', available: () => false, check: (s) => s.dynasty.heirlooms.some((h) => h.sinceYear > s.player.birthYear) },
   { id: 'marathon', label: 'Run a marathon', labelTr: 'Maraton koş', available: () => false, check: (s) => has(s, 'marathon') },
   // only with the head start that makes it reachable by study (review item 15: Smarts 34 was asked to reach 100)
-  { id: 'genius', label: 'Reach 100 Smarts', labelTr: 'Zekân 100 olsun', available: (s) => st(s).smarts >= 70 && age(s) < 60, weight: (s) => (st(s).smarts >= 80 ? 2 : 1), check: (s) => s.player.stats.smarts >= 100 },
-  { id: 'fit50', label: 'Have 90+ Health at age 50', labelTr: '50 yaşında sağlığın 90+ olsun', available: (s) => age(s) < 45 && st(s).health >= 70, check: (s) => age(s) === 50 && s.player.stats.health >= 90 },
+  // round 7: gains shrink near the top (stats.ts), so 100 is out of reach on purpose; 90 takes years of study
+  { id: 'genius', label: 'Reach 90 Smarts', labelTr: 'Zekân 90 olsun', available: (s) => st(s).smarts >= 72 && st(s).smarts < 88 && age(s) < 60, weight: (s) => (st(s).smarts >= 80 ? 2 : 1), keep: (s) => age(s) < 60, check: (s) => s.player.stats.smarts >= 90 },
+  // round 7: health now fades from 40 without exercise; 75 at fifty is a goal for someone who keeps at it
+  { id: 'fit50', label: 'Have 70+ Health at age 50', labelTr: '50 yaşında sağlığın 70+ olsun', available: (s) => age(s) < 45 && st(s).health >= 65, keep: (s) => age(s) <= 50, check: (s) => age(s) === 50 && s.player.stats.health >= 70 },
   { id: 'cat', label: 'Adopt a cat', labelTr: 'Bir kedi sahiplen', weight: () => 0.8, check: (s) => 'pet_cat' in s.player.flags },
   { id: 'viral', label: 'Go viral', labelTr: 'Viral ol', available: () => false, check: (s) => has(s, 'viral') },
-  { id: 'happy90', label: 'Reach 90 Happiness', labelTr: 'Mutluluğun 90 olsun', available: (s) => st(s).happiness >= 50 && st(s).happiness < 85, check: (s) => s.player.stats.happiness >= 90 },
-  { id: 'looks90', label: 'Reach 90 Looks', labelTr: 'Görünüşün 90 olsun', available: (s) => st(s).looks >= 60 && st(s).looks < 85 && age(s) < 50, weight: () => 0.8, check: (s) => s.player.stats.looks >= 90 },
+  // round 7: the ids stay (old saves), the bars follow the diminishing gains (stats.ts). Looks: a yearly makeover
+  // takes 65 to 75 in about five years, but the bots stayed under 5% (one activity, one use a year), so it is not drawn
+  { id: 'happy90', label: 'Reach 85 Happiness', labelTr: 'Mutluluğun 85 olsun', available: (s) => st(s).happiness >= 50 && st(s).happiness < 80, keep: () => true, check: (s) => s.player.stats.happiness >= 85 },
+  { id: 'looks90', label: 'Reach 75 Looks', labelTr: 'Görünüşün 75 olsun', available: () => false, weight: () => 0.8, keep: (s) => age(s) < 60, check: (s) => s.player.stats.looks >= 75 },
   { id: 'loved5', label: 'Be very close to five people at once', labelTr: 'Aynı anda beş kişiyle çok yakın ol', available: (s) => age(s) < 70, check: (s) => closeOnes(s) >= 5 },
 ];
 
@@ -72,17 +84,27 @@ export const BASE_GOALS: GoalDef[] = [
  * goal that cannot happen any more (a PhD at 70, "turn your life around" without a conviction).
  */
 const PACK_GATES: Record<string, (s: GameState) => boolean> = {
+  // only random events turn a life around (crime/events-after.ts); round 7 bots: 0 of 5–9 lives, too few to judge
   crime_reformed: (s) => s.player.criminalRecord > 0,
   crime_heist: (s) => age(s) < 60,
   campus_honors: (s) => s.player.school === 'university' || (age(s) < 20 && s.player.education !== 'university'),
-  campus_phd: (s) => age(s) < 40,
+  // round 7: drawn for someone already in grad school (0–9% for everyone else, even graduates with Smarts 70+)
+  campus_phd: (s) => age(s) < 40 && 'grad_school' in s.player.flags,
   boss_founder: (s) => age(s) < 65,
   boss_exit: (s) => age(s) < 60,
-  boss_ipo: (s) => age(s) < 55,
-  boss_team50: (s) => age(s) < 55,
-  fame_star: (s) => age(s) < 50,
-  fame_world_tour: (s) => age(s) < 50,
-  fame_wax: (s) => age(s) < 45,
+  // round 7: the IPO wants a scale-up worth hundreds of millions (0% in the bots); drawn only for a scale-up, and a
+  // team of 50 only for a company that already has 25
+  boss_ipo: (s) => age(s) < 55 && companyOf(s.player)?.stage === 'scaleup' && (companyOf(s.player)?.employees ?? 0) >= 25,
+  boss_team50: (s) => age(s) < 55 && (companyOf(s.player)?.employees ?? 0) >= 25,
+  // round 7: the fame goals are drawn for a fame career already under way (they stayed at 0% for everyone else)
+  fame_star: (s) => age(s) < 50 && (peekFame(s.player)?.peakFame ?? 0) >= 20,
+  fame_world_tour: (s) => age(s) < 50 && (peekFame(s.player)?.tours ?? 0) >= 1,
+  fame_wax: (s) => age(s) < 45 && (peekFame(s.player)?.peakFame ?? 0) >= 40,
+  // round 7: muhtar is a goal you can run for from 40 (culture-tr/muhtar.ts), with a clean record
+  tr_muhtar: (s) => age(s) < 76 && s.player.criminalRecord === 0,
+  // round 7: only random events lead home (culture-tr index.ts), so it is not drawn until an activity does (4.9%)
+  tr_memleket: () => false,
+  fame_albums3: (s) => (peekFame(s.player)?.albums.length ?? 0) >= 1,
 };
 
 /** Whether this goal can still be drawn for the current player. */
@@ -154,7 +176,7 @@ export function goalChapter(s: GameState): void {
   const kept = s.player.goals.filter((g) => {
     if (g.done) return true;
     const def = goalDef(g.id);
-    return !!def && goalAvailable(def, s);
+    return !!def && (def.keep ? def.keep(s) : goalAvailable(def, s));
   });
   const retired = s.player.goals.length - kept.length;
   const pool = [...BASE_GOALS, ...enabledPacks(s.enabledPacks).flatMap((p) => p.goals ?? [])].filter((g) => !held.has(g.id) && goalAvailable(g, s) && !g.check(s));

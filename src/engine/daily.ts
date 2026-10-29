@@ -45,7 +45,7 @@ const descendants = (s: GameState) => {
  * Medal thresholds come from simulated lives (scripts/daily-par.ts, round 4): bronze sits near the median of a
  * passive player who only taps "Age up" (review item 14: a calm 77-year life earned nothing), silver near the
  * median of an active player and gold near the active top tenth. Re-run the script (with and without `passive`)
- * after balance changes.
+ * after balance changes. Round 7: re-run after the stat decay, pensions and real mortgage interest (60 days × 4 tries).
  */
 export const DAILY_CATEGORIES: DailyCategory[] = [
   {
@@ -56,7 +56,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Net worth when you die',
     hintTr: 'Öldüğündeki net servetin',
     unit: 'money',
-    medals: [75_000, 350_000, 900_000],
+    medals: [75_000, 275_000, 800_000],
     score: worth,
   },
   {
@@ -67,7 +67,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Age you reach',
     hintTr: 'Ulaştığın yaş',
     unit: 'years',
-    medals: [79, 85, 91],
+    medals: [77, 84, 90],
     score: (s) => playerAge(s),
   },
   {
@@ -78,7 +78,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Children and grandchildren',
     hintTr: 'Çocukların ve torunların',
     unit: 'count',
-    medals: [2, 6, 10],
+    medals: [2, 5, 9],
     score: descendants,
   },
   {
@@ -89,7 +89,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Pets you owned in your life',
     hintTr: 'Hayatın boyunca sahip olduğun evcil hayvanlar',
     unit: 'count',
-    medals: [1, 5, 10],
+    medals: [1, 5, 12],
     score: (s) => petsOf(s.player).length,
   },
   {
@@ -100,7 +100,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'Highest yearly salary',
     hintTr: 'En yüksek yıllık maaşın',
     unit: 'money',
-    medals: [65_000, 110_000, 175_000],
+    medals: [45_000, 75_000, 105_000],
     score: (s) => Math.max(peak(s, 'salary'), salaryOf(s) / wageFactor(s)),
   },
   {
@@ -111,7 +111,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hint: 'People very close to you at the same time',
     hintTr: 'Aynı anda çok yakın olduğun insan sayısı',
     unit: 'count',
-    medals: [2, 6, 8],
+    medals: [2, 6, 9],
     score: (s) => Math.max(peak(s, 'close'), closeCount(s)),
   },
   {
@@ -123,7 +123,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hintTr: 'Zirvedeyken hayran sayın',
     pack: 'fame',
     unit: 'count',
-    medals: [2_000, 50_000, 400_000],
+    medals: [2_000, 25_000, 300_000],
     score: (s) => Math.max(peak(s, 'fans'), (s.player.ext?.fame as { peakFame?: number } | undefined)?.peakFame ?? 0),
   },
   {
@@ -135,7 +135,7 @@ export const DAILY_CATEGORIES: DailyCategory[] = [
     hintTr: 'Şirketinin ulaştığı en yüksek değer',
     pack: 'boss',
     unit: 'money',
-    medals: [100_000, 700_000, 4_000_000],
+    medals: [100_000, 600_000, 3_500_000],
     score: (s) => peak(s, 'company'),
   },
 ];
@@ -177,11 +177,25 @@ export interface DailyPlan {
   categories: string[];
 }
 
-/** Who you are today and what you are scored on. Same for everyone on the same date. */
-export function dailyPlan(date: string): DailyPlan {
+/**
+ * Round 7 (review 6 §3.9): two daily plans, both deterministic. 'global' picks any country; 'tr' (a Turkish phone)
+ * is the same plan, but every other day the life is in Türkiye. The UI sets the region from the device language.
+ */
+export type DailyRegion = 'global' | 'tr';
+let dailyRegion: DailyRegion = 'global';
+export const setDailyRegion = (r: DailyRegion) => {
+  dailyRegion = r;
+};
+/** On the 'tr' plan, the days whose life is in Türkiye. */
+export const trDailyDay = (date: string) => ((dayIndex(date) % 2) + 2) % 2 === 0;
+
+/** Who you are today and what you are scored on. Same for everyone on the same date and in the same region. */
+export function dailyPlan(date: string, region: DailyRegion = dailyRegion): DailyPlan {
   const seed = dailySeed(date);
   const rng = createRng(seed ^ 0x5bd1e995);
-  const country = COUNTRIES[rng.int(0, COUNTRIES.length - 1)];
+  const drawn = COUNTRIES[rng.int(0, COUNTRIES.length - 1)];
+  // the same rng calls in both regions: only the country (and so its city and names) changes
+  const country = region === 'tr' && trDailyDay(date) ? getCountry('tr') : drawn;
   const gender: Gender = rng.chance(0.5) ? 'female' : 'male';
   const featuredPack = FEATURED[((dayIndex(date) % FEATURED.length) + FEATURED.length) % FEATURED.length];
   const base = DAILY_CATEGORIES.filter((c) => !c.pack);
@@ -213,7 +227,8 @@ export function newDailyGame(date: string, profile: Profile): GameState {
     { firstName: plan.firstName, lastName: plan.lastName, gender: plan.gender, countryId: plan.countryId, city: plan.city, seed: plan.seed },
     fair,
   );
-  s.enabledPacks = ['base', ...(plan.featuredPack ? [plan.featuredPack] : [])];
+  // round 7: a life in Türkiye gets the free Türkiye pack (LGS, YKS, askerlik), as a family life does
+  s.enabledPacks = ['base', ...(plan.countryId === 'tr' ? ['culture_tr'] : []), ...(plan.featuredPack ? [plan.featuredPack] : [])];
   s.perks = [];
   const meta: DailyMeta = { date, categories: plan.categories, featuredPack: plan.featuredPack, peak: {} };
   s.daily = meta;

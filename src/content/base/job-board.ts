@@ -1,10 +1,10 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import type { GameState } from '../../engine/types';
-import { EDUCATION_RANK, MAJOR_INFO, jobMajors, majorOf, majorReason, salaryFor, titleFor, type JobDef } from '../../engine/careers';
-import { makeCtx } from '../../engine/context';
+import { EDUCATION_RANK, KPSS_JOBS, MAJOR_INFO, jobMajors, majorOf, majorReason, salaryFor, sameTrack, titleFor, type JobDef } from '../../engine/careers';
+import { lastJobOf, makeCtx } from '../../engine/context';
 import { getCountry } from '../../engine/world';
 import { allJobs } from '../registry';
-import { aOrAn, jobGaps, jobShown, MAX_HIRE_AGE, type JobGap } from './util';
+import { aOrAn, careersExt, jobGaps, jobKind, jobShown, kpssScore, MAX_HIRE_AGE, PART_TIME_JOBS, trRules, type JobGap } from './util';
 import { sayWith, type Pair } from './lines';
 
 // Round 4 job board (review item 9: "the listing shows 3 random jobs, no salary, no requirements").
@@ -17,6 +17,8 @@ import { sayWith, type Pair } from './lines';
 
 /** The pending event the job board opens. */
 export const JOB_BOARD_EVENT = 'base.job_board';
+/** The activity that opens it (activities.ts 'job_search'). */
+const JOB_SEARCH_ACTIVITY = 'job_search';
 /** Fallback choices on the board event (job0..job5). */
 const SLOTS = 6;
 
@@ -96,6 +98,12 @@ export function jobRequirements(c: Ctx, j: JobDef): string[] {
   if (r.maxAge !== undefined) out.push(c.t(`Age ${r.maxAge} or under`, `En fazla ${r.maxAge} yaş`));
   if (r.health !== undefined) out.push(c.t(`Health ${r.health}+`, `Sağlık ${r.health}+`));
   if (r.cleanRecord) out.push(c.t('Clean record', 'Temiz sicil'));
+  if (trRules(c)) {
+    // round 7: Türkiye's state posts
+    if (j.id === 'police') out.push(c.t('Police school or a degree', 'PMYO ya da lisans diploması'));
+    const kpss = KPSS_JOBS[j.id];
+    if (kpss !== undefined) out.push(`KPSS ${kpss}+`);
+  }
   if (j.partTime) out.push(c.t('Part-time', 'Yarı zamanlı'));
   return out;
 }
@@ -111,7 +119,21 @@ export function gapReason(c: Ctx, j: JobDef, gap: JobGap): string {
     case 'over_age':
       return c.t(`They only take new starters up to age ${r.maxAge}.`, `Bu işe en fazla ${r.maxAge} yaşında başlanıyor.`);
     case 'student':
-      return c.t('Not while you are still at school.', 'Okul sürerken olmaz.');
+      return c.p.school === 'university'
+        ? c.t('Not alongside a full-time degree; part-time work only.', 'Örgün eğitim sürerken tam zamanlı iş olmaz; sadece yarı zamanlı.')
+        : careersExt(c).academy !== undefined
+          ? c.t('Not while you are at the police school.', 'Polis okulu sürerken olmaz.')
+          : c.t('Not while you are still at school.', 'Okul sürerken olmaz.');
+    case 'kpss': {
+      const have = kpssScore(c);
+      return have === undefined
+        ? c.t(`Needs a KPSS score of ${KPSS_JOBS[j.id]}+ from the last two years.`, `Son iki yılda alınmış en az ${KPSS_JOBS[j.id]} KPSS puanı gerekiyor.`)
+        : c.t(`Your KPSS score (${have}) is below the ${KPSS_JOBS[j.id]} this post takes.`, `Bu kadro için en az ${KPSS_JOBS[j.id]} KPSS puanı gerekiyor; seninki ${have}.`);
+    }
+    case 'academy':
+      return c.t('Needs the two-year police school (PMYO) or a university degree.', 'İki yıllık Polis Meslek Yüksekokulu (PMYO) ya da lisans diploması gerekiyor.');
+    case 'askerlik':
+      return c.t('Do your military service first, or get it postponed.', 'Önce askerliğini yapmalı ya da tecil ettirmelisin.');
     case 'education': {
       const e = EDU_LABEL[j.education] ?? EDU_LABEL.primary;
       const en = j.education === 'university' ? 'a university degree' : j.education === 'highschool' ? 'a high school diploma' : 'primary school';
@@ -130,17 +152,48 @@ export function gapReason(c: Ctx, j: JobDef, gap: JobGap): string {
   }
 }
 
-/** Chance that a qualified application succeeds (one rng roll in applyToJob). No RNG here. */
+/**
+ * Chance that a qualified application succeeds (one rng roll in applyToJob). No RNG here.
+ * Round 7 (review 6 §3.4: every listing said "high odds"): the fit decides, as it does in life:
+ * - the bar: the more selective the job, the lower the base chance;
+ * - smarts above or below the bar, and education above the minimum;
+ * - the right degree (a medicine graduate applying to be a doctor) or a related field;
+ * - experience: a previous job in the same line of work, or any job at all; a first job at 18 is hard to get;
+ * - age (from 45 every year counts against you), looks a little, a criminal record a lot;
+ * - Türkiye's KPSS posts are filled by score: the margin over the post's minimum decides.
+ */
 export function hireChance(c: Ctx, j: JobDef): number {
   const p = c.p;
-  let chance = 0.35 + p.stats.smarts / 250 + p.stats.looks / 500 - (p.criminalRecord > 0 ? 0.2 : 0);
-  // the competitive jobs: smarts close to the bar make it harder
-  chance -= Math.max(0, j.minSmarts - p.stats.smarts) / 40;
-  if (j.partTime) chance += 0.15;
-  return Math.max(0.1, Math.min(0.95, chance));
+  const age = c.age;
+  const bar = Math.max(j.minSmarts, j.req?.smarts ?? 0);
+  let x = 0.5 - bar / 150;
+  x += Math.max(-0.2, Math.min(0.2, (p.stats.smarts - bar) / 100));
+  // a little more schooling helps; a graduate applying for unskilled work reads as "overqualified"
+  const over = EDUCATION_RANK[p.education] - EDUCATION_RANK[j.education];
+  x += p.education === 'university' && EDUCATION_RANK[j.education] <= 1 ? -0.08 : over > 0 ? 0.04 : 0;
+  const major = majorOf(p);
+  // the degree the job asks for: a medicine graduate is always in the running for a doctor's post
+  if (major && jobMajors(j).includes(major)) x = Math.max(x + 0.3, 0.35);
+  else if (major && MAJOR_INFO[major].fields.includes(j.field)) x += 0.08;
+  // experience: the last job held (or the current one), and the best one
+  const last = lastJobOf(p);
+  const peak = (p.ext?.engine as { peakJob?: { id: string } } | undefined)?.peakJob;
+  const worked = (last && !PART_TIME_JOBS.has(last.id)) || !!peak;
+  if ((last && sameTrack(last.id, j)) || (peak && sameTrack(peak.id, j))) x += 0.15 + Math.min(0.08, (last?.level ?? 0) * 0.04);
+  else if (worked) x += 0.05;
+  else if (!j.partTime && age < 22) x -= 0.15;
+  if (age > 45) x -= (age - 45) * 0.012;
+  x += (p.stats.looks - 50) / 500;
+  if (p.criminalRecord > 0) x -= 0.25;
+  if (j.partTime) x += 0.15;
+  // Türkiye: a KPSS post goes by the score's margin over the post's minimum
+  const need = KPSS_JOBS[j.id];
+  if (need !== undefined && trRules(c)) x = 0.25 + ((kpssScore(c) ?? 0) - need) / 25;
+  return Math.max(0.05, Math.min(0.9, x));
 }
 
-const oddsOf = (x: number): JobOdds => (x >= 0.7 ? 'high' : x >= 0.45 ? 'medium' : 'low');
+/** High from 60%, medium from 35%: what the board shows next to each opening. */
+const oddsOf = (x: number): JobOdds => (x >= 0.6 ? 'high' : x >= 0.35 ? 'medium' : 'low');
 
 /** Fit with the player's education and degree: graduates see graduate jobs first (no doctors down the mine). */
 function matchOf(c: Ctx, j: JobDef): number {
@@ -226,13 +279,66 @@ export function applyToJob(s: GameState, jobId: string): string | null {
 
 // ------------------------------------------------------------------ the board event
 
-const REJECT: ((t: string) => Pair)[] = [
+/** Rejections that fit the job (review 6 §4.28: no spaghetti tower at the police interview). `t` = the title. */
+type Reject = (t: string) => Pair;
+const REJECT_ANY: Reject[] = [
   (t) => [`You interviewed for ${t}, but they went with someone else.`, `${t} pozisyonu için mülakata girdin ama başkasını seçtiler.`],
-  (t) => [`The ${t} interview went well, you thought. They never called back.`, `${t} mülakatının iyi geçtiğini düşünmüştün. Bir daha aramadılar.`],
-  (t) => [`They said you were "a strong candidate" for ${t}. Then they hired their cousin.`, `${t} için "güçlü bir aday" olduğunu söylediler. Sonra kuzenlerini aldılar.`],
   (t) => [`You were second out of forty for ${t}. Second gets a polite email.`, `${t} için kırk kişi arasında ikinci oldun. İkinciye kibar bir e-posta düşüyor.`],
-  (t) => [`The ${t} interview had a group exercise with a tower of spaghetti. Your tower fell. So did your chances.`, `${t} mülakatında makarnadan kule yapma etkinliği vardı. Senin kulen yıkıldı. Şansın da.`],
 ];
+const REJECT: Record<string, Reject[]> = {
+  office: [
+    (t) => [`The ${t} interview went well, you thought. They never called back.`, `${t} mülakatının iyi geçtiğini düşünmüştün. Bir daha aramadılar.`],
+    (t) => [`They said you were "a strong candidate" for ${t}. Then they hired their cousin.`, `${t} için "güçlü bir aday" olduğunu söylediler. Sonra kuzenlerini aldılar.`],
+    (t) => [`The ${t} interview had a group exercise with a tower of spaghetti. Your tower fell. So did your chances.`, `${t} mülakatında makarnadan kule yapma etkinliği vardı. Senin kulen yıkıldı. Şansın da.`],
+  ],
+  trade: [
+    (t) => [`The master watched you work for ten minutes for the ${t} job, said "we'll call you" and went back to his tea.`, `${t} işi için usta seni on dakika izledi, "Ararız" dedi ve çayına döndü.`],
+    (t) => [`They wanted ${aOrAn(t)} with experience. You brought enthusiasm.`, `Tecrübeli bir ${t} arıyorlarmış. Sende ise sadece heves vardı.`],
+    (t) => [`The trial day for ${t} went fine until you dropped the toolbox.`, `${t} işi için deneme gününe çağrıldın; alet çantasını düşürene kadar her şey yolundaydı.`],
+  ],
+  service: [
+    (t) => [`Your trial shift for ${t} fell on a Saturday rush. You survived it; the job went to someone faster.`, `${t} için deneme vardiyan cumartesi akşamına denk geldi. Hayatta kaldın ama işi daha hızlı birine verdiler.`],
+    (t) => [`The manager liked you for ${t}, but the owner's nephew needed a job too.`, `Müdür seni ${t} işi için beğendi ama patronun yeğeninin de işe ihtiyacı varmış.`],
+    (t) => [`You were second for ${t}. Second gets "we'll keep your CV on file".`, `${t} için ikinci oldun. İkinciye "Özgeçmişinizi dosyada tutuyoruz" düşüyor.`],
+  ],
+  health: [
+    (t) => [`The ${t} panel asked about your last night shift. You had not done one yet.`, `${t} mülakatında komisyon son nöbetini sordu. Henüz hiç nöbet tutmamıştın.`],
+    (t) => [`They filled the ${t} post from inside the hospital.`, `${t} kadrosunu hastanenin içinden birine verdiler.`],
+  ],
+  uniform: [
+    (t) => [`You passed the physical test for ${t}, then stammered at the interview question "Why this job?"`, `${t} alımında fiziki yeterliliği geçtin ama mülakatta "Neden bu meslek?" sorusunda kekeledin.`],
+    (t) => [`You finished the ${t} fitness run four seconds over the limit.`, `${t} alımındaki koşu testini sınırın dört saniye üstünde bitirdin.`],
+    (t) => [`The ${t} board said "not this intake" and wished you luck.`, `${t} alım komisyonu "Bu dönem olmadı" dedi ve sana başarılar diledi.`],
+  ],
+  school: [
+    (t) => [`In your demo lesson for ${t} a pupil asked a question you could not answer. The room went quiet.`, `${t} için verdiğin deneme dersinde bir öğrencinin sorusuna cevap veremedin. Sınıf sessizleşti.`],
+    (t) => [`They took a ${t} with more years in front of a class.`, `Sınıf önünde daha çok yılı olan birini ${t} olarak aldılar.`],
+  ],
+  studio: [
+    (t) => [`You showed your work for the ${t} job. They said "very interesting", which means no.`, `${t} işi için çalışmalarını gösterdin. "Çok ilginç" dediler; yani hayır.`],
+    (t) => [`Someone with more connections got the ${t} job.`, `${t} işini çevresi daha geniş biri kaptı.`],
+  ],
+};
+/** Türkiye's KPSS posts are not interviews: the appointment list decides. */
+const REJECT_KPSS: Reject[] = [
+  (t) => [`The appointment results came out. Your KPSS score fell just short of this year's ${t} posts.`, `Atama sonuçları açıklandı. KPSS puanın bu yılki ${t} kadrolarına az farkla yetmedi.`],
+  (t) => [`You put ${t} posts in thirty cities on your list. The last one placed scored a little more than you.`, `Otuz ilde ${t} kadrosu yazdın. En son yerleşen senden biraz yüksek puan almış.`],
+];
+
+function rejectLine(c: Ctx, job: JobDef, title: string): string {
+  if (KPSS_JOBS[job.id] !== undefined && trRules(c)) return sayWith(c, 'job_board.reject.kpss', REJECT_KPSS, title);
+  const kind = jobKind(job.id, job.field);
+  return sayWith(c, `job_board.reject.${kind}`, [...REJECT_ANY, ...(REJECT[kind] ?? [])], title);
+}
+
+/** The hire line: a KPSS appointment, the police training (POMEM) for a graduate, or a plain job offer. */
+function hireLine(c: Ctx, job: JobDef, title: string, titleTr: string, pay: string): string {
+  if (trRules(c) && KPSS_JOBS[job.id] !== undefined)
+    return c.t(`Your KPSS score got you a state post (kadro): you start as ${aOrAn(title)} on ${pay} a year.`, `KPSS puanınla kadroya atandın! ${titleTr} olarak başlıyorsun; yıllık maaşın ${pay}.`);
+  if (trRules(c) && job.id === 'police')
+    return c.t(`You passed the police entrance exams. After training at the police academy (POMEM) you start as ${aOrAn(title)} on ${pay} a year.`, `Polis alım sınavlarını geçtin. POMEM'deki eğitimin ardından ${titleTr} olarak göreve başlıyorsun; yıllık maaşın ${pay}.`);
+  return c.t(`You got the job! You start as ${aOrAn(title)} on ${pay} a year.`, `İşi kaptın! ${titleTr} olarak başlıyorsun; yıllık maaşın ${pay}.`);
+}
 
 const jobChoice = (i: number): ChoiceDef => ({
   id: `job${i}`,
@@ -263,13 +369,11 @@ const jobChoice = (i: number): ChoiceDef => ({
       }
       c.h.stat('happiness', 6);
       const pay = c.h.fmt(salaryFor(job, lvl, getCountry(c.p.countryId).wageFactor));
-      return c.t(
-        `You got the job! You start as ${aOrAn(c.h.jobTitle() ?? title)} on ${pay} a year.`,
-        `İşi kaptın! ${c.h.jobTitle() ?? titleTr} olarak başlıyorsun; yıllık maaşın ${pay}.`,
-      );
+      const now = c.h.jobTitle();
+      return hireLine(c, job, now ?? title, now ?? titleTr, pay);
     }
     c.h.stat('happiness', -3);
-    return sayWith(c, 'job_board.reject', REJECT, c.lang === 'tr' ? titleTr : title);
+    return rejectLine(c, job, c.lang === 'tr' ? titleTr : title);
   },
   tone: (c) => (c.p.jobId === String(c.vars[`job${i}`]) ? 'good' : 'bad'),
 });
@@ -292,6 +396,8 @@ export const jobBoardEvents: EventDef[] = [
     category: 'work',
     scheduled: true,
     setup: (c) => {
+      // opened by the 'Look for a job' activity (it counts the use before the board opens), not the engine's nudge
+      if ((c.p.actionsThisYear[JOB_SEARCH_ACTIVITY] ?? 0) > 0) c.vars.viaActivity = 1;
       fallbackPicks(c).forEach((r, i) => {
         c.vars[`job${i}`] = r.id;
         c.vars[`lvl${i}`] = r.level;
@@ -309,10 +415,18 @@ export const jobBoardEvents: EventDef[] = [
     choices: [...Array.from({ length: SLOTS }, (_, i) => jobChoice(i)), {
         id: 'none',
         label: (c) => c.t('Keep looking later', 'Sonra yine bakarsın'),
-        // a line, so a year whose only event was the listings still has something in the story (round 5: the
-        // yearly nudge for the jobless opens this board now, not the old salary-less listings)
-        resolve: (c) =>
-          c.vars.job0 ? c.t('You closed the listings. Maybe next week.', 'İlanları kapattın. Belki haftaya.') : c.t('Nothing for you this week. You will look again.', 'Bu hafta sana uygun bir ilan yok. Yine bakacaksın.'),
+        // round 7 (review 6 §3.11): looking and closing without applying is free: the activity is given back and
+        // nothing is written. The yearly nudge for the jobless (opened by the engine) still leaves a line.
+        resolve: (c) => {
+          if (c.vars.viaActivity) {
+            const used = c.p.actionsThisYear[JOB_SEARCH_ACTIVITY] ?? 0;
+            if (used > 0) c.p.actionsThisYear[JOB_SEARCH_ACTIVITY] = used - 1;
+            return '';
+          }
+          return c.vars.job0
+            ? c.t('You looked through the listings and kept your options open.', 'İlanlara göz gezdirdin, şimdilik bir yere başvurmadın.')
+            : c.t('Nothing for you this week. You will look again.', 'Bu hafta sana uygun bir ilan yok. Yine bakacaksın.');
+        },
       }],
   },
 ];

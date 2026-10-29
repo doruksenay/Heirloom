@@ -102,7 +102,7 @@ const CLUB_LINES: Record<ClubId, Pair[]> = {
 // ------------------------------------------------------------------ activity line pools
 
 const STUDY_KID: Pair[] = [
-  ['You did your homework at the kitchen table and only asked for help twice. Personal best.', 'Ödevini mutfak masasında yaptın ve sadece iki kez yardım istedin. Kişisel rekor.'],
+  ['You did your homework at the kitchen table and only asked for help twice. Personal best.', 'Ödevini mutfak masasında yaptın ve sadece iki kez yardım istedin. Senin için büyük başarı.'],
   ['You learned your times tables by singing them in the bath. The neighbours learned them too.', 'Çarpım tablosunu banyoda şarkı söyleyerek ezberledin. Komşular da ezberledi.'],
   ['You read a whole chapter ahead. The next day you knew an answer before the teacher finished the question.', 'Bir bölüm önden okudun. Ertesi gün öğretmen soruyu bitirmeden cevabı bildin.'],
   ['You practised your handwriting until your letters stopped leaning like tired people.', 'Harflerin yorgun insanlar gibi yana yatmayı bırakana kadar el yazısı çalıştın.'],
@@ -853,7 +853,15 @@ export const youngSchoolEvents: EventDef[] = [
     maxAge: 17,
     once: true,
     when: inHigh,
-    title: tt('The yearbook needs your quote.', 'Mezuniyet yıllığı için bir söz lazım.'),
+    // round 7: the yearbook is American; Türkiye has the graduation album, Germany the Abizeitung, Britain the leavers' book
+    title: (c) =>
+      c.p.countryId === 'tr'
+        ? c.t('The graduation album needs a line from you.', 'Mezuniyet albümüne senden de bir söz isteniyor.')
+        : c.p.countryId === 'de'
+          ? c.t('The Abi newspaper needs your quote.', 'Okulun mezuniyet dergisi için bir söz lazım.')
+          : c.p.countryId === 'uk'
+            ? c.t("The leavers' book needs your quote.", 'Mezuniyet defteri için bir söz lazım.')
+            : c.t('The yearbook needs your quote.', 'Mezuniyet yıllığı için bir söz lazım.'),
     text: tt('It will be printed forever. Your future children will read it.', 'Sonsuza kadar basılı kalacak. Gelecekteki çocukların okuyacak.'),
     choices: [
       opt('deep', ['Something deep and philosophical', 'Derin ve felsefi bir şey'], (c) =>

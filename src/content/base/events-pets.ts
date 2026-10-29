@@ -2,7 +2,7 @@ import type { Ctx, EventDef } from '../types';
 import { MAX_PETS, addPet, displayName, findPet, nextNum, petAge, petDies, petKind, petNames, petState, petsOf, type Pet, type PetKind } from '../../engine/pets';
 import { currentTier, homeTier, type HomeTier } from '../../engine/home';
 import { acc, cap, da, dat, gen, officeJob, wage, wth } from './util';
-import { coastal, inTr } from './events-flavour';
+import { coastal, inFlat, inTr } from './events-flavour';
 import { say as sayLine, type Pair } from './lines';
 import {
   ADOPT_DECLINED,
@@ -66,7 +66,7 @@ const ADOPT_LINES: Record<PetKind, [string, string]> = {
   bird: ['{n} the budgie arrived in a tiny cage with an enormous attitude.', 'Muhabbet kuşu {n} minicik bir kafes ve kocaman bir tavırla geldi.'],
   fish: ['You bought {n} and a bowl. {n} has a three-second memory and already loves you.', '{acc} ve bir fanus aldın. Üç saniyelik hafızasıyla seni çoktan sevdi.'],
   rabbit: ['{n} the rabbit hopped out of the box and straight under the sofa. Welcome home.', 'Tavşan {n} kutudan fırladı ve doğruca kanepenin altına girdi. Evine hoş geldin.'],
-  turtle: ['You adopted {n}, a tortoise of {x}. With luck, {n} will meet your grandchildren.', '{x} yaşında bir kaplumbağa olan {acc} sahiplendin. Şansın yaver giderse torunlarınla da tanışacak.'],
+  turtle: ['You adopted {n}, a tortoise of {x}. With luck, {n} will outlive you and meet the next generation.', '{x} yaşında bir kaplumbağa olan {acc} sahiplendin. Şansın yaver giderse senden sonraki kuşakla da tanışacak.'],
   horse: ['{n} arrived in a trailer and looked over the field like a landlord.', '{n} bir römorkla geldi ve tarlaya ev sahibi edasıyla baktı.'],
 };
 
@@ -209,7 +209,9 @@ const petEventsOnly: EventDef[] = [
         label: (c) => c.t('Find them all homes', 'Hepsine yuva bul'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
-          return c.t('Every flat in the building has a puppy now. The building manager is livid.', 'Apartmandaki her dairede artık bir köpek yavrusu var. Apartman yöneticisi küplere biniyor.');
+          return inFlat(c)
+            ? c.t('Every flat in the building has a puppy now. The building manager is livid.', 'Apartmandaki her dairede artık bir köpek yavrusu var. Apartman yöneticisi küplere biniyor.')
+            : c.t('Every house on the street has a puppy now. The street has never been so loud or so happy.', 'Sokaktaki her evde artık bir köpek yavrusu var. Sokak hiç bu kadar gürültülü ve bu kadar mutlu olmamıştı.');
         },
       },
     ],
@@ -923,7 +925,9 @@ const homeEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 4);
           c.h.stat('health', -2);
-          return c.t('Four flights of stairs, six pizzas, and a sofa stuck in the stairwell for forty minutes. Best day of the year.', 'Dört kat merdiven, altı pizza ve merdiven boşluğunda kırk dakika sıkışıp kalan bir kanepe. Yılın en güzel günü.') + petMove(c);
+          return (inFlat(c)
+            ? c.t('Four flights of stairs, six pizzas, and a sofa stuck in the stairwell for forty minutes. Best day of the year.', 'Dört kat merdiven, altı pizza ve merdiven boşluğunda kırk dakika sıkışıp kalan bir kanepe. Yılın en güzel günü.')
+            : c.t('Six pizzas, one borrowed van and a sofa stuck in the front door for forty minutes. Best day of the year.', 'Altı pizza, ödünç bir kamyonet ve ön kapıda kırk dakika sıkışıp kalan bir kanepe. Yılın en güzel günü.')) + petMove(c);
         },
       },
     ],
@@ -934,7 +938,7 @@ const homeEvents: EventDef[] = [
     minAge: 18,
     cooldown: 6,
     weight: 12,
-    when: (c) => moved(c, 2) && currentTier(c.p) !== 'parents',
+    when: (c) => moved(c, 2) && currentTier(c.p) !== 'parents' && inFlat(c),
     title: (c) => c.t('Your new neighbors throw a party every Thursday.', 'Yeni komşuların her perşembe parti veriyor.'),
     text: (c) => c.t('The bass comes up through your floor. Last week someone sang a ballad at 2 a.m.', inTr(c) ? 'Bas sesi yerden yükseliyor. Geçen hafta biri gece ikide arabesk söyledi.' : 'Bas sesi yerden yükseliyor. Geçen hafta biri gece ikide avaz avaz aşk şarkısı söyledi.'),
     choices: [

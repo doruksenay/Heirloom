@@ -1180,7 +1180,7 @@ export const moreEvents: EventDef[] = [
           if (c.rng.chance(0.45 + c.p.stats.looks / 400)) {
             hype(comp, 30);
             grow(c, comp, 1.25);
-            return c.t('The critics gasped. In a good way. Orders poured in from three continents.', 'Eleştirmenlerin nefesi kesildi, hem de iyi anlamda. Üç kıtadan sipariş yağdı.');
+            return c.t('The critics gasped. In a good way. Orders poured in from three continents.', 'Eleştirmenlerin nefesi kesildi; bu sefer hayranlıktan. Üç kıtadan sipariş yağdı.');
           }
           hype(comp, -5);
           return c.t('The critics gasped. In a bad way. One model refused to come out.', 'Eleştirmenlerin nefesi kesildi, ama kötü anlamda. Mankenlerden biri podyuma çıkmayı reddetti.');
@@ -1831,5 +1831,10 @@ function jubilee(c: Ctx, comp: Company) {
   c.h.stat('happiness', age >= 50 ? 10 : 6);
   if (age === 25) c.h.achieve('jubilee25');
   if (age === 50) c.h.achieve('half_century');
+  // round 7: the owner in prison hears about the party from a letter
+  if (c.p.jailYears > 0) {
+    c.h.log(tidy(c.t(`${comp.name} turned ${age}. The staff sent you a photo of the cake and a card signed by everyone. You pinned it above your bunk.`, `${comp.name} ${age} yaşına girdi. Çalışanlar sana pastanın fotoğrafını ve herkesin imzaladığı bir kart yolladı. Ranzanın üstüne astın.`)), 'big');
+    return;
+  }
   c.h.log(tidy(c.t(en, tr)), 'big');
 }

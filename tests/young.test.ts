@@ -29,6 +29,11 @@ function player(age: number, lang: Lang, seed: number, countryId = seed % 2 ? 't
     if (seed % 2) c.h.setJob('barista');
     p.home.owned = seed % 3 === 0;
     c.h.flag('teen_moved_out');
+    // round 7: a renter who just left a rented flat (the deposit events need a real move-out)
+    if (!p.home.owned && seed % 3 === 1) {
+      c.h.flag('left_rental');
+      p.ext = { ...(p.ext ?? {}), house: { ...((p.ext?.house as object) ?? {}), tier: 'flat', movedYear: s.year } };
+    }
   }
   if (age >= 20 && seed % 5 === 0) {
     const y = ys(c);

@@ -43,6 +43,8 @@ function family(age: number, lang: Lang, country: string, variant: number): Game
     h.addRelation(kid, 'child', 65);
   }
   s.player.money = variant % 4 === 3 ? 50 : 500_000;
+  // round 7: some families just moved out of a rented home (the deposit events need it)
+  if (variant % 2 === 0) s.player.flags.left_rental = s.year;
   s.player.jobId = variant % 2 ? BASE_JOBS[0].id : null;
   s.player.retired = age >= 66;
   s.player.stats = { happiness: 50, health: variant % 2 ? 45 : 80, smarts: 60, looks: 50 };

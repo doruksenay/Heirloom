@@ -9,6 +9,18 @@ import type { CountryId } from '../../engine/world';
 
 /** The life is in Türkiye: simit, dolmuş, Kemal Bey and Adana kebab only make sense here. */
 export const inTr = (c: Ctx) => c.p.countryId === 'tr';
+/**
+ * Round 7: a Turkish home, for Türkiye flavour (bayram, halay, okey, kahvehane, çeyrek altın, termos çayı). True in
+ * Türkiye and for a Turkish family abroad (a life that left Türkiye, or its children), who still keep bayram in
+ * Köln or Manchester. Everyone else gets neutral words (yılbaşı, özel günler, dans).
+ */
+export const trHome = (c: Ctx): boolean => {
+  if (c.p.countryId === 'tr') return true;
+  const e = c.p.ext?.emig as { from?: string } | undefined;
+  if (e?.from === 'tr') return true;
+  const r = c.s.dynasty.roots;
+  return !!r && r.countryId === 'tr' && c.s.dynasty.generation === r.generation + 1;
+};
 
 /** The player's city has a sea coast (beach walks, harbours, ferries). */
 export const coastal = (c: Ctx) => isCoastal(c.p.city);
@@ -28,12 +40,33 @@ export function byCountry<T>(c: Ctx, m: ByCountry<T>): T {
 
 /** Has ever had a child (living or not). */
 export const hasKids = (c: Ctx) => c.p.relations.some((r) => r.kind === 'child');
+/** Round 7: a living grandchild on record (a living child's children). */
+export const hasGrandkids = (c: Ctx) =>
+  c.h.relatives('child').some((k) => (k.person.childIds ?? []).some((id) => c.s.people[id] && c.s.people[id].deathYear === undefined) || ((k.person.kids ?? 0) > 0 && !k.person.childIds));
+/** [en, tr] "The grandchildren" / "The children" / "Your life", for lines about who keeps you here. */
+export const keepsYouHere = (c: Ctx): [string, string] =>
+  hasGrandkids(c) ? ['The grandchildren are', 'Torunlar'] : c.h.relatives('child').length ? ['The children are', 'Çocukların'] : ['Your life is', 'Hayatın'];
 /** Married, with a partner, with children, or in a home of their own: flat-share and first-room events skip these lives. */
 export const settled = (c: Ctx) => !!c.h.partner() || hasKids(c) || c.p.home.owned;
 /** Still living in the parents' home (never moved to a room, studio or flat of their own). */
 export const atParents = (c: Ctx) => !c.p.home.owned && currentTier(c.p) === 'parents';
 
 /** A child who emigrated (base.child_abroad). They call, they do not drop by. Flag: `abroad:<personId>`. */
+/**
+ * Round 7: the player lives with this partner (moved in through base.nudge_together, flag `moved_in:<id>`). Saves
+ * from before round 7 only have the plain `moved_in` flag, which counts for the current partner. No rng.
+ */
+export const livesWith = (c: Ctx, personId: string): boolean =>
+  c.h.has(`moved_in:${personId}`) || (c.h.has('moved_in') && !Object.keys(c.p.flags ?? {}).some((f) => f.startsWith('moved_in:')));
+
+/** Round 7: moved out of a rented home this year or last (moveTo sets the flag), for deposit disputes. */
+export const leftRentalRecently = (c: Ctx): boolean => (c.p.flags?.left_rental ?? -99) >= c.s.year - 1;
+
+/** Round 7: a home with neighbours through the wall (a room, studio or flat), not a house, farm or villa. */
+export const thinWalls = (c: Ctx): boolean => ['room', 'studio', 'flat', 'parents'].includes(currentTier(c.p));
+/** Round 7: lives in a building (a room, studio or flat; the parents' home counts), so apartman lines fit. */
+export const inFlat = thinWalls;
+
 export const ABROAD = 'abroad';
 export const isAbroad = (c: Ctx, personId: string) => c.h.has(`${ABROAD}:${personId}`);
 /** Where an emigrated child lives: [English, Turkish] city names. */

@@ -59,7 +59,7 @@ const BUSK_TR_EXTRA: ((v: { fans: string; money: string }) => Pair)[] = [
 ];
 
 const OPEN_MIC_GOOD: ((n: string) => Pair)[] = [
-  (n) => [`Open mic night: you played two songs and the room went quiet in the good way. ${n} new fans.`, `Açık sahne gecesinde iki şarkı çaldın ve salon iyi anlamda sustu. ${n} yeni hayran.`],
+  (n) => [`Open mic night: you played two songs and the room went quiet in the good way. ${n} new fans.`, `Açık sahne gecesinde iki şarkı çaldın; salonda çıt çıkmadı. ${n} yeni hayran.`],
   (n) => [`You were on after a poet and before a man with a ukulele. You were the best of the three. ${n} new fans.`, `Bir şairden sonra, ukulelesi olan bir adamdan önce çıktın. Üçünüzün en iyisi sendin. ${n} yeni hayran.`],
   (n) => [`The café owner asked you to come back every month. ${n} new fans and a free tea.`, `Kafenin sahibi her ay gelmeni istedi. ${n} yeni hayran ve bedava bir çay.`],
   (n) => [`Someone at the back sang your chorus back to you, and you nearly forgot the next line. ${n} new fans.`, `Arkalardan biri nakaratını sana geri söyledi; sen de az kalsın sonraki dizeyi unutuyordun. ${n} yeni hayran.`],

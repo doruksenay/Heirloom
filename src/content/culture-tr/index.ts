@@ -1,4 +1,5 @@
 import type { ActivityDef, ContentPack, Ctx, EventDef } from '../types';
+import { KPSS_JOBS } from '../../engine/careers';
 import { canMarryGrandkid, marryGrandkid } from '../base/events-elder';
 import type { GameState } from '../../engine/types';
 import type { RibbonDef } from '../../engine/ribbons';
@@ -7,7 +8,9 @@ import { aOrAn, cap, dat, eligibleJobs, gen, kin, kinWord, nm, officeJob, single
 import { pickIndex, say, type Pair } from '../base/lines';
 import { closeAll, hasDad, hasMom, inTR } from './common';
 import { aliveKin } from '../base/kin';
+import { inFlat } from '../base/events-flavour';
 import { milestoneEvents, trOnYear, trSchedule } from './milestones';
+import { muhtarActivities, muhtarEvents, muhtarRunning, muhtarSchedule } from './muhtar';
 import { bayramLine, FERRY_IST, FERRY_IZMIR, HALISAHA, HALISAHA_HURT, kahveLine, pazarLines, sayBand, TAVLA, teaLine } from './lines';
 import { bandOf } from './common';
 
@@ -159,7 +162,7 @@ const childhood: EventDef[] = [
             );
           }
           c.h.stat('health', -4);
-          const caller = hasMom(c) ? ['Your mother', 'Annen'] : hasDad(c) ? ['Your father', 'Baban'] : ['The neighbor upstairs', 'Üst kattaki komşu'];
+          const caller = hasMom(c) ? ['Your mother', 'Annen'] : hasDad(c) ? ['Your father', 'Baban'] : ['The neighbor next door', 'Yan komşu'];
           return c.t(
             `Climbing to the neighbor's balcony, you fell into the rosebush. ${caller[0]} called you in from the fourth floor, and the whole street heard your full name.`,
             `Komşunun balkonuna tırmanırken gül fidanının içine düştün. ${caller[1]} dördüncü kattan "Eve!" diye bağırdı; bütün sokak göbek adını da öğrendi.`,
@@ -610,6 +613,7 @@ const youth: EventDef[] = [
     minAge: 18,
     maxAge: 23,
     once: true,
+    weight: 20, // round 7: a short window (18–23, no job, no school); at the default weight it often never came
     when: (c) => inTR(c) && !c.p.jobId && c.p.school === null && c.p.jailYears === 0,
     title: (c) => c.t('A friend says there is summer work in Bodrum.', "Bir arkadaşın Bodrum'da yazlık iş olduğunu söylüyor."),
     text: (c) => c.t('Waiting tables (garsonluk) at a seaside restaurant. Sun, tips and no sleep.', 'Sahilde bir restoranda garsonluk. Güneş, bahşiş, uykusuzluk.'),
@@ -693,7 +697,8 @@ const youth: EventDef[] = [
 function kpss(c: Ctx, need: number): string {
   c.h.stat('smarts', 4);
   c.h.stat('happiness', -3);
-  const posts = eligibleJobs(c).filter((j) => j.field === 'public');
+  // only real KPSS posts (no bus driver or muhtar through the exam)
+  const posts = eligibleJobs(c).filter((j) => j.id in KPSS_JOBS);
   if (c.p.stats.smarts >= need && posts.length) {
     c.h.setJob(c.rng.pick(posts).id);
     c.h.stat('happiness', 8);
@@ -1059,11 +1064,12 @@ const adult: EventDef[] = [
   },
   {
     id: 'tr.aidat',
+    // round 7: aidat and the building meeting are for a flat, not a house or a villa
     category: 'money',
     minAge: 25,
     maxAge: 88,
     cooldown: 7,
-    when: (c) => inTR(c) && ownHome(c),
+    when: (c) => inTR(c) && ownHome(c) && inFlat(c),
     // a different fight each meeting: elevator, insulation, roof, intercom, garden
     setup: (c) => {
       c.vars.topic = pickIndex(c, 'tr.aidat', AIDAT.length);
@@ -1110,7 +1116,7 @@ const adult: EventDef[] = [
     maxAge: 85,
     once: true,
     when: (c) => inTR(c) && c.p.jailYears === 0,
-    title: (c) => c.t('Your building holds an earthquake drill.', 'Apartmanda deprem tatbikatı var.'),
+    title: (c) => (inFlat(c) ? c.t('Your building holds an earthquake drill.', 'Apartmanda deprem tatbikatı var.') : c.t('Your neighborhood holds an earthquake drill.', 'Mahallede deprem tatbikatı var.')),
     text: (c) =>
       c.t(
         'Everyone agrees an emergency bag (deprem çantası) is a good idea. Far fewer people have actually packed one.',
@@ -1138,7 +1144,7 @@ const adult: EventDef[] = [
           c.h.stat('smarts', 3);
           c.h.stat('happiness', 3);
           c.h.stat('health', 1);
-          return c.t('You learned first aid with your neighbors. Now the whole building knows who to call.', 'Komşularınla ilk yardım öğrendin. Artık bütün apartman kimi arayacağını biliyor.');
+          return c.t('You learned first aid with your neighbors. Now the whole street knows who to call.', 'Komşularınla ilk yardım öğrendin. Artık bütün sokak kimi arayacağını biliyor.');
         },
       },
       {
@@ -1355,7 +1361,7 @@ const adult: EventDef[] = [
     cooldown: 4,
     when: inTR,
     title: (c) => c.t('Your neighbors invite you to iftar, the evening meal that breaks the Ramadan fast.', 'Komşular seni iftara çağırıyor.'),
-    text: (c) => c.t('The whole building is coming. Somebody made thirty kinds of börek.', 'Bütün apartman orada olacak. Biri otuz çeşit börek açmış.'),
+    text: (c) => (inFlat(c) ? c.t('The whole building is coming. Somebody made thirty kinds of börek.', 'Bütün apartman orada olacak. Biri otuz çeşit börek açmış.') : c.t('The whole street is coming. Somebody made thirty kinds of börek.', 'Bütün sokak orada olacak. Biri otuz çeşit börek açmış.')),
     choices: [
       {
         id: 'go',
@@ -1376,11 +1382,11 @@ const adult: EventDef[] = [
 ];
 
 const IFTAR_GO: Pair[] = [
-  ["You brought güllaç (a milky rose-water dessert) and were declared everybody's favorite neighbor.", 'Güllaç götürdün ve oybirliğiyle apartmanın en sevilen komşusu ilan edildin.'],
-  ['You brought a tray of baklava. The neighbor from the fourth floor took three pieces "for her husband".', 'Bir tepsi baklava götürdün. Dördüncü kattaki komşu "eşime" diye üç dilim ayırdı.'],
-  ['You brought dates and sat next to the oldest neighbor, who told you how the building was built, brick by brick.', 'Hurma götürdün ve en yaşlı komşunun yanına oturdun. Sana apartmanın nasıl yapıldığını tuğla tuğla anlattı.'],
+  ["You brought güllaç (a milky rose-water dessert) and were declared everybody's favorite neighbor.", 'Güllaç götürdün ve oybirliğiyle mahallenin en sevilen komşusu ilan edildin.'],
+  ['You brought a tray of baklava. The neighbor from across the street took three pieces "for her husband".', 'Bir tepsi baklava götürdün. Karşı komşu "eşime" diye üç dilim ayırdı.'],
+  ['You brought dates and sat next to the oldest neighbor, who told you how the street looked when it was all gardens.', 'Hurma götürdün ve en yaşlı komşunun yanına oturdun. Sana sokağın her yeri bahçeyken nasıl göründüğünü anlattı.'],
   ['You brought dessert and stayed for tea. The children set the table and set off three arguments.', 'Tatlı götürüp çaya kaldın. Çocuklar sofrayı kurdu, üç de tartışma başlattı.'],
-  ['You waited with everyone for the call to prayer, forks in the air. Nobody has ever been so quiet in that building.', 'Herkesle birlikte çatallar havada ezanı bekledin. O apartmanda hiç bu kadar sessiz bir an olmamıştı.'],
+  ['You waited with everyone for the call to prayer, forks in the air. Nobody has ever been so quiet in that house.', 'Herkesle birlikte çatallar havada ezanı bekledin. O evde hiç bu kadar sessiz bir an olmamıştı.'],
   ['You brought künefe from the good place. Somebody asked for the address before saying hello.', 'İyi yerden künefe götürdün. Biri daha selam vermeden adresi sordu.'],
 ];
 const IFTAR_STAY: Pair[] = [
@@ -1508,7 +1514,8 @@ const later: EventDef[] = [
     maxAge: 80,
     once: true,
     weight: 4,
-    when: (c) => inTR(c) && c.p.jailYears === 0 && c.p.criminalRecord === 0,
+    // round 7: not for someone already muhtar or already running (muhtar.ts)
+    when: (c) => inTR(c) && c.p.jailYears === 0 && c.p.criminalRecord === 0 && !c.p.achievements.includes('tr_muhtar') && !muhtarRunning(c.p),
     title: (c) => c.t('The neighbors want you to run for muhtar.', 'Komşular muhtarlığa aday olmanı istiyor.'),
     text: (c) =>
       c.t(
@@ -1590,7 +1597,7 @@ const later: EventDef[] = [
         label: (c) => c.t('Just eat, gratefully', 'Sadece afiyetle ye'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
-          return c.t('Four bowls of aşure from four houses, each one the best. The one from downstairs had the most walnuts.', 'Dört evden dört kâse aşure geldi, hepsi birbirinden güzel. En çok ceviz alt kattakindeydi.');
+          return c.t('Four bowls of aşure from four houses, each one the best. The one from next door had the most walnuts.', 'Dört evden dört kâse aşure geldi, hepsi birbirinden güzel. En çok ceviz yan komşununkindeydi.');
         },
       },
     ],
@@ -1863,10 +1870,11 @@ export const cultureTrPack: ContentPack = {
   rating: 'all',
   // free since v0.9: lives in Türkiye are the game's home market, so this content is never sold
   entitlement: null,
-  events,
-  activities,
+  // round 7 (balance): running for muhtar (muhtar.ts)
+  events: [...events, ...muhtarEvents],
+  activities: [...activities, ...muhtarActivities],
   ribbons,
   goals,
-  schedule: trSchedule,
+  schedule: (c, current) => muhtarSchedule(c, trSchedule(c, current)),
   onYear: trOnYear,
 };

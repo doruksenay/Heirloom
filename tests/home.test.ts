@@ -141,7 +141,9 @@ describe('homes', () => {
     expect(s.player.money).toBe(0);
     const loan = s.player.home.loan!;
     expect(loan.principal).toBe(price - before);
-    expect(loan.balance).toBeLessThanOrEqual(Math.round(price * 1.25));
+    // round 7: real interest (economy.ts MORTGAGE_RATE), so the total paid is well above the amount borrowed
+    expect(loan.balance).toBeGreaterThan(loan.principal);
+    expect(loan.balance).toBeLessThanOrEqual(Math.round(loan.principal * 2.5));
     expect(loan.payment * loan.yearsLeft).toBeGreaterThanOrEqual(loan.balance);
     // a year of the budget pays one instalment off the loan
     const owed = loan.balance;

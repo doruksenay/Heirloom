@@ -5,8 +5,9 @@ import { hireableIn } from '../../engine/careers';
 import { cityName } from '../../engine/places';
 import { moveTo } from './activities-home';
 import { nameClashesWithFamily } from '../../engine/context';
-import { abl, cap, dat, kin, loc, wage } from './util';
-import { isAbroad } from './events-flavour';
+import { abl, cap, dat, gen, kin, loc, wage, wth } from './util';
+import { alivePets } from '../../engine/pets';
+import { hasGrandkids, isAbroad, keepsYouHere } from './events-flavour';
 
 // Round 6: moving abroad (free). An adult can move the family to another country: the partner and the children under
 // 18 come along, an owned home is sold, a job tied to the old country is lost. Money stays in US-baseline dollars;
@@ -188,14 +189,29 @@ export function relocate(c: Ctx, dest: string, city: string, cost: number): stri
   const housing = moveTo(c, going.length ? 'flat' : 'studio', 'rent');
   const cityEn = cityName(city, 'en');
   const cityTr = cityName(city, 'tr');
+  // round 7 (review 6 §4.18, §3.15): "İngiltere'nin Manchester şehrine", and "ailecek" only for a real family
+  const placeTr = dest === 'tr' ? dat(cityTr) : `${gen(cnTr(dest))} ${cityTr} şehrine`;
+  const kidsGoing = going.filter((x) => c.p.relations.some((r) => r.personId === x.id && r.kind === 'child')).length;
+  const spouseGoing = going.some((x) => c.p.relations.some((r) => r.personId === x.id && r.kind === 'spouse'));
+  const carrier = alivePets(c.p).length > 0;
   const main = returning
     ? c.t(
         `You moved back to ${cityEn}, ${cnEn(dest)}. The airport smelled of home.`,
-        dest === 'tr' ? `${dat(cityTr)} geri döndün. Havaalanı bile memleket kokuyordu.` : `${dat(cityTr)}, ${dat(cnTr(dest))} geri döndün. Havaalanı bile memleket kokuyordu.`,
+        `${placeTr} geri döndün. Havaalanı bile memleket kokuyordu.`,
       )
-    : going.length
-      ? c.t(`The whole family moved to ${cityEn}, ${cnEn(dest)}. Eleven suitcases, one cat carrier and a lot of hope.`, `Ailecek ${dat(cityTr)}, ${dat(cnTr(dest))} taşındınız. On bir bavul, bir taşıma çantası ve kocaman bir umut.`)
-      : c.t(`You packed two suitcases and moved to ${cityEn}, ${cnEn(dest)}.`, `İki bavul toplayıp ${dat(cityTr)}, ${dat(cnTr(dest))} taşındın.`);
+    : spouseGoing || (kidsGoing > 0 && going.length > kidsGoing)
+      ? c.t(
+          `The whole family moved to ${cityEn}, ${cnEn(dest)}. ${kidsGoing ? 'Eleven suitcases' : 'Six suitcases'}${carrier ? ', one pet carrier' : ''} and a lot of hope.`,
+          `Ailecek ${placeTr} taşındınız. ${kidsGoing ? 'On bir bavul' : 'Altı bavul'}${carrier ? ', bir taşıma çantası' : ''} ve kocaman bir umut.`,
+        )
+      : kidsGoing
+        ? c.t(
+            `You and the ${kidsGoing > 1 ? 'children' : 'little one'} moved to ${cityEn}, ${cnEn(dest)}. You carried most of the suitcases and all of the worry.`,
+            `${kidsGoing > 1 ? 'Çocuklarla' : 'Çocuğunla'} birlikte ${placeTr} taşındınız. Bavulların çoğunu da, bütün endişeyi de sen taşıdın.`,
+          )
+        : going.length
+          ? c.t(`You and ${going[0].firstName} moved to ${cityEn}, ${cnEn(dest)}, with four suitcases and one shared plan.`, `${wth(going[0].firstName)} birlikte ${placeTr} taşındınız. Dört bavul, ortak bir plan.`)
+          : c.t(`You packed two suitcases and moved to ${cityEn}, ${cnEn(dest)}.`, `İki bavul toplayıp ${placeTr} taşındın.`);
   return [main, ...parts, housing].join(' ');
 }
 
@@ -207,10 +223,15 @@ export const abroadActivities: ActivityDef[] = [
   {
     id: 'move_abroad',
     label: (c) => c.t('Move abroad', 'Yurt dışına taşın'),
+    // round 7: "ailecek" only with a family that would come along
     description: (c) =>
-      emig(c) || secondGen(c)
-        ? c.t('Try yet another country, family and all', 'Ailecek bir başka ülkeye daha git')
-        : c.t('Start over in another country, family and all', 'Ailecek başka bir ülkede yeni bir hayata başla'),
+      movers(c).length
+        ? emig(c) || secondGen(c)
+          ? c.t('Try yet another country, family and all', 'Ailecek bir başka ülkeye daha git')
+          : c.t('Start over in another country, family and all', 'Ailecek başka bir ülkede yeni bir hayata başla')
+        : emig(c) || secondGen(c)
+          ? c.t('Try yet another country', 'Bir başka ülkeye daha git')
+          : c.t('Start over in another country', 'Başka bir ülkede yeni bir hayata başla'),
     group: 'Family',
     minAge: 18,
     maxAge: 75,
@@ -409,7 +430,12 @@ export const abroadEvents: EventDef[] = [
       ch('call', 'Stay in and call home', 'Evde kal, memleketi ara', (c) => {
         c.h.stat('happiness', -1);
         for (const r of c.h.relatives(['mother', 'father'])) c.h.closeness(r.person.id, 4);
-        return c.t('You talked for three hours. Your mother asked if you were eating properly. Four times.', 'Üç saat konuştunuz. Annen düzgün yemek yiyip yemediğini sordu. Dört kez.');
+        // round 7: only a living mother asks (review 6 §3.2)
+        if (c.h.relatives('mother').length)
+          return c.t('You talked for three hours. Your mother asked if you were eating properly. Four times.', 'Üç saat konuştunuz. Annen düzgün yemek yiyip yemediğini sordu. Dört kez.');
+        if (c.h.relatives('father').length)
+          return c.t('You talked for three hours. Your father asked about the weather there, the prices there and the weather again.', 'Üç saat konuştunuz. Baban oranın havasını, fiyatlarını, sonra yine havasını sordu.');
+        return c.t('You called an old friend back home and talked for three hours. The neighbourhood news alone took one.', 'Memleketten eski bir arkadaşını arayıp üç saat konuştunuz. Sadece mahalle haberleri bir saat sürdü.');
       }),
     ],
   },
@@ -449,7 +475,7 @@ export const abroadEvents: EventDef[] = [
       ch('tv', 'Learn from cartoons', 'Çizgi filmlerden öğren', (c) => {
         c.h.stat('happiness', 2);
         learn(c, 8);
-        return c.t('You now speak like a talking sponge. It is a start.', 'Artık konuşan bir sünger gibi konuşuyorsun. Bir başlangıç.');
+        return c.t('You now speak like a talking sponge. It is a start.', 'Dili sünger gibi çekiyorsun; konuşması zaman alacak. Bir başlangıç.');
       }),
       ch('hands', 'Get by with your hands', 'Elle kolla anlaş', (c) => {
         c.h.stat('happiness', -1);
@@ -566,7 +592,9 @@ export const abroadEvents: EventDef[] = [
         c.h.money(-num(c));
         for (const r of c.h.relatives(['mother', 'father', 'sibling', 'grandparent'])) c.h.closeness(r.person.id, 6);
         c.h.stat('happiness', 4);
-        return c.t('The suitcase weighed 31 kilos and the airline noticed. Your aunt cried over a scarf.', 'Bavul 31 kilo geldi, havayolu da fark etti. Teyzen bir eşarp için ağladı.');
+        return c.h.relatives('mother').length
+          ? c.t('The suitcase weighed 31 kilos and the airline noticed. Your mother cried over a scarf.', 'Bavul 31 kilo geldi, havayolu da fark etti. Annen bir eşarp için ağladı.')
+          : c.t('The suitcase weighed 31 kilos and the airline noticed. An old neighbour cried over a scarf.', 'Bavul 31 kilo geldi, havayolu da fark etti. Eski bir komşun bir eşarp için ağladı.');
       }, { tone: 'good', requires: (c) => c.p.money >= num(c), requiresLabel: 'Not enough savings', badge: 'Costs more' }),
       ch('light', 'Travel light', 'Hafif yolculuk et', (c) => {
         for (const r of c.h.relatives(['sibling'])) c.h.closeness(r.person.id, -3);
@@ -576,7 +604,11 @@ export const abroadEvents: EventDef[] = [
       ch('skip', 'Not this year', 'Bu yıl olmaz', (c) => {
         for (const r of c.h.relatives(['mother', 'father'])) c.h.closeness(r.person.id, -4);
         c.h.stat('happiness', -2);
-        return c.t('You said next year. Your mother said "of course" in a voice you will remember.', 'Seneye dedin. Annen "Tabii" dedi; o sesi unutmayacaksın.');
+        if (c.h.relatives('mother').length)
+          return c.t('You said next year. Your mother said "of course" in a voice you will remember.', 'Seneye dedin. Annen "Tabii" dedi; o sesi unutmayacaksın.');
+        if (c.h.relatives('father').length)
+          return c.t('You said next year. Your father said "of course" and changed the subject a little too fast.', 'Seneye dedin. Baban "Tabii" dedi ve konuyu biraz fazla hızlı değiştirdi.');
+        return c.t('You said next year. Next year, you said it again.', 'Seneye dedin. Ertesi yıl da aynı şeyi dedin.');
       }),
     ],
   },
@@ -723,17 +755,17 @@ export const abroadEvents: EventDef[] = [
       c.vars.amt = moveCost(c, emig(c)!.from);
     },
     title: (c) => c.t(`Retired. Go back to ${cn(c, emig(c)!.from)} for good?`, `Emekli oldun. ${cap(dat(cnTr(emig(c)!.from)))} temelli dönsen mi?`),
-    text: (c) => c.t('The grandchildren are here. The sea of your childhood is there.', 'Torunlar burada. Çocukluğunun denizi orada.'),
+    text: (c) => c.t(`${keepsYouHere(c)[0]} here. The sea of your childhood is there.`, `${keepsYouHere(c)[1]} burada. Çocukluğunun denizi orada.`),
     choices: [
       ch('go', 'Go back', 'Dön', (c) => {
         const e = emig(c)!;
         return relocate(c, e.from, e.fromCity, num(c));
       }, { badge: 'Big change', requires: (c) => c.p.money >= num(c), requiresLabel: 'Not enough savings', tone: 'big' }),
-      ch('stay', 'Stay near the grandchildren', 'Torunların yanında kal', (c) => {
+      { ...ch('stay', '', '', () => ''), label: (c) => (hasGrandkids(c) ? c.t('Stay near the grandchildren', 'Torunların yanında kal') : c.t('Stay here', 'Burada kal')), resolve: (c) => {
         c.h.stat('happiness', 3);
         for (const r of c.h.relatives('child')) c.h.closeness(r.person.id, 3);
         return c.t('You stayed. Sunday lunches are at your place now.', 'Kaldın. Pazar sofraları artık senin evinde.');
-      }),
+      } },
     ],
   },
   // ---------------------------------------------------------------- the children: between two countries
@@ -858,7 +890,7 @@ export const abroadEvents: EventDef[] = [
       ch('drive', 'Drive through the Balkans', "Balkanlar'dan arabayla git", (c) => {
         c.h.stat('happiness', 4);
         c.h.stat('health', -1);
-        return c.t('Six hours at the border gate at Kapıkule. Someone sold you a watermelon through the window. Worth it.', 'Kapıkule sınır kapısında altı saat. Biri camdan karpuz sattı. Değdi.');
+        return c.t('Six hours at the border gate at Kapıkule. Someone sold you a watermelon through the window. Worth it.', 'Kapıkule sınır kapısında altı saat. Biri camdan karpuz sattı; hayatının en pahalı, en tatlı karpuzuydu.');
       }, { tone: 'good' }),
       ch('fly', 'Fly, like a sensible person', 'Akıllı ol, uçakla git', (c) => {
         c.h.money(-num(c));
@@ -1020,7 +1052,7 @@ export const abroadEvents: EventDef[] = [
     text: (c) =>
       c.h.has('house_back_home')
         ? c.t('The house back home has waited years for this.', 'Memleketteki ev yıllardır bu anı bekliyor.')
-        : c.t('The grandchildren are here. The sun is there.', 'Torunlar burada. Güneş orada.'),
+        : c.t(`${keepsYouHere(c)[0]} here. The sun is there.`, `${keepsYouHere(c)[1]} burada. Güneş orada.`),
     choices: [
       ch('go', 'Go back for good', 'Temelli dön', (c) => {
         const e = emig(c)!;
@@ -1031,11 +1063,14 @@ export const abroadEvents: EventDef[] = [
         c.h.stat('happiness', 5);
         return c.t('Six months here, six months there. The suitcase never quite gets unpacked.', 'Altı ay orada, altı ay burada. Bavul hiçbir zaman tam boşalmıyor.');
       }, { tone: 'good', requires: (c) => c.p.money >= Math.round(num(c) / 3), requiresLabel: 'Not enough savings' }),
-      ch('stay', 'Stay with the grandchildren', 'Torunların yanında kal', (c) => {
-        c.h.stat('happiness', 2);
-        for (const r of c.h.relatives('child')) c.h.closeness(r.person.id, 3);
-        return c.t('You stayed. The tea glasses came with you years ago anyway.', 'Kaldın. İnce belli bardaklar zaten yıllar önce seninle gelmişti.');
-      }),
+      {
+        ...ch('stay', 'Stay with the grandchildren', 'Torunların yanında kal', (c) => {
+          c.h.stat('happiness', 2);
+          for (const r of c.h.relatives('child')) c.h.closeness(r.person.id, 3);
+          return c.t('You stayed. The tea glasses came with you years ago anyway.', 'Kaldın. İnce belli bardaklar zaten yıllar önce seninle gelmişti.');
+        }),
+        label: (c) => (hasGrandkids(c) ? c.t('Stay with the grandchildren', 'Torunların yanında kal') : c.t('Stay here', 'Burada kal')),
+      },
     ],
   },
 ];

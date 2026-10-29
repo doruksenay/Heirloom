@@ -410,7 +410,7 @@ const partA: EventDef[] = [
     minAge: 18,
     weight: 14,
     when: onAny('butcher'),
-    title: (c) => (inTr(c) ? c.t('The week before the Feast of Sacrifice. Everyone wants you.', 'Kurban Bayramı arifesi. Herkes seni istiyor.') : c.t('The week before the holidays. Everyone wants their roast.', 'Bayram öncesi hafta. Herkes kızartmalık etini istiyor.')),
+    title: (c) => (inTr(c) ? c.t('The week before the Feast of Sacrifice. Everyone wants you.', 'Kurban Bayramı arifesi. Herkes seni istiyor.') : c.t('The week before the holidays. Everyone wants their roast.', 'Yılbaşı öncesi son hafta. Herkes kızartmalık etini istiyor.')),
     text: (c) =>
       inTr(c)
         ? c.t('Forty families have booked you for the first morning of the feast. There is one of you.', 'Kırk aile bayramın ilk sabahı için seni ayarladı. Sen bir tanesin.')
@@ -441,7 +441,7 @@ const partA: EventDef[] = [
         resolve: (c) => {
           const amt = cash(c, 400);
           c.h.stat('happiness', 7);
-          return c.t(`You still made ${amt}, and three families who could not afford it ate well. The best holiday in years.`, `Yine de ${amt} kazandın; gücü yetmeyen üç aile de güzel bir sofraya oturdu. Yıllardır geçirdiğin en güzel bayram.`);
+          return c.t(`You still made ${amt}, and three families who could not afford it ate well. The best holiday in years.`, inTr(c) ? `Yine de ${amt} kazandın; gücü yetmeyen üç aile de güzel bir sofraya oturdu. Yıllardır geçirdiğin en güzel bayram.` : `Yine de ${amt} kazandın; gücü yetmeyen üç aile de güzel bir sofraya oturdu. Yıllardır geçirdiğin en güzel tatil.`);
         },
         tone: 'good',
       },

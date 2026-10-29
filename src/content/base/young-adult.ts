@@ -1,5 +1,5 @@
 import type { Ctx, EventDef } from '../types';
-import { atParents, inTr, settled } from './events-flavour';
+import { atParents, inTr, leftRentalRecently, settled } from './events-flavour';
 import { single, wth } from './util';
 import { aliveKin } from './kin';
 import {
@@ -186,10 +186,10 @@ export const youngAdultEvents: EventDef[] = [
     minAge: 19,
     maxAge: 29,
     once: true,
-    when: movedOut,
+    when: (c) => movedOut(c) && leftRentalRecently(c),
     setup: (c) => newAdult(c, 'll', 45, 75),
-    title: tt('Your landlord wants to keep your whole deposit.', 'Ev sahibin depozitonun tamamını geri vermek istemiyor.'),
-    text: tt('For "a mark on the wall". The mark was there when you moved in. You think.', '"Duvardaki bir iz" yüzünden. O iz sen taşındığında da vardı. Galiba.'),
+    title: tt('Your old landlord wants to keep your whole deposit.', 'Eski ev sahibin depozitonun tamamını geri vermek istemiyor.'),
+    text: tt('For "a mark on the wall". The mark was there when you moved in. You think.', '"Duvardaki bir iz" yüzünden. O iz sen eve girdiğinde de vardı. Galiba.'),
     choices: [
       opt('photos', ['Find your move-in photos', 'Taşınırken çektiğin fotoğrafları bul'], (c) =>
         gamble(

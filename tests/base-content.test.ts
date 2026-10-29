@@ -517,3 +517,68 @@ describe('interactions speak per relationship (playtest 3, problem 2)', () => {
     expect(Object.keys(s.dynasty.lineMemory!).some((k) => k.startsWith('rel.'))).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------- round 7 (content-fix)
+import { kinNamesTr, possCase } from '../src/content/base/kin-names';
+import { abl, acc, gen, wth } from '../src/i18n/tr-grammar';
+import { kidMilestoneEvents, kidMilestonesOnYear, kidReadyForBaby, KID_WED_FLAG } from '../src/content/base/kid-milestones';
+import { scareKind } from '../src/content/base/events-heirloom';
+
+describe('round 7: kinship words, country flavour, children and heirlooms', () => {
+  const tr = () => {
+    const s = player(6, 'tr', 'tr', 'İzmir');
+    const mom = s.people[s.player.relations.find((r) => r.kind === 'mother')!.personId];
+    const dad = s.people[s.player.relations.find((r) => r.kind === 'father')!.personId];
+    return { s, mom: mom.firstName, dad: dad.firstName };
+  };
+
+  it('puts a kinship possessive into every case without an apostrophe', () => {
+    expect(['nom', 'gen', 'acc', 'dat', 'loc', 'abl', 'wth'].map((k) => possCase('annen', k as never))).toEqual(['annen', 'annenin', 'anneni', 'annene', 'annende', 'annenden', 'annenle']);
+    expect(['gen', 'acc', 'dat', 'wth'].map((k) => possCase('baban', k as never))).toEqual(['babanın', 'babanı', 'babana', 'babanla']);
+    expect(possCase('dayın', 'dat')).toBe('dayına');
+  });
+
+  it('calls parents annen/baban in Turkish lines, keeps names after a kin word and in English', () => {
+    const { s, mom, dad } = tr();
+    const c = makeCtx(s);
+    expect(c.t(`Hugged ${mom}`, `Koşup ${gen(mom)} bacaklarına sarıldın.`)).toBe('Koşup annenin bacaklarına sarıldın.');
+    expect(kinNamesTr(s, `İşten dönerken ${acc(dad)} aradın.`)).toBe('İşten dönerken babanı aradın.');
+    expect(kinNamesTr(s, `${wth(dad)} parka gittin. ${abl(mom)} harçlık aldın.`)).toBe('Babanla parka gittin. Annenden harçlık aldın.');
+    expect(kinNamesTr(s, `${dad} dedi ki: "Yağını kontrol et."`)).toBe('Baban dedi ki: "Yağını kontrol et."');
+    expect(kinNamesTr(s, `Annen ${mom} (30) ve baban ${dad} (32) seni eve getirdi.`)).toBe(`Annen ${mom} (30) ve baban ${dad} (32) seni eve getirdi.`);
+    expect(makeCtx({ ...s, lang: 'en' }).t(`You hugged ${mom}.`, 'x')).toBe(`You hugged ${mom}.`);
+  });
+
+  it('keeps a name that someone else in the family also has', () => {
+    const { s, mom } = tr();
+    const sib = s.people[s.player.relations.find((r) => r.kind === 'sibling')?.personId ?? ''];
+    if (!sib) return;
+    const old = sib.firstName;
+    sib.firstName = mom;
+    expect(kinNamesTr(s, `${mom} geldi.`)).toBe(`${mom} geldi.`);
+    sib.firstName = old;
+  });
+
+  it('marries a child on screen before any grandchild can come', () => {
+    const s = player(55, 'tr', 'tr', 'İzmir');
+    const c = makeCtx(s);
+    const kid = c.h.newPerson({ age: 30, gender: 'male' });
+    c.h.addRelation(kid, 'child', 70);
+    expect(kidReadyForBaby(c, kid)).toBe(false);
+    kidMilestonesOnYear(c);
+    expect(s.player.flags[KID_WED_FLAG + kid.id]).toBe(s.year);
+    expect(s.player.log[s.player.log.length - 1].text).toMatch(/(evlendi|birlikte yaşıyor)/);
+    // not in the wedding year itself, then yes
+    expect(kidReadyForBaby(c, kid)).toBe(false);
+    s.year++;
+    expect(kidReadyForBaby(makeCtx(s), kid)).toBe(true);
+    expect(kidMilestoneEvents.map((e) => e.id)).toEqual(expect.arrayContaining(['base.km_karne', 'base.km_exam', 'base.km_asker', 'base.km_isteme', 'base.ad_kid_wedding_cost']));
+  });
+
+  it('gives moths and spilt milk a repairer, not a reward', () => {
+    expect(scareKind({ what: ['Moths have found the quilt.', ''] })).toBe('damage');
+    expect(scareKind({ what: ['A pan of boiling milk went over the recipe book.', ''] })).toBe('damage');
+    expect(scareKind({ what: ['You left the pocket watch in a taxi.', ''] })).toBe('lost');
+    expect(scareKind({ what: ["The quilt was lent to a neighbour for a guest and hasn't come back.", ''] })).toBe('lent');
+  });
+});

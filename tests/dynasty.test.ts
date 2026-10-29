@@ -634,7 +634,8 @@ describe('round 3 engine fixes (playtest 3)', () => {
       } else {
         // the father's mother: babaanne
         expect(text).toContain("Babaannen Ada'yı kaybettin. Yılmaz ailesinin 3. kuşağı seninle başlıyor.");
-        expect(text).toContain("Ada'nın çocuklarıyla senin aranda bölündü");
+        // round 7: a grandparent is named by the kinship word in Turkish (babaannenin, not Ada'nın)
+        expect(text).toContain('babaannenin çocuklarıyla senin aranda bölündü');
       }
     }
   });

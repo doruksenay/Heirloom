@@ -32,6 +32,7 @@ import {
 import { afterYear, moraleGrowth, moreActivities, moreEvents } from './extra';
 import { say, sayWith, type Pair } from '../base/lines';
 import { inTr } from '../base/events-flavour';
+import { kinNamesTr } from '../base/kin-names';
 
 // "Boss" expansion: start a company, grow it, raise money, sell it, take it public, or lose everything.
 export const BOSS_ENTITLEMENT = 'pack.boss';
@@ -958,7 +959,7 @@ export const bossPack: ContentPack = {
     bossState(prev).company = null;
     const extra = (g >= 3 ? (tr ? ` Şirketi yöneten ${g}. kuşak sensin.` : ` You are generation ${g} to run it.`) : '') + taxLine;
     return tidy(tr
-      ? `Aile şirketinin başına geçtin: ${comp.name}. ${comp.founderName} tarafından ${comp.founded} yılında kurulmuştu.${extra}`
+      ? kinNamesTr(s, `Aile şirketinin başına geçtin: ${comp.name}. ${comp.founderName} tarafından ${comp.founded} yılında kurulmuştu.${extra}`, next)
       : `You took over the family business, ${comp.name}, founded by ${comp.founderName} in ${comp.founded}.${extra}`);
   },
   lifeTiles: (s) => {

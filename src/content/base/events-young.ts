@@ -372,8 +372,8 @@ export const youngEvents: EventDef[] = [
         resolve: (c) => {
           c.h.stat('happiness', 2);
           return c.t(
-            `You left a note in ${nm(c)}'s locker. ${He(who(c))} showed it to everyone, trying to guess who wrote it.`,
-            `${gen(nm(c))} dolabına bir not bıraktın. Kimin yazdığını bulmak için notu herkese gösterdi.`,
+            `You left a note in ${nm(c)}'s ${c.p.countryId === 'tr' ? 'desk' : 'locker'}. ${He(who(c))} showed it to everyone, trying to guess who wrote it.`,
+            `${gen(nm(c))} ${c.p.countryId === 'tr' ? 'sırasına' : 'dolabına'} bir not bıraktın. Kimin yazdığını bulmak için notu herkese gösterdi.`,
           );
         },
       },

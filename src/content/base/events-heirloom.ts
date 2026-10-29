@@ -442,6 +442,43 @@ interface Scare {
   search: Pair;
   reward: Pair;
 }
+/**
+ * Round 7 (review 6 §3.13): what kind of scare it is decides the second choice. Something lost gets a reward;
+ * something damaged (moths, spilt milk, a burst pipe, a fall) goes to a repairer; something lent out gets a polite
+ * reminder. Keyed by the English "what" line, so the tables stay as they are. No rng.
+ */
+type ScareKind = 'lost' | 'damage' | 'lent';
+const DAMAGE_SCARES = new Set([
+  'A pipe burst in the ceiling, right above the piano.',
+  'Two removal men lost their grip on the piano halfway down the stairs.',
+  'Woodworm has been found in the back of the piano.',
+  'A storm blew the window open and rain poured onto the piano.',
+  'Moths have found the quilt.',
+  'A pan of boiling milk went over the recipe book.',
+  'The nail gave way and the painting crashed down behind the sofa.',
+  'Damp has crept up the wall behind the painting.',
+  'A burst pipe has soaked the drawer with the bundle of letters in it.',
+  'A child pulled the tablecloth and the tea set went flying.',
+  'In the night, the shelf under the tea set gave way.',
+  'The sewing machine slid off the table and hit the floor.',
+  'The cellar flooded with the sewing machine in it.',
+  'The radio fell off the kitchen shelf.',
+  'Rain came in through the window and soaked the radio.',
+  'Water from the flat upstairs has soaked through onto the kilim.',
+  'A removal man rolled the kilim up with a broken mirror inside.',
+  'The typewriter slid off a desk and landed on its keys.',
+  'The backgammon board was used as a tray at a party and something spilled inside.',
+  'The old toolbox fell from the loft ladder.',
+]);
+const LENT_SCARES = new Set([
+  "The quilt was lent to a neighbour for a guest and hasn't come back.",
+  'The painting was lent to a café to brighten a wall, and the café has closed.',
+  'A guest borrowed the bundle of letters to read in bed and took it home by mistake.',
+  'A tailor who borrowed the sewing machine has closed shop and vanished.',
+  'A neighbour borrowed the backgammon board for one game and kept it for a year.',
+]);
+export const scareKind = (s: { what: Pair }): ScareKind => (DAMAGE_SCARES.has(s.what[0]) ? 'damage' : LENT_SCARES.has(s.what[0]) ? 'lent' : 'lost');
+
 const SCARES: PerType<Scare[]> = {
   clock: [
     {
@@ -668,7 +705,7 @@ const PARTNER_IDEA: PerType<{ idea: (n: string) => Pair; yes: Pair }[]> = {
   quilt: [
     {
       idea: (n) => [`${n} says the quilt smells of "old house" and wants to wash it at sixty degrees.`, `${n}, yorganın "eski ev" koktuğunu söylüyor ve altmış derecede yıkamak istiyor.`],
-      yes: ['It came out of the wash smaller and much softer. Now only the youngest fits under it.', 'Yıkamadan küçülmüş ama çok daha yumuşak çıktı. Artık altına sadece en küçük sığıyor.'],
+      yes: ['It came out of the wash smaller and much softer. Now only the youngest fits under it.', 'Yıkamada küçüldü ama çok daha yumuşak oldu. Artık altına sadece en küçük sığıyor.'],
     },
     {
       idea: (n) => [`${n} wants to hang the quilt on the wall like a tapestry.`, `${n} yorganı duvar halısı gibi duvara asmak istiyor.`],
@@ -712,7 +749,7 @@ const PARTNER_IDEA: PerType<{ idea: (n: string) => Pair; yes: Pair }[]> = {
 const SNEAK: PerType<{ plan: Pair; ok: Pair; bad: Pair }[]> = {
   clock: [
     {
-      plan: ['You want to wear the pocket watch to the school dance.', 'Okul balosuna cep saatini takmak istiyorsun.'],
+      plan: ['You want to wear the pocket watch to the school dance.', 'Mezuniyet balosunda cep saatini takmak istiyorsun.'],
       ok: ['You checked the time on the pocket watch all night, very slowly. You were the most interesting person there.', 'Bütün gece saate ağır ağır baktın. Oradaki en ilginç kişi sendin.'],
       bad: ['The chain caught on a door handle and you came home with the watch in your fist and your heart in your mouth.', 'Zincir bir kapı koluna takıldı; eve saat avucunda, yüreğin ağzında döndün.'],
     },
@@ -876,6 +913,13 @@ const freshPartner = (c: Ctx) => {
 function scareMemory(c: Ctx, it: HeirloomInstance, e: HlEntry): Pair {
   const [yen, ytr] = e.y > 0 ? inYear(e.y) : ['once', 'bir keresinde'];
   const w = whoWas(c, it, e.n);
+  const table = SCARES[type(c)];
+  const dmg = typeof e.i === 'number' && !!table?.[e.i % table.length] && scareKind(table[e.i % table.length]) === 'damage';
+  if (dmg) {
+    if (e.m === 'reward' || !w) return [`${yen} a repairer saved it`, `${ytr} bir usta kurtarmıştı`];
+    if (w.self) return [`${yen} you saved it yourself`, `${ytr} sen kurtarmıştın`];
+    return [`${yen} ${w.en} saved it`, `${ytr} ${w.tr} kurtarmıştı`];
+  }
   if (e.m === 'reward' || !w) return [`${yen} a stranger brought it back`, `${ytr} bir yabancı geri getirmişti`];
   if (w.self) return [`${yen} you got it back yourself`, `${ytr} sen geri getirmiştin`];
   return [`${yen} ${w.en} got it back`, `${ytr} ${w.tr} geri getirmişti`];
@@ -1056,9 +1100,15 @@ export const heirloomEvents: EventDef[] = [
     title: (c) => say2(c, BORROW[type(c)].ask(nm(c))),
     text: (c) => {
       const it = item(c);
+      // round 7 (review 6 §3.13): the record follows what was really decided: a refusal is not a loan
       const last = lastEntry(it, 'lend');
-      if (last?.n && last.y > 0)
-        return c.t(`It was last lent out in ${last.y}, to ${last.n}, and it came back. Mostly the same.`, `En son ${last.y} yılında ${dat(last.n)} ödünç verilmiş ve geri gelmişti. Aşağı yukarı aynı hâliyle.`);
+      if (last?.n && last.y > 0 && last.m === 'no')
+        return c.t(`The last time someone asked, in ${last.y}, it was ${last.n}, and the answer was no.`, `En son ${last.y} yılında ${last.n} istemişti; cevap hayırdı.`);
+      const lent = entries(it, 'lend').filter((e) => e.m !== 'no' && e.n && e.y > 0).pop();
+      if (lent)
+        return lent.m === 'late'
+          ? c.t(`It was last lent out in ${lent.y}, to ${lent.n}. It came back eight months late, a little worse for wear.`, `En son ${lent.y} yılında ${dat(lent.n!)} ödünç verilmişti; sekiz ay gecikmeyle, biraz hırpalanmış olarak geri gelmişti.`)
+          : c.t(`It was last lent out in ${lent.y}, to ${lent.n}, and it came back. Mostly the same.`, `En son ${lent.y} yılında ${dat(lent.n!)} ödünç verilmiş ve geri gelmişti. Aşağı yukarı aynı hâliyle.`);
       return c.t(`${cap(subj(c, it))} has not left the family since ${it.sinceYear}.`, `${Subj(c)} ${it.sinceYear} yılından beri aileden hiç çıkmadı.`);
     },
     choices: [
@@ -1068,8 +1118,9 @@ export const heirloomEvents: EventDef[] = [
         badge: 'Risky',
         resolve: (c) => {
           const n = nm(c);
-          record(item(c), { k: 'lend', y: c.s.year, n });
-          if (c.rng.chance(0.75)) {
+          const ok = c.rng.chance(0.75);
+          record(item(c), ok ? { k: 'lend', y: c.s.year, n } : { k: 'lend', y: c.s.year, n, m: 'late' });
+          if (ok) {
             c.h.closeness(String(c.vars.pid), 8);
             c.h.stat('happiness', 4);
             addStory(c, item(c), `Lent to ${n} in ${c.s.year}, and returned.`, `${c.s.year} yılında ${dat(n)} ödünç verildi ve geri geldi.`);
@@ -1188,12 +1239,21 @@ export const heirloomEvents: EventDef[] = [
     choices: [
       {
         id: 'search',
-        label: (c) => c.t('Drop everything and get it back', 'Her şeyi bırak, peşine düş'),
+        label: (c) => {
+          const k = scareKind(SCARES[type(c)][vi(c, 4)]);
+          return k === 'damage'
+            ? c.t('Save it yourself, right now', 'Hemen kendin kurtarmaya çalış')
+            : k === 'lent'
+              ? c.t('Go and ask for it back yourself', 'Gidip kendin geri iste')
+              : c.t('Drop everything and get it back', 'Her şeyi bırak, peşine düş');
+        },
         resolve: (c) => {
           c.h.stat('health', -1);
           c.h.stat('happiness', 3);
           const it = item(c);
-          addStory(c, it, `Nearly lost in ${c.s.year}. ${c.p.firstName} got it back.`, `${c.s.year} yılında az kalsın kayboluyordu. ${c.p.firstName} onu geri getirdi.`);
+          if (scareKind(SCARES[type(c)][vi(c, 4)]) === 'damage')
+            addStory(c, it, `Nearly ruined in ${c.s.year}. ${c.p.firstName} saved it.`, `${c.s.year} yılında az kalsın mahvoluyordu. ${c.p.firstName} onu kurtardı.`);
+          else addStory(c, it, `Nearly lost in ${c.s.year}. ${c.p.firstName} got it back.`, `${c.s.year} yılında az kalsın kayboluyordu. ${c.p.firstName} onu geri getirdi.`);
           record(it, { k: 'scare', y: c.s.year, n: c.p.firstName, m: 'search', i: vi(c, 4) });
           const [en, tr] = SCARES[type(c)][vi(c, 4)].search;
           const n = entries(it, 'scare').length;
@@ -1203,11 +1263,21 @@ export const heirloomEvents: EventDef[] = [
       },
       {
         id: 'reward',
-        label: (c) => c.t(`Offer a reward (${c.h.fmt(wage(c, 250))})`, `Ödül koy (${c.h.fmt(wage(c, 250))})`),
+        label: (c) => {
+          const k = scareKind(SCARES[type(c)][vi(c, 4)]);
+          const amt = c.h.fmt(wage(c, 250));
+          return k === 'damage'
+            ? c.t(`Take it to a repairer (${amt})`, `Bir ustaya emanet et (${amt})`)
+            : k === 'lent'
+              ? c.t(`Ask around, with a thank-you gift (${amt})`, `Etrafa sor, getirene bir hediye söz ver (${amt})`)
+              : c.t(`Offer a reward (${amt})`, `Ödül koy (${amt})`);
+        },
         resolve: (c) => {
           c.h.money(-wage(c, 250));
           c.h.stat('happiness', 2);
-          addStory(c, item(c), `Nearly lost in ${c.s.year}, and brought back by a stranger.`, `${c.s.year} yılında az kalsın kayboluyordu; bir yabancı geri getirdi.`);
+          if (scareKind(SCARES[type(c)][vi(c, 4)]) === 'damage')
+            addStory(c, item(c), `Nearly ruined in ${c.s.year}, and saved by a repairer.`, `${c.s.year} yılında az kalsın mahvoluyordu; bir usta kurtardı.`);
+          else addStory(c, item(c), `Nearly lost in ${c.s.year}, and brought back by a stranger.`, `${c.s.year} yılında az kalsın kayboluyordu; bir yabancı geri getirdi.`);
           record(item(c), { k: 'scare', y: c.s.year, m: 'reward', i: vi(c, 4) });
           return say2(c, SCARES[type(c)][vi(c, 4)].reward);
         },

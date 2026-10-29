@@ -154,6 +154,8 @@ export const moreEvents: EventDef[] = [
           c.h.money(-wage(c, 900));
           c.h.closeness(String(c.vars.pid), 10);
           c.h.stat('happiness', 4);
+          // round 7: a real trip abroad, so later travel lines have one to remember
+          if (!c.h.has('travelled')) c.h.flag('travelled');
           return c.t(
             `You visited ${nm(c)} in ${c.vars.city}. Best trip of your life.`,
             `${acc(nm(c))} ${cityTr(String(c.vars.city), 2)} ziyaret ettin. Hayatının en güzel seyahatiydi.`,
@@ -468,7 +470,7 @@ export const moreEvents: EventDef[] = [
         id: 'no',
         label: (c) => c.t('Politely decline', 'Kibarca reddet'),
         resolve: (c) =>
-          c.t('You declined. Your cousin called you "a sheep" at dinner.', 'Reddettin. Kuzenin yemekte sana "koyun" dedi.'),
+          c.t('You declined. Your cousin called you "a sheep" at dinner.', 'Reddettin. Kuzenin yemekte sana "ödlek" dedi.'),
       },
     ],
   },
@@ -664,7 +666,12 @@ export const moreEvents: EventDef[] = [
       c.h.stat('happiness', 6);
       const k = kin(c, kid.person, 'child');
       return c.t(
-        `Your ${k} ${kid.person.firstName} graduated from high school. You cried in the third row.`,
+        // round 7: no American "high school" in Germany or Britain
+        c.p.countryId === 'de'
+          ? `Your ${k} ${kid.person.firstName} passed the Abitur. You cried in the third row.`
+          : c.p.countryId === 'uk'
+            ? `Your ${k} ${kid.person.firstName} finished sixth form. You cried in the third row.`
+            : `Your ${k} ${kid.person.firstName} graduated from high school. You cried in the third row.`,
         `${cap(k)} ${kid.person.firstName} liseden mezun oldu. Üçüncü sırada hüngür hüngür ağladın.`,
       );
     },

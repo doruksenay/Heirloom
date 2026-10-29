@@ -212,7 +212,7 @@ export const healthEvents: EventDef[] = [
     setup: (c) => {
       c.vars.amt = wage(c, inTr(c) ? 1500 : 6000);
     },
-    title: T('Your hairline is retreating faster than you would like.', 'Saç çizgin istediğinden hızlı geri çekiliyor.'),
+    title: T('Your hairline is retreating faster than you would like.', 'Alnın istediğinden hızlı açılıyor.'),
     text: (c) =>
       inTr(c)
         ? c.t('Half the people on your street have had a hair transplant. The clinic down the road has a waiting list.', 'Sokağındakilerin yarısı saç ektirmiş. Yolun aşağısındaki kliniğin sıra listesi var.')
@@ -221,7 +221,7 @@ export const healthEvents: EventDef[] = [
       ch('transplant', 'Get a transplant', 'Saç ektir', (c) => {
         c.h.money(-num(c));
         c.h.stat('looks', 6);
-        return c.t('A week in a headband looking like a startled tennis player, then hair. Real hair. You touch it at traffic lights.', 'Bir hafta bandanayla ürkmüş bir tenisçi gibi dolaştın, sonra saç. Gerçek saç. Kırmızı ışıkta dokunuyorsun.');
+        return c.t('A week in a headband looking like a startled tennis player, then hair. Real hair. You touch it at traffic lights.', 'Bir hafta bandanayla dolaştın, sonra saçlar çıktı. Gerçek saçlar. Kırmızı ışıkta durunca elin hâlâ başına gidiyor.');
       }, { requires: (c) => afford(c, num(c)), requiresLabel: 'Not enough money' }),
       ch('shave', 'Shave it all off', 'Hepsini kazıt', (c) => {
         c.h.stat('looks', 2);

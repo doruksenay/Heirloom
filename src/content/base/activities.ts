@@ -3,10 +3,11 @@ import type { ActivityDef } from '../types';
 import type { Ctx } from '../types';
 import type { Person } from '../../engine/types';
 import { cityName, isCoastal } from '../../engine/places';
-import { MAX_HIRE_AGE, abl, acc, cap, dat, gen, kin, loc, single, wage, wth } from './util';
+import { MAX_HIRE_AGE, PART_TIME_JOBS, abl, acc, atAcademy, cap, dat, gen, kin, loc, single, wage, wth } from './util';
 import { workKey, workPool } from './work-lines';
 import { JOB_BOARD_EVENT } from './job-board';
 import { addPerformance } from '../../engine/context';
+import { RANK_RULES } from '../../engine/careers';
 import { inPrison, say, sayWith, type Pair } from './lines';
 import { ABROAD_CITIES, aNum, isAbroad } from './events-flavour';
 import { gkAge, grandkids } from './events-elder';
@@ -49,7 +50,7 @@ const GYM_ADULT: Pair[] = [
   ['You had a great workout.', 'Harika bir antrenman yaptın.'],
   ['You lifted heavier than ever.', 'Hayatında kaldırdığın en ağır ağırlığı kaldırdın.'],
   ['You ran 5 km without stopping.', 'Hiç durmadan 5 km koştun.'],
-  ['You tried a spin class. Your legs filed a complaint.', 'Bisiklet dersine girdin. Bacakların resmi şikâyette bulundu.'],
+  ['You tried a spin class. Your legs filed a complaint.', 'Bisiklet dersine girdin. Bacakların isyan etti.'],
   ['A stranger asked you for gym advice. You gave it with total confidence.', 'Bir yabancı sana spor tavsiyesi sordu. Kendinden son derece emin bir şekilde verdin.'],
   ['You spent more time choosing a playlist than working out. Still counts.', 'Antrenmandan çok çalma listesi seçtin. Yine de sayılır.'],
   ['The person on the next treadmill was clearly racing you. You let them win after a dignified twenty minutes.', 'Yan koşu bandındaki kişi resmen seninle yarışıyordu. Onurlu bir yirmi dakikanın ardından kazanmasına izin verdin.'],
@@ -70,13 +71,13 @@ const GYM_ADULT: Pair[] = [
   ['The instructor shouted "one more!" four times. It was never one more.', 'Eğitmen dört kez "Bir tane daha!" diye bağırdı. Hiçbir zaman bir tane daha değildi.'],
   ['You cycled to work all week. Your legs are stronger and your shirts are a disgrace.', 'Bütün hafta işe bisikletle gittin. Bacakların güçlendi, gömleklerin ise rezil oldu.'],
   ['You swam in the outdoor pool in the early morning. Steam rose off the water. Nobody else was mad enough to come.', 'Sabahın erken saatinde açık havuzda yüzdün. Suyun üstünden buhar yükseliyordu. Gelecek kadar deli başka kimse yoktu.'],
-  ['You learned a proper front crawl. You still breathe like a walrus, but a faster walrus.', 'Düzgün serbest stil yüzmeyi öğrendin. Hâlâ bir mors gibi nefes alıyorsun ama daha hızlı bir mors.'],
+  ['You learned a proper front crawl. You still breathe like a walrus, but a faster walrus.', 'Düzgün serbest stil yüzmeyi öğrendin. Hâlâ manda gibi soluyorsun ama artık hızlı bir manda.'],
   ['You tried a boxing class and hit the pad so hard that the instructor said "easy". You have not felt this good in years.', 'Bir boks dersine girdin ve lapa o kadar sert vurdun ki eğitmen "Yavaş" dedi. Yıllardır bu kadar iyi hissetmemiştin.'],
-  ['You climbed the stairs of your building instead of taking the lift. Twelve floors. A neighbour applauded on the eighth.', 'Asansör yerine apartmanın merdivenlerini çıktın. On iki kat. Sekizinci katta bir komşu alkışladı.'],
+  ['You walked up the big hill instead of taking the bus. The whole hill. A neighbour applauded halfway.', 'Otobüse binmek yerine yokuşu yürüyerek çıktın. Hem de bütün yokuşu. Yarı yolda bir komşu alkışladı.'],
   ['You went hiking at the weekend and came back with a sunburn, a blister and a new favourite view.', 'Hafta sonu doğa yürüyüşüne çıktın; bir güneş yanığı, bir su toplaması ve yeni bir en sevdiğin manzarayla döndün.'],
   ['You went to a dance fitness class. You were always one step behind and having the time of your life.', 'Bir dans fitness dersine girdin. Hep bir adım gerideydin ve hayatının en güzel saatini geçiriyordun.'],
   ['The man at the front desk asked if you had been away. You had. You said you had been "training privately".', 'Resepsiyondaki adam bir süredir görünmediğini söyledi. Doğruydu. "Özel çalışıyordum" dedin.'],
-  ['You did the whole workout without checking your phone once. A personal record.', 'Bütün antrenmanı bir kez bile telefona bakmadan yaptın. Kişisel rekor.'],
+  ['You did the whole workout without checking your phone once. A personal record.', 'Bütün antrenmanı bir kez bile telefona bakmadan yaptın. Bu bir ilk.'],
   ['You swam until your fingers wrinkled and your thoughts finally went quiet.', 'Parmakların buruşana ve düşüncelerin sonunda susana kadar yüzdün.'],
 ];
 
@@ -84,7 +85,7 @@ const GYM_ADULT: Pair[] = [
 const GYM_AGAIN: Pair[] = [
   ['Back to the gym for a second round this year. The receptionist now says "the usual?"', 'Bu yıl spor salonuna ikinci kez döndün. Resepsiyondaki görevli artık "Her zamankinden mi?" diyor.'],
   ['You went back to the gym. Your muscles remembered the last time and filed a formal complaint.', 'Spor salonuna yine gittin. Kasların geçen seferi hatırladı ve resmî şikâyette bulundu.'],
-  ['Your second go at the gym this year. It hurt less. You took that personally, in a good way.', 'Bu yıl spor salonunda ikinci denemen. Daha az acıttı. Bunu iyi anlamda kişisel algıladın.'],
+  ['Your second go at the gym this year. It hurt less. You took that personally, in a good way.', 'Bu yıl spor salonunda ikinci denemen. Daha az acıttı. Bunu kendine iltifat saydın.'],
   ['You went again, which is the whole secret. Most people do not go again.', 'Yine gittin; bütün sır bu. Çoğu insan bir daha gitmez.'],
   ['You went back and did the same workout as last time, a little better. Nobody noticed but the mirror.', 'Yine gidip geçen seferki antrenmanı biraz daha iyi yaptın. Aynadan başka kimse fark etmedi.'],
   ['Two gym trips in one year. You have started calling it "my gym" in conversation.', 'Bir yılda iki kez spor salonu. Sohbette "benim salon" demeye başladın.'],
@@ -118,7 +119,7 @@ const GYM_SENIOR: Pair[] = [
   ['You walked three laps of the park and stopped to chat on every bench. Exercise, and news.', 'Parkta üç tur attın ve her bankta sohbet için durdun. Hem spor hem haber.'],
   ['You did your stretches to the radio. The songs were from your youth. You moved like your youth, briefly.', 'Esneme hareketlerini radyo eşliğinde yaptın. Şarkılar gençliğindendi. Kısa bir süre gençliğindeki gibi hareket ettin.'],
   ['The swimming pool has a lane for "slow and steady". You are its president.', 'Havuzda "yavaş ama emin" kulvarı var. Sen onun başkanısın.'],
-  ['You joined the morning exercise group in the park. Someone brought tea in a flask. You are staying.', 'Parktaki sabah sporu grubuna katıldın. Biri termosla çay getirdi. Kalıyorsun.'],
+  ['You joined the morning exercise group in the park. Someone brought tea in a flask. You are staying.', 'Parktaki sabah sporu grubuna katıldın. Biri termos getirip herkese birer bardak dağıttı. Kalıyorsun.'],
   ['You beat your step count from last week by a hundred steps. You walked to the bakery twice on purpose.', 'Geçen haftaki adım sayını yüz adım geçtin. Bilerek iki kez fırına yürüdün.'],
   ['You tried a dance class for seniors. You remembered a step from fifty years ago and the whole class learned it.', 'Yaşlılar için bir dans dersine girdin. Elli yıl önceki bir figürü hatırladın ve bütün sınıf onu öğrendi.'],
 ];
@@ -151,7 +152,7 @@ const GYM_JAIL: Pair[] = [
 
 const LIB_KID: Pair[] = [
   ['You found a book about dinosaurs and now correct grown-ups on their names.', 'Dinozorlarla ilgili bir kitap buldun; artık büyüklerin dinozor isimlerini düzeltiyorsun.'],
-  ['You read a whole comic series in one afternoon. The librarian called it "a personal best".', 'Bir öğleden sonrada bütün bir çizgi roman serisini okudun. Kütüphaneci buna "kişisel rekor" dedi.'],
+  ['You read a whole comic series in one afternoon. The librarian called it "a personal best".', 'Bir öğleden sonrada bütün bir çizgi roman serisini okudun. Kütüphaneci "Bu bir rekor" dedi.'],
   ['You got your very own library card. You keep it in your pocket like a passport.', 'Kendi kütüphane kartın oldu. Pasaport gibi cebinde taşıyorsun.'],
   ['You read a book about space and announced at dinner that the sun will explode one day. Dessert was quiet.', 'Uzayla ilgili bir kitap okudun ve akşam yemeğinde güneşin bir gün patlayacağını duyurdun. Tatlı faslı sessiz geçti.'],
   ['Story hour at the library. You asked so many questions that the reader let you finish the story.', 'Kütüphanede masal saati vardı. O kadar çok soru sordun ki okuyan abla masalı senin bitirmene izin verdi.'],
@@ -200,7 +201,7 @@ const LIB_GEN: Pair[] = [
   ['You read about octopuses for three hours. They have three hearts.', 'Üç saat boyunca ahtapotlar hakkında okudun. Üç kalpleri varmış.'],
   ['You learned twenty words of a new language. You already forgot eight.', 'Yeni bir dilden yirmi kelime öğrendin. Sekizini çoktan unuttun.'],
   ['You read a poetry collection on the library steps. One line followed you around all week.', 'Kütüphanenin merdivenlerinde bir şiir kitabı okudun. Bir dizesi bütün hafta peşini bırakmadı.'],
-  ['You borrowed a cookbook and returned it with a sauce stain on the best page. A review, of sorts.', 'Bir yemek kitabı ödünç aldın ve en güzel sayfasında bir sos lekesiyle iade ettin. Bir tür eleştiri.'],
+  ['You borrowed a cookbook and returned it with a sauce stain on the best page. A review, of sorts.', 'Bir yemek kitabı ödünç aldın ve en güzel sayfasında bir sos lekesiyle iade ettin. Senin eleştirin de bu oldu.'],
   ['You read the biography of a famous explorer. Then you explored the back shelves and found the library cat.', 'Ünlü bir kâşifin biyografisini okudun. Sonra arka rafları keşfettin ve kütüphanenin kedisini buldun.'],
   ['You got lost in an encyclopedia. You came in for the Roman Empire and left an expert on rubber ducks.', 'Bir ansiklopedide kayboldun. Roma İmparatorluğu için girdin, lastik ördek uzmanı olarak çıktın.'],
   ['The library was silent except for one man sharpening pencils with real intensity. You read a thriller anyway.', 'Kütüphane sessizdi; sadece bir adam büyük bir ciddiyetle kalem açıyordu. Sen de bir gerilim romanı okudun.'],
@@ -210,11 +211,11 @@ const LIB_GEN: Pair[] = [
   ['You read a travel book about a country you will probably never visit. You visited it anyway, for three hundred pages.', 'Muhtemelen hiç gitmeyeceğin bir ülkeyi anlatan bir gezi kitabı okudun. Üç yüz sayfa boyunca yine de gittin.'],
   ['You finally read the book everyone talked about five years ago. They were right. You are late, but right too.', 'Beş yıl önce herkesin konuştuğu kitabı sonunda okudun. Haklılarmış. Geç kaldın ama sen de haklısın.'],
   ['You read a history of bread. You now cannot eat a sandwich without thinking about the Egyptians.', 'Ekmeğin tarihini anlatan bir kitap okudun. Artık Mısırlıları düşünmeden sandviç yiyemiyorsun.'],
-  ['You read a book of short stories, one a night. It felt like a box of chocolates for the brain.', 'Her gece bir tane olmak üzere bir öykü kitabı okudun. Beyin için bir kutu çikolata gibiydi.'],
+  ['You read a book of short stories, one a night. It felt like a box of chocolates for the brain.', 'Her gece bir tane olmak üzere bir öykü kitabı okudun. Beynine her gece bir lokma tatlı gibi geldi.'],
   ['You read about how the brain works and spent a week noticing your own brain doing exactly that.', 'Beynin nasıl çalıştığını okudun ve bir hafta boyunca kendi beyninin tam olarak bunu yaptığını fark ettin.'],
   ['You read a crime novel and guessed the murderer on page forty. You finished it anyway, to be smug.', 'Bir polisiye okudun ve katili kırkıncı sayfada tahmin ettin. Yine de bitirdin; sırf kendini beğenmek için.'],
-  ['You sat in the reading room until closing time. The librarian switched the lights off around you, gently.', 'Kapanış saatine kadar okuma salonunda oturdun. Kütüphaneci ışıkları etrafında usulca söndürdü.'],
-  ['You read a book about the stars and walked home looking up. You tripped once. Worth it.', 'Yıldızlarla ilgili bir kitap okudun ve eve başını kaldırıp yukarı bakarak yürüdün. Bir kez tökezledin. Değdi.'],
+  ['You sat in the reading room until closing time. The librarian switched the lights off around you, gently.', 'Kapanış saatine kadar okuma salonunda oturdun. Sen hâlâ oradayken kütüphaneci ışıkları usulca söndürdü.'],
+  ['You read a book about the stars and walked home looking up. You tripped once. Worth it.', 'Yıldızlarla ilgili bir kitap okudun ve eve başını kaldırıp yukarı bakarak yürüdün. Bir kez tökezledin; yıldızlar yine de yerli yerindeydi.'],
   ['You borrowed a book in a language you are learning. You understood a third of it and enjoyed all of it.', 'Öğrendiğin dilde bir kitap ödünç aldın. Üçte birini anladın, hepsinden keyif aldın.'],
   ['You read a biography of an inventor who failed a thousand times. You feel much better about Tuesday.', 'Bin kez başarısız olmuş bir mucidin biyografisini okudun. Salı günü hakkında çok daha iyi hissediyorsun.'],
   ['You read an old newspaper on microfilm from the year you were born. The prices made you laugh out loud in a quiet room.', 'Doğduğun yılın gazetelerini mikrofilmden okudun. Fiyatlar yüzünden sessiz salonda kahkaha attın.'],
@@ -228,7 +229,7 @@ const LIB_GEN: Pair[] = [
 const LIB_SENIOR: Pair[] = [
   ['You joined the library reading group. You were the only one who finished the book, and you said so.', 'Kütüphanenin okuma grubuna katıldın. Kitabı bitiren tek kişi sendin ve bunu söyledin.'],
   ['You read the newspapers in the library from front to back, then again to find the mistakes.', 'Kütüphanede gazeteleri baştan sona okudun, sonra hataları bulmak için bir daha okudun.'],
-  ['You borrowed a large-print thriller and stayed up past midnight to finish it. Worth it.', 'İri puntolu bir gerilim romanı ödünç aldın ve bitirmek için gece yarısını geçirdin. Değdi.'],
+  ['You borrowed a large-print thriller and stayed up past midnight to finish it. Worth it.', 'İri puntolu bir gerilim romanı ödünç aldın ve bitirmek için gece yarısını geçirdin. Sabah gözlerini zor açtın ama katili biliyordun.'],
   ['You found a book you read as a teenager. It was much sadder this time.', 'Gençken okuduğun bir kitabı buldun. Bu sefer çok daha hüzünlü geldi.'],
   ['You looked up your family name in the local archive and found an ancestor fined for "excessive singing".', 'Yerel arşivde soyadını araştırdın ve "aşırı şarkı söylemekten" ceza yemiş bir atanı buldun.'],
   ['A young librarian showed you how to borrow e-books. You borrowed eleven before lunch.', 'Genç bir kütüphaneci sana e-kitap ödünç almayı gösterdi. Öğle yemeğine kadar on bir tane aldın.'],
@@ -517,7 +518,7 @@ const PARENTS_ADULT: ((x: ParentX) => Pair)[] = [
   ({ k, accK, obj }) => [`You called your ${k} to talk ${obj} through the new TV remote. It took forty minutes. You both secretly enjoyed it.`, `Yeni televizyon kumandasını tarif etmek için ${accK} aradın. Kırk dakika sürdü. İkiniz de gizliden gizliye keyif aldınız.`],
   ({ k, accK, n }) => [`You called your ${k}. ${n} wanted to know when you are visiting. You said "soon". ${n} wrote it down.`, `${cap(accK)} aradın. ${n} ne zaman geleceğini sordu. "Yakında" dedin. ${n} not aldı.`],
   ({ k, accK }) => [`You called your ${k} for no reason. You talked about the weather, the news and nothing. Exactly what you needed.`, `Hiçbir sebep yokken ${accK} aradın. Havadan, haberlerden ve hiçbir şeyden konuştunuz. Tam ihtiyacın olan buydu.`],
-  ({ n }) => [`You called ${n} and talked for an hour about nothing. When you hung up you felt about twelve, in a good way.`, `${acc(n)} arayıp bir saat boş şeylerden konuştun. Kapattığında kendini on iki yaşında gibi hissettin; iyi anlamda.`],
+  ({ n }) => [`You called ${n} and talked for an hour about nothing. When you hung up you felt about twelve, in a good way.`, `${acc(n)} arayıp bir saat boş şeylerden konuştun. Kapattığında kendini yeniden on iki yaşında hissettin.`],
   ({ n }) => [`You called ${n} for a recipe and got the recipe, the story behind it and news of three cousins.`, `${acc(n)} bir tarif için aradın; tarifi, arkasındaki hikâyeyi ve üç kuzenin haberlerini aldın.`],
   ({ n }) => [`You called ${n} on the way home from work. You arrived home still talking and sat in the car until the end.`, `İşten dönerken ${acc(n)} aradın. Eve vardığında hâlâ konuşuyordunuz; konuşma bitene kadar arabada oturdun.`],
 ];
@@ -529,7 +530,7 @@ const PARENTS_OLD: ((x: ParentX) => Pair)[] = [
   ({ k, accK, n }) => [`You called your ${k} to ask about the medicine. ${n} wanted to talk about the neighbor's new car instead.`, `İlaçlarını sormak için ${accK} aradın. ${n} ise komşunun yeni arabasını anlatmak istedi.`],
   ({ k, accK, n }) => [`You called your ${k}. ${n} said "I'm fine, don't worry" four times. You worried, quietly.`, `${cap(accK)} aradın. ${n} dört kez "İyiyim, merak etme" dedi. Merak ettin; ama sessizce.`],
   ({ k, accK, n }) => [`You called your ${k} and asked about your own childhood. ${n} remembered things you had forgotten.`, `${cap(accK)} aradın ve kendi çocukluğunu sordun. ${n} senin unuttuğun şeyleri hatırlıyordu.`],
-  ({ k, accK }) => [`A video call with your ${k}: ten minutes of ceiling, then a face. Worth it.`, `${cap(accK)} görüntülü aradın: on dakika tavan, sonra bir yüz. Değdi.`],
+  ({ k, accK }) => [`A video call with your ${k}: ten minutes of ceiling, then a face. Worth it.`, `${cap(accK)} görüntülü aradın: on dakika tavan, sonra bir yüz. Günün en güzel anı oydu.`],
   ({ k, accK, age }) => [`You called your ${k}, who told you to dress warmly. You are ${age}. You dressed warmly.`, `${cap(accK)} aradın; sıkı giyinmeni söyledi. ${age} yaşındasın. Sıkı giyindin.`],
   ({ k, accK, n, obj }) => [`You called your ${k} and read ${obj} the news. ${n} disagreed with most of it.`, `${cap(accK)} aradın ve ona haberleri okudun. ${n} çoğuna katılmadı.`],
   ({ k, accK, n }) => [`You called your ${k} and promised to visit at the weekend. ${n} started cooking immediately.`, `${cap(accK)} aradın ve hafta sonu geleceğine söz verdin. ${n} hemen yemek yapmaya başladı.`],
@@ -580,7 +581,7 @@ const SIBS_OLD: ((x: SibX) => Pair)[] = [
   ({ n }) => [`You and ${n} told childhood stories to anyone who would listen. Nobody escaped.`, `${wth(n)} çocukluğunuza dair hikâyeleri dinleyen herkese anlattınız. Kimse kaçamadı.`],
   ({ n }) => [`${n} still calls you by your childhood nickname. You still hate it. You would miss it.`, `${n} sana hâlâ çocukluk lakabınla sesleniyor. Hâlâ nefret ediyorsun. Ama söylemese özlerdin.`],
   ({ n }) => [`You and ${n} played cards like you did fifty years ago. Same arguments, same luck.`, `${wth(n)} elli yıl önceki gibi kâğıt oynadınız. Aynı tartışmalar, aynı şans.`],
-  ({ n }) => [`You and ${n} cooked your mother's recipe. It was almost right. It is never quite right.`, `${wth(n)} annenizin tarifini pişirdiniz. Neredeyse aynısı oldu. Hiçbir zaman tam aynısı olmuyor.`],
+  ({ n }) => [`You and ${n} cooked the recipe your mother handed down. It was almost right. It is never quite right.`, `${wth(n)} annenizden kalma tarifi pişirdiniz. Neredeyse aynısı oldu. Hiçbir zaman tam aynısı olmuyor.`],
   ({ n }) => [`You and ${n} sat on a bench and agreed that everything was better before. Then you agreed it wasn't.`, `${wth(n)} bir bankta oturup eskiden her şeyin daha güzel olduğuna karar verdiniz. Sonra olmadığına karar verdiniz.`],
   ({ n }) => [`You and ${n} phoned each other every evening this week. Nothing to say. Plenty to say.`, `${wth(n)} bu hafta her akşam telefonlaştınız. Söylenecek bir şey yoktu. Söylenecek çok şey vardı.`],
 ];
@@ -1209,7 +1210,8 @@ export const baseActivities: ActivityDef[] = [
       addPerformance(c.p, 12);
       // hard work earns at most one promotion every four years, and only after two years in the job
       const last = c.p.flags[WORK_HARD_PROMO];
-      const ready = c.p.jobYears >= 2 && (last === undefined || c.s.year - last >= 4);
+      // round 7: police and civil-service ranks come from years and rank exams (careers.ts RANK_RULES)
+      const ready = c.p.jobYears >= 2 && (last === undefined || c.s.year - last >= 4) && !RANK_RULES[c.p.jobId ?? ''];
       if (c.rng.chance(0.06 + c.p.stats.smarts / 1000) && ready && c.h.promote()) {
         c.h.flag(WORK_HARD_PROMO);
         c.h.stat('happiness', 6);
@@ -1228,8 +1230,8 @@ export const baseActivities: ActivityDef[] = [
     group: 'Career',
     minAge: 18,
     maxAge: 45,
-    // a professional footballer trains full time: no full-time degree alongside it
-    available: (c) => c.p.education === 'highschool' && c.p.school === null && c.p.jailYears === 0 && c.p.jobId !== 'athlete',
+    // round 7: no full-time degree alongside a full-time job (a footballer, a surgeon, a police officer): quit first
+    available: (c) => c.p.education === 'highschool' && c.p.school === null && c.p.jailYears === 0 && !atAcademy(c) && (!c.p.jobId || PART_TIME_JOBS.has(c.p.jobId)),
     run: (c) => {
       // in Türkiye university goes through the YKS and the tercih (culture-tr/milestones.ts)
       if (c.p.countryId === 'tr' && c.s.enabledPacks.includes('culture_tr')) return { event: 'tr.tercih' };

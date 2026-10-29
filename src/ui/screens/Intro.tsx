@@ -51,7 +51,8 @@ export function Intro({ app }: { app: AppApi }) {
           <div class="icon-box" style={{ width: '88px', height: '88px', borderRadius: '28px' }}>
             <Icon name="clock" size={48} />
           </div>
-          <span class="chip accent">{T('Once per life, rewind one event')}</span>
+          {/* round 7 (review 6 §3.15): the rewind is the pocket watch's power, not a rule for every life */}
+          <span class="chip accent">{T('Pocket watch: rewind one moment in each life')}</span>
         </div>
       ),
     },

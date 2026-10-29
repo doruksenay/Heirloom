@@ -3,6 +3,8 @@ import { ageUp, choose, doActivity, newGame, openEvent } from '../src/engine/gam
 import { makeCtx } from '../src/engine/context';
 import { activitiesFor } from '../src/content/registry';
 import { cultureTrPack } from '../src/content/culture-tr';
+import { tercihLists } from '../src/content/culture-tr/milestones';
+import { MAJOR_INFO } from '../src/engine/careers';
 import { allRibbons } from '../src/engine/ribbons';
 import { goalDef } from '../src/engine/goals';
 import { createRng } from '../src/engine/rng';
@@ -111,7 +113,9 @@ describe('Türkiye culture pack', () => {
       }
     }
     // a grandchild's wedding needs a 60-year-old with grandchildren over 22; the bot rarely gets there, so it has its own test below
-    const RARE = new Set(['tr.torun_dugun']);
+    // round 7: this bot runs a tr_ activity half the time, so it is usually already running for muhtar (muhtar.ts)
+    // before the neighbors' random invitation (tr.muhtar, 55+) can come
+    const RARE = new Set(['tr.torun_dugun', 'tr.muhtar']);
     const missing = cultureTrPack.events.map((e) => e.id).filter((id) => !fired.has(id) && !RARE.has(id));
     expect(missing).toEqual([]);
     const idle = (cultureTrPack.activities ?? []).map((a) => a.id).filter((id) => !ran.has(id));
@@ -119,8 +123,10 @@ describe('Türkiye culture pack', () => {
     expect(said.length).toBeGreaterThan(1000);
     expect([...new Set(said.filter(english))].slice(0, 20)).toEqual([]);
     // pack ribbons are checked before the base ones, so they must stay rare
-    const packRibbons = (ribbons.get('mahalle_muhtari') ?? 0) + (ribbons.get('altin_bilezik') ?? 0);
-    expect(packRibbons).toBeLessThan(40);
+    // round 7: muhtar is a goal the player runs for (muhtar.ts), and this bot campaigns in half of its activities, so
+    // it wins often; it must still not be the ribbon of most lives
+    expect(ribbons.get('altin_bilezik') ?? 0).toBeLessThan(40);
+    expect(ribbons.get('mahalle_muhtari') ?? 0).toBeLessThan(100);
     expect(worth / 200).toBeLessThan(5_000_000);
   });
 
@@ -175,6 +181,8 @@ describe('Türkiye culture pack', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const s = play(seed, profile([cultureTrPack.entitlement!]), seed % 2 ? 'uk' : 'de');
       expect(s.enabledPacks).toContain('culture_tr');
+      // a life that moved to Türkiye (abroad.ts) lives the Türkiye pack from then on; this test is about lives elsewhere
+      if (s.player.countryId === 'tr' || (s.player.ext?.emig as { from?: string } | undefined)?.from === 'tr') continue;
       expect(Object.keys(s.player.eventLastAge).filter((id) => id.startsWith('tr.'))).toEqual([]);
       expect(activitiesFor(s.enabledPacks).filter((a) => a.id.startsWith('tr_') && a.available?.({ p: s.player } as Ctx))).toEqual([]);
       expect((s.player.goals ?? []).filter((g) => g.id.startsWith('tr_'))).toEqual([]);
@@ -307,8 +315,15 @@ describe('Türkiye life milestones (round 5)', () => {
       expect(ids.includes('m_medicine'), `score ${score}: ${ids.join(',')}`).toBe(medicine);
       expect(ids).toContain('retake');
       expect(ids).toContain('work');
-      expect(ids.filter((x) => x.startsWith('m_') || x === 'vakif').length).toBeGreaterThan(0);
-      expect(ids.length).toBeLessThanOrEqual(5);
+      expect(ids.filter((x) => x.startsWith('m_') || x.startsWith('v_')).length).toBeGreaterThan(0);
+      // round 7: every major the score reaches is listed, plus the private (vakıf) places above it
+      const { open, paid } = tercihLists(score);
+      expect(ids.filter((x) => x.startsWith('m_')).map((x) => x.slice(2)).sort()).toEqual([...open].sort());
+      expect(ids.filter((x) => x.startsWith('v_')).map((x) => x.slice(2)).sort()).toEqual([...paid].sort());
+      // the result text names the same majors the list shows
+      const body = s.pending!.body.toLocaleLowerCase('tr');
+      const named = (m: keyof typeof MAJOR_INFO) => body.includes(MAJOR_INFO[m].tr.toLocaleLowerCase('tr')) || body.includes(MAJOR_INFO[m].en.toLocaleLowerCase('tr'));
+      for (const m of [...open.slice(0, 1), ...paid]) expect(named(m), `${score}: ${m} in "${body}"`).toBe(true);
       const pick = ids.find((x) => x.startsWith('m_'))!;
       const n = s.player.log.length;
       choose(s, pick);

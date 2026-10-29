@@ -2,7 +2,7 @@ import type { Ctx, EventDef } from '../types';
 import { isCareerUpgrade, sameTrack, titleFor } from '../../engine/careers';
 import { abl, acc, cap, dat, kin, nm, single, wage, who, wth, eligibleJobs, employee, officeJob, workKind, quietInMourning } from './util';
 import { BURNOUT, LAYOFF } from './work-lines';
-import { byCountry, him, he, type ByCountry } from './events-flavour';
+import { byCountry, him, he, trHome, type ByCountry } from './events-flavour';
 import { promoteAnyway } from '../../engine/context';
 import { catName, syncFlagCat } from '../../engine/pets';
 import { divorceTerms, divorcedLine, yearsWith } from './relationships';
@@ -10,7 +10,7 @@ import { hlCaseTr, isOwnHeirloom, nameOrOwn } from './heirloom-words';
 
 const TOPICS_EN = ['the dishes', 'your phone screen time', 'whose family to visit for the holidays', 'money', 'the thermostat'];
 const TOPICS_TR = ['bulaşıklar', 'telefona gömülmen', 'bayramda kimin ailesine gidileceği', 'para', 'kombinin derecesi'];
-const topicTr = (en: string) => TOPICS_TR[TOPICS_EN.indexOf(en)] ?? en;
+const topicTr = (c: Ctx, en: string) => (!trHome(c) && en === TOPICS_EN[2] ? 'yılbaşında kimin ailesine gidileceği' : TOPICS_TR[TOPICS_EN.indexOf(en)] ?? en);
 
 /** Headhunters place office and professional jobs, not farmers, fishers or footballers. */
 const NOT_HEADHUNTED = new Set(['athlete', 'coach', 'soldier', 'officer', 'artist', 'farmer', 'fisher', 'taxi', 'police', 'firefighter']);
@@ -97,7 +97,7 @@ export const adultEvents: EventDef[] = [
       c.vars.topic = c.rng.pick(TOPICS_EN);
     },
     title: (c) =>
-      c.t(`${nm(c)} is upset with you about ${c.vars.topic}.`, `${nm(c)} sana ${topicTr(String(c.vars.topic))} yüzünden küs.`),
+      c.t(`${nm(c)} is upset with you about ${c.vars.topic}.`, `${nm(c)} sana ${topicTr(c, String(c.vars.topic))} yüzünden küs.`),
     text: (c) => c.t('The silence at dinner is very loud.', 'Akşam yemeğindeki sessizlik kulak tırmalıyor.'),
     choices: [
       {

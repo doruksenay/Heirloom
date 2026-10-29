@@ -1,12 +1,12 @@
 import type { ChoiceDef, Ctx, EventDef } from '../types';
 import { keepWorkingLine, retirementLine } from '../../engine/common-lines';
-import { MAX_HIRE_AGE, aOrAn, acc, dat, eligibleJobs, familyFirstNames, gen, nm, wage, who, wth } from './util';
+import { MAX_HIRE_AGE, aOrAn, acc, cap, dat, eligibleJobs, familyFirstNames, gen, nm, wage, who, wth } from './util';
 import { da } from '../../i18n/tr-grammar';
 import { say, sayWith, type Pair } from './lines';
 import type { Gender, Person } from '../../engine/types';
 import { furniture as furnitureItem } from '../../engine/home';
 import { tuitionFor } from '../../engine/economy';
-import { atParents, inTr } from './events-flavour';
+import { atParents, inTr, livesWith } from './events-flavour';
 import { firstNames } from '../../engine/world';
 import { EDUCATION_RANK, titleFor, type JobDef } from '../../engine/careers';
 import { MAJORS, peekCampus } from '../campus/state';
@@ -281,6 +281,13 @@ const SETUP_HOW: { title: (n: string) => Pair; text: Pair }[] = [
     text: ['Six months of nodding at each other by the water fountain. Today it turned into words.', 'Altı aydır su sebilinin başında birbirinize başınızla selam veriyordunuz. Bugün söze döküldü.'],
   },
 ];
+/** Who asks about the family name at dinner: a living mother or father, otherwise an old relative. [en, tr, tr dative]. */
+function asker(c: Ctx): [string, string, string] {
+  if (c.h.relatives('mother').length) return ['your mother', 'annen', 'annene'];
+  if (c.h.relatives('father').length) return ['your father', 'baban', 'babana'];
+  return ['an old relative', 'yaşlı bir akraban', 'yaşlı akrabana'];
+}
+
 /** Türkiye only: the aunt who knows "a very decent young person". */
 const SETUP_AUNT = {
   title: (n: string): Pair => [`Your aunt knows someone: ${n}`, `Teyzenin bir adayı var: ${n}`],
@@ -424,8 +431,8 @@ const NUDGE_EVENTS: EventDef[] = [
     title: (c) => c.t(`${nm(c)} asks where this is going`, `${nm(c)} "Biz neyiz?" diye sordu`),
     text: (c) =>
       c.t(
-        `${c.s.year - (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.sinceYear ?? c.s.year)} years together. The toothbrush at your place has turned into a question.`,
-        `${c.s.year - (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.sinceYear ?? c.s.year)} yıldır birliktesiniz. Evindeki diş fırçası artık bir soru işareti.`,
+        `${c.s.year - (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.sinceYear ?? c.s.year)} years together. ${livesWith(c, String(c.vars.pid)) ? 'You share a flat, a fridge and a Wi-Fi password; the next step is the only thing left unshared.' : 'The toothbrush at your place has turned into a question.'}`,
+        `${c.s.year - (c.p.relations.find((r) => r.personId === String(c.vars.pid))?.sinceYear ?? c.s.year)} yıldır birliktesiniz. ${livesWith(c, String(c.vars.pid)) ? 'Aynı evi, aynı buzdolabını, aynı internet şifresini paylaşıyorsunuz; konuşulmayan tek şey sıradaki adım.' : 'Evindeki diş fırçası artık bir soru işareti.'}`,
       ),
     choices: [
       {
@@ -438,9 +445,11 @@ const NUDGE_EVENTS: EventDef[] = [
       {
         id: 'move_in',
         label: (c) => c.t('Move in together', 'Aynı eve çıkın'),
-        requires: (c) => !c.h.has('moved_in'),
+        // round 7 (review 6 §3.3): a couple who already live together are not asked to move in again
+        hidden: (c) => livesWith(c, String(c.vars.pid)),
         resolve: (c) => {
           c.h.flag('moved_in');
+          c.h.flag(`moved_in:${String(c.vars.pid)}`);
           c.h.closeness(String(c.vars.pid), 8);
           c.h.stat('happiness', 4);
           const n = nm(c);
@@ -609,7 +618,8 @@ export const scheduledEvents: EventDef[] = [
     id: 'base.after_highschool',
     category: 'milestone',
     scheduled: true,
-    title: (c) => c.t('High school is over. What now?', 'Lise bitti. Şimdi ne olacak?'),
+    title: (c) =>
+      c.t(c.p.countryId === 'de' ? 'Abitur in hand. What now?' : c.p.countryId === 'uk' ? 'School is over. What now?' : 'High school is over. What now?', 'Lise bitti. Şimdi ne olacak?'),
     text: (c) =>
       c.t(
         'Everyone has an opinion about your future. Especially your relatives.',
@@ -804,12 +814,14 @@ export const scheduledEvents: EventDef[] = [
     title: (c) => c.t(`Who will carry on the ${c.s.dynasty.familyName} name?`, `${c.s.dynasty.familyName} adını kim yaşatacak?`),
     text: (c) => {
       const item = c.s.dynasty.heirlooms[0]?.name;
+      // round 7 (review 6 §3.2): an aunt is never on record, so a living parent asks, or an old relative
+      const [en, tr] = asker(c);
       return item
         ? c.t(
-            `At a family dinner your aunt asked it again, this time looking straight at the family heirloom: ${item}.`,
-            `Bir aile yemeğinde halan aynı soruyu yine sordu. Bu sefer gözü doğrudan aile yadigârındaydı: ${item}.`,
+            `At a family dinner ${en} asked it again, this time looking straight at the family heirloom: ${item}.`,
+            `Bir aile yemeğinde ${tr} aynı soruyu yine sordu. Bu sefer gözü doğrudan aile yadigârındaydı: ${item}.`,
           )
-        : c.t('At a family dinner your aunt asked it again, between the soup and the main course.', 'Bir aile yemeğinde halan aynı soruyu yine sordu, çorbayla ana yemek arasında.');
+        : c.t(`At a family dinner ${en} asked it again, between the soup and the main course.`, `Bir aile yemeğinde ${tr} aynı soruyu yine sordu, çorbayla ana yemek arasında.`);
     },
     choices: [
       {
@@ -858,9 +870,10 @@ export const scheduledEvents: EventDef[] = [
         label: (c) => c.t('The name will be fine', 'O isim yaşar, merak etme'),
         resolve: (c) => {
           c.h.stat('happiness', 3);
+          const [en, , trDat] = asker(c);
           return c.t(
-            `You told your aunt the ${c.s.dynasty.familyName} name is doing very well in the phone book. She laughed despite herself.`,
-            `Halana, ${c.s.dynasty.familyName} adının telefon rehberinde gayet iyi yaşadığını söyledin. Kendini tutamayıp güldü.`,
+            `You told ${en} the ${c.s.dynasty.familyName} name is doing very well in the phone book. A laugh escaped, despite everything.`,
+            `${cap(trDat)}, ${c.s.dynasty.familyName} adının telefon rehberinde gayet iyi yaşadığını söyledin. Kendini tutamayıp güldü.`,
           );
         },
       },

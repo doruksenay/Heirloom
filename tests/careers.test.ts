@@ -276,7 +276,7 @@ describe('career upgrades and the career top (playtest 3 §2.10)', () => {
     expect(promoteAnyway(makeCtx(s))).toBe(true);
     expect(s.player.jobLevel).toBe(2); // Café Manager, the top of a three-step ladder
     expect(s.player.achievements).not.toContain('top_job');
-    withJob(s, 40, 'police', 2, 5);
+    withJob(s, 40, 'police', 4, 5); // round 7: six police ranks, Emniyet Amiri to Emniyet Müdürü
     expect(promoteAnyway(makeCtx(s))).toBe(true);
     expect(s.player.achievements).toContain('top_job');
   });
@@ -300,7 +300,8 @@ describe('round 4: many more jobs and the job board', async () => {
     expect(full.length).toBeGreaterThanOrEqual(80);
     for (const j of full) {
       expect(j.titles.length, j.id).toBeGreaterThanOrEqual(4);
-      expect(j.titles.length, j.id).toBeLessThanOrEqual(6);
+      // round 7: the officer corps has its seven real ranks, Teğmen to Tuğgeneral
+      expect(j.titles.length, j.id).toBeLessThanOrEqual(j.id === 'officer' ? 7 : 6);
     }
     expect(PART_TIME_IDS.length).toBeGreaterThanOrEqual(9);
     for (const j of free) for (const t of j.titlesTr ?? []) for (const w of t.split(/[\s']+/)) expect(['the', 'and', 'of', 'Junior', 'Senior', 'Manager'], `${j.id}: ${t}`).not.toContain(w);
@@ -499,7 +500,7 @@ describe('round 5: career pace', () => {
     for (const r of STEP_RAISES) expect(r >= 0.08 && r <= 0.2).toBe(true);
     expect(levelMultiplier(4)).toBeLessThan(2.3);
     // no ordinary promotion to the top before 42
-    const s = withJob(fresh(6), 35, 'police', 2, 12);
+    const s = withJob(fresh(6), 35, 'diplomat', 4, 12); // police now rise only by rank rules (round 7)
     expect(TOP_RUNG_MIN_AGE).toBe(42);
     expect(makeCtx(s).h.promote()).toBe(false);
     s.player.birthYear = s.year - 43;
@@ -604,5 +605,161 @@ describe('round 5: career coherence', () => {
       }
     }
     expect(board).toBeGreaterThan(0);
+  });
+});
+
+describe('round 7: hiring odds, the free job board and Türkiye public-sector realism', async () => {
+  const { jobListingFor, hireChance, JOB_BOARD_EVENT } = await import('../src/content/base/job-board');
+  const { jobGaps } = await import('../src/content/base/util');
+  const { tercihLists } = await import('../src/content/culture-tr/milestones');
+  const { randomLifeCountry } = await import('../src/engine/new-life');
+  const { dailyPlan } = await import('../src/engine/daily');
+  const { MAJOR_IDS } = await import('../src/engine/careers');
+  const jobOf = (id: string) => BASE_JOBS.find((j) => j.id === id)!;
+  /** An adult with no job and no school, in Türkiye. */
+  const adult = (age: number, gender: 'female' | 'male' = 'female', education: 'highschool' | 'university' = 'highschool', seed = 3) => {
+    const s = fresh(seed);
+    s.player.gender = gender;
+    s.player.birthYear = s.year - age;
+    s.player.school = null;
+    s.player.education = education;
+    s.player.jobId = null;
+    s.player.stats.smarts = 60;
+    s.player.stats.health = 80;
+    s.pending = null;
+    return s;
+  };
+
+  it('shows honest odds: an 18-year-old is low or locked out of most listings', () => {
+    const s = adult(18);
+    const rows = jobListingFor(s);
+    const lowOrLocked = rows.filter((r) => !r.qualifies || r.odds === 'low' || r.odds === 'medium').length;
+    expect(lowOrLocked / rows.length).toBeGreaterThan(0.6);
+    expect(new Set(rows.filter((r) => r.qualifies).map((r) => r.odds)).size).toBeGreaterThan(1);
+    // a medicine graduate is a far better bet for a doctor's post than for a bank's trading floor
+    const g = adult(26, 'female', 'university');
+    g.player.major = 'medicine';
+    g.player.stats.smarts = 80;
+    const c = makeCtx(g);
+    expect(hireChance(c, jobOf('doctor'))).toBeGreaterThan(hireChance(c, jobOf('banker')));
+  });
+
+  it('gives the activity back when the board is closed without applying', () => {
+    const s = adult(25);
+    doActivity(s, 'job_search');
+    expect(s.pending?.eventId).toBe(JOB_BOARD_EVENT);
+    const n = s.player.log.length;
+    choose(s, 'none');
+    expect(s.player.actionsThisYear.job_search ?? 0).toBe(0);
+    expect(s.player.log.length).toBe(n);
+  });
+
+  it('needs KPSS for memur posts, the police school or a degree for the police, and askerlik first for men', () => {
+    const s = adult(23, 'male');
+    const c = makeCtx(s);
+    expect(jobGaps(c, jobOf('civil_servant'))).toContain('kpss');
+    expect(jobGaps(c, jobOf('police'))).toContain('academy');
+    expect(jobGaps(c, jobOf('police'))).toContain('askerlik');
+    s.player.ext = { ...(s.player.ext ?? {}), careers: { kpss: 80, kpssYear: s.year }, culture_tr: { asker: 'er' } };
+    const c2 = makeCtx(s);
+    expect(jobGaps(c2, jobOf('civil_servant'))).toEqual([]);
+    // a score counts for two years
+    s.year += 3;
+    s.player.birthYear += 3;
+    expect(jobGaps(makeCtx(s), jobOf('civil_servant'))).toContain('kpss');
+    // a postponement (tecil) is enough for the askerlik rule
+    const t = adult(24, 'male', 'university');
+    t.player.ext = { ...(t.player.ext ?? {}), culture_tr: { tecil: 1, tecilYear: t.year } };
+    expect(jobGaps(makeCtx(t), jobOf('police'))).toEqual([]);
+    // outside Türkiye none of this applies
+    const us = adult(23, 'male');
+    us.player.countryId = 'us';
+    expect(jobGaps(makeCtx(us), jobOf('civil_servant'))).toEqual([]);
+  });
+
+  it('takes the police school for two years, then posts the graduate as Polis Memuru', () => {
+    let posted = false;
+    for (let seed = 1; seed <= 40 && !posted; seed++) {
+      const s = adult(19, 'male', 'highschool', seed);
+      s.player.stats.smarts = 90;
+      s.player.stats.health = 95;
+      doActivity(s, 'career_police_school');
+      if (!(s.player.ext?.careers as { academy?: number } | undefined)?.academy) continue;
+      // a full-time student: no full-time job meanwhile
+      expect(jobGaps(makeCtx(s), jobOf('barista'))).toEqual([]);
+      expect(jobGaps(makeCtx(s), jobOf('warehouse'))).toContain('student');
+      for (let y = 0; y < 2; y++) {
+        s.year++;
+        careerOnYear(makeCtx(s));
+      }
+      expect(s.player.jobId).toBe('police');
+      expect(s.player.jobTitle).toBe('Police Officer');
+      posted = true;
+    }
+    expect(posted).toBe(true);
+  });
+
+  it('climbs police ranks by years and exams; Komiser Yardımcısı needs a degree in Türkiye', () => {
+    expect(BASE_JOBS.find((j) => j.id === 'police')!.titlesTr).toEqual(['Polis Memuru', 'Komiser Yardımcısı', 'Komiser', 'Başkomiser', 'Emniyet Amiri', 'Emniyet Müdürü']);
+    expect(BASE_JOBS.find((j) => j.id === 'officer')!.titlesTr).toEqual(['Teğmen', 'Üsteğmen', 'Yüzbaşı', 'Binbaşı', 'Yarbay', 'Albay', 'Tuğgeneral']);
+    const s = withJob(fresh(4), 24, 'police', 0, 2);
+    s.player.education = 'highschool';
+    s.player.stats.smarts = 95;
+    for (let y = 0; y < 4; y++) {
+      s.year++;
+      s.player.birthYear++;
+      s.player.jobYears++;
+      careerOnYear(makeCtx(s));
+    }
+    expect(s.player.jobLevel).toBe(0); // no degree, no PAEM
+    const u = withJob(fresh(5), 24, 'police', 0, 0);
+    u.player.stats.smarts = 95;
+    let first = -1;
+    for (let y = 0; y < 12; y++) {
+      u.year++;
+      u.player.birthYear++;
+      u.player.jobYears++;
+      careerOnYear(makeCtx(u));
+      if (u.player.jobLevel >= 1 && first < 0) first = y;
+    }
+    expect(first).toBeGreaterThanOrEqual(2);
+  });
+
+  it('has no full-time job alongside a full-time degree', () => {
+    const s = adult(20, 'female', 'highschool');
+    s.player.school = 'university';
+    const c = makeCtx(s);
+    expect(jobGaps(c, jobOf('engineer'))).toContain('education');
+    expect(jobGaps(c, jobOf('warehouse'))).toContain('student');
+    expect(jobGaps(c, jobOf('cashier'))).not.toContain('student');
+    expect(eligibleJobs(c).every((j) => j.partTime || ['barista', 'retail'].includes(j.id))).toBe(true);
+    // a student who still holds one leaves it at the year's end
+    s.player.jobId = 'athlete';
+    careerOnYear(makeCtx(s));
+    expect(s.player.jobId).toBeNull();
+  });
+
+  it('lists every major the YKS score reaches, plus the vakıf places above it', () => {
+    for (let score = 150; score <= 560; score += 10) {
+      const { open, paid } = tercihLists(score);
+      expect(open.every((m) => !paid.includes(m))).toBe(true);
+      expect(open.length + paid.length).toBeLessThanOrEqual(MAJOR_IDS.length);
+    }
+    expect(tercihLists(560).open.length).toBe(MAJOR_IDS.length);
+  });
+
+  it('starts the first random life on a Turkish phone in Türkiye, later ones about 80%, and has a Türkiye daily', () => {
+    expect(randomLifeCountry(true, true, 0.99, 0.5)).toBe('tr');
+    let tr = 0;
+    for (let i = 0; i < 1000; i++) if (randomLifeCountry(true, false, (i + 0.5) / 1000, ((i * 7) % 1000) / 1000) === 'tr') tr++;
+    expect(tr).toBe(800);
+    expect(randomLifeCountry(false, true, 0.1, 0.0)).not.toBeUndefined();
+    const days = Array.from({ length: 28 }, (_, i) => new Date(Date.UTC(2026, 10, 1 + i)).toISOString().slice(0, 10));
+    const trDays = days.filter((d) => dailyPlan(d, 'tr').countryId === 'tr').length;
+    expect(trDays).toBeGreaterThanOrEqual(14);
+    expect(trDays).toBeLessThan(28);
+    for (const d of days) expect(dailyPlan(d, 'tr')).toEqual(dailyPlan(d, 'tr'));
+    // the global plan is unchanged by the region
+    expect(days.filter((d) => dailyPlan(d, 'global').countryId === 'tr').length).toBeLessThan(10);
   });
 });

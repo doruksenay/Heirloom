@@ -182,7 +182,7 @@ export const INSULT: Record<Rel, L[]> = {
 
 export const INSULT_SHRUG: L[] = [
   ({ N, He }) => [`You had a go at ${N}. ${He} laughed and said it was the nicest thing you had said all year.`, `${dat(N)} laf soktun. Güldü ve bunun bütün yıl söylediğin en tatlı şey olduğunu söyledi.`],
-  ({ N, He }) => [`You insulted ${N}. ${He} said "nice try" and stole a chip from your plate.`, `${dat(N)} laf soktun. "İyi denemeydi" dedi ve tabağından bir patates kaptı.`],
+  ({ N, He }) => [`You insulted ${N}. ${He} said "nice try" and stole a chip from your plate.`, `${dat(N)} laf soktun. "Yemezler" dedi ve tabağından bir patates kaptı.`],
 ];
 
 // ================================================================ holiday together
@@ -247,7 +247,7 @@ export const COOK: Record<Rel, L[]> = {
     ({ N, he }) => [`You cooked for ${N}, who told you about every meal ${he} ever cooked for you.`, `${N} için yemek yaptın; o da sana yıllar boyunca senin için pişirdiği her yemeği anlattı.`],
   ],
   sibling: [
-    ({ N, He }) => [`You cooked a dish from your childhood for ${N}. ${He} said it tasted exactly wrong, in a good way.`, `${N} için çocukluğunuzdan bir yemek pişirdin. Tadının tam olarak yanlış olduğunu söyledi; iyi anlamda.`],
+    ({ N, He }) => [`You cooked a dish from your childhood for ${N}. ${He} said it tasted exactly wrong, in a good way.`, `${N} için çocukluğunuzdan bir yemek pişirdin. Tadının tam olarak yanlış olduğunu söyledi; tam da hatırladığı gibi yanlış.`],
     ({ N, He }) => [`You made dinner for ${N}. ${He} did the washing up without being asked, which has never happened before.`, `${N} için akşam yemeği yaptın. Kimse söylemeden bulaşıkları yıkadı; bu daha önce hiç olmamıştı.`],
   ],
   love: [

@@ -505,7 +505,7 @@ export const childEvents: EventDef[] = [
       },
       {
         id: 'wiggle',
-        label: (c) => c.t('Wiggle like an eel', 'Yılan balığı gibi kıvrıl'),
+        label: (c) => c.t('Wiggle like an eel', 'Yerinde duramayıp kıpır kıpır kıpırdan'),
         resolve: (c) => {
           c.h.stat('looks', -3);
           c.h.stat('happiness', 2);
@@ -867,7 +867,7 @@ export const childEvents: EventDef[] = [
     text: (c) =>
       c.t(
         'There is a cake shaped like your favorite cartoon and eleven kids high on sugar.',
-        'En sevdiğin çizgi film kahramanı şeklinde bir pasta ve şekerden uçmuş on bir çocuk var.',
+        'En sevdiğin çizgi film kahramanı şeklinde bir pasta ve şekeri fazla kaçırıp yerinde duramayan on bir çocuk var.',
       ),
     choices: [
       {
@@ -1586,7 +1586,7 @@ export const childEvents: EventDef[] = [
           c.h.stat('happiness', 4);
           return c.t(
             'You spent every coin on a pencil with a rubber head and a snow globe. Worth it.',
-            'Son kuruşuna kadar lastik kafalı bir kaleme ve bir kar küresine yatırdın. Değdi.',
+            'Son kuruşuna kadar lastik kafalı bir kaleme ve bir kar küresine yatırdın. Ömrünün en iyi alışverişiydi.',
           );
         },
       },

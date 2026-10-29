@@ -3,7 +3,7 @@ import type { GameState, Mortgage, Player, StatKey } from '../../engine/types';
 import { getCountry } from '../../engine/world';
 import { salaryFor } from '../../engine/careers';
 import { nameClashesWithFamily } from '../../engine/context';
-import { newMortgage, yearlyIncome } from '../../engine/economy';
+import { canBorrow, mortgagePayoff, newMortgage, yearlyIncome } from '../../engine/economy';
 import { FURNITURE, STYLE_SETS, currentTier, setProgress, homeTier, houseState, type HomeTier, type HomeTierDef } from '../../engine/home';
 import {
   MAX_PETS,
@@ -22,6 +22,7 @@ import {
 import { acc, dat, gen, loc, wage, wth } from './util';
 import { cityName, isCoastal } from '../../engine/places';
 import { pickIndex, say } from './lines';
+import { kinNamesTr } from './kin-names';
 
 // ---------------------------------------------------------------- helpers shared with the pet and home events
 
@@ -106,7 +107,7 @@ export function moveTo(c: Ctx, tier: HomeTier, mode: 'rent' | 'buy'): string {
   const parts: string[] = [];
   if (p.home.owned) {
     const sale = Math.round(p.home.value * 0.95);
-    const owed = p.home.loan?.balance ?? 0;
+    const owed = mortgagePayoff(p.home.loan); // round 7 balance: the loan's payoff today, not every future instalment
     c.h.money(sale - owed);
     parts.push(
       owed > 0
@@ -122,10 +123,12 @@ export function moveTo(c: Ctx, tier: HomeTier, mode: 'rent' | 'buy'): string {
     const down = Math.max(0, Math.min(p.money, price));
     const loan = price - down;
     c.h.money(-down);
-    if (loan > 0) mortgage = newMortgage(loan, c.age);
+    if (loan > 0) mortgage = newMortgage(loan, c.age, p.countryId);
     c.h.achieve('homeowner');
   }
   const furniture = def.garden ? p.home.furniture : p.home.furniture.filter((f) => !FURNITURE.some((x) => x.id === f && x.slot === 'garden'));
+  // round 7: leaving a rented place this year (flag year), so a deposit dispute only follows a real move-out
+  if (!p.home.owned && currentTier(p) !== 'parents') c.h.flag('left_rental');
   p.home = { name: homeTitle(tier, p.city, c.lang), value: price, owned: mode === 'buy', furniture };
   if (mortgage) p.home.loan = mortgage;
   const st = houseState(p);
@@ -332,10 +335,14 @@ function petsOnYear(c: Ctx): void {
       petDies(p, pet, s.year, 'age');
       c.h.stat('happiness', -(4 + Math.round(pet.closeness / 10)));
       const fill = (x: string, name: string) => x.split('{n}').join(name).split('{a}').join(String(age));
-      c.h.log(
-        c.t(fill(en, displayName(pet, 'en')), fill(tr, displayName(pet, 'tr'))) + (older ? c.t(' It had been in the family longer than you.', ' Bu ailede senden bile eskiydi.') : ''),
-        'bad',
-      );
+      // round 7: in prison the news comes by letter, not at the pet's side
+      if (p.jailYears > 0)
+        c.h.log(c.t(`A letter from home: ${displayName(pet, 'en')} died of old age. You read it three times.`, `Evden bir mektup geldi: ${displayName(pet, 'tr')} yaşlılıktan ölmüş. Mektubu üç kez okudun.`), 'bad');
+      else
+        c.h.log(
+          c.t(fill(en, displayName(pet, 'en')), fill(tr, displayName(pet, 'tr'))) + (older ? c.t(' It had been in the family longer than you.', ' Bu ailede senden bile eskiydi.') : ''),
+          'bad',
+        );
       continue;
     }
     // close pets lift you up
@@ -344,7 +351,7 @@ function petsOnYear(c: Ctx): void {
     const cared = (pet.caredYear ?? 0) >= s.year - 1;
     if (!cared && c.age >= 12) petCloser(pet, -def.neglect);
     if (pet.closeness >= 40) pet.sulked = false;
-    if (pet.closeness < 25 && !pet.sulked) {
+    if (pet.closeness < 25 && !pet.sulked && p.jailYears === 0) {
       pet.sulked = true;
       const n = displayName(pet, 'en');
       const nt = displayName(pet, 'tr');
@@ -410,7 +417,8 @@ export function homeOnInherit(prev: Player, next: Player, s: GameState): string 
   const head = tr
     ? `${list} evde kaldı ve artık seninle.`
     : `${list} stayed with the house and ${names.length === 1 ? 'is' : 'are'} yours now.`;
-  return `${head} ${inheritPetLine(pets, prev.firstName, tr, handedOver, s.year)}`;
+  const line = `${head} ${inheritPetLine(pets, prev.firstName, tr, handedOver, s.year)}`;
+  return tr ? kinNamesTr(s, line, next) : line;
 }
 
 type PetLine = (n: string, p: string) => [string, string];
@@ -561,7 +569,7 @@ const PLAY_LINES: Record<PetKind, [string, string][]> = {
   ],
   rabbit: [
     ['You let {n} hop around the balcony. Two flower pots did not survive.', '{acc} balkonda zıplattın. İki saksı bu ziyareti atlatamadı.'],
-    ['You fed {n} parsley one leaf at a time. Pure joy, mostly yours.', '{dat} maydanozu yaprak yaprak yedirdin. Saf mutluluk, çoğu senin.'],
+    ['You fed {n} parsley one leaf at a time. Pure joy, mostly yours.', '{dat} maydanozu yaprak yaprak yedirdin. Mutluluk paylaşıldı; büyük kısmı sana düştü.'],
     ['{n} did a happy little jump in the air. You did not know rabbits could do that. Now you want to see it again.', '{n} havaya minik bir sevinç zıplaması yaptı. Tavşanların bunu yapabildiğini bilmiyordun. Şimdi bir daha görmek istiyorsun.'],
     ['{n} chewed through a phone charger. You played with {n} anyway. Love is blind.', '{n} bir telefon şarjını kemirdi. Yine de onunla oynadın. Aşk kördür.'],
     ['{n} flopped over on the carpet, completely relaxed. You did the same. Nobody moved for an hour.', '{n} halının üstüne yan yattı, tamamen gevşedi. Sen de aynısını yaptın. Bir saat kimse kıpırdamadı.'],
@@ -571,7 +579,7 @@ const PLAY_LINES: Record<PetKind, [string, string][]> = {
   turtle: [
     ['You gave {n} a strawberry. It took forty minutes and was worth every second.', '{dat} bir çilek verdin. Kırk dakika sürdü ve her saniyesine değdi.'],
     ['You and {n} sat in the sun together. Neither of you said anything. Perfect.', '{wth} güneşte yan yana oturdunuz. İkiniz de hiçbir şey demediniz. Mükemmel.'],
-    ['You took {n} for a walk on the grass. Three meters in an hour. A personal best.', '{acc} çimlerde yürüyüşe çıkardın. Bir saatte üç metre. Kişisel rekor.'],
+    ['You took {n} for a walk on the grass. Three meters in an hour. A personal best.', '{acc} çimlerde yürüyüşe çıkardın. Bir saatte üç metre. Onun için bir maraton.'],
     ['{n} ate a lettuce leaf so slowly that you finished a whole newspaper.', '{n} bir marul yaprağını o kadar yavaş yedi ki sen bütün bir gazeteyi bitirdin.'],
     ['You gave {n} a warm bath. {n} looked deeply satisfied, in a prehistoric way.', '{acc} ılık suda yıkadın. {n} tarih öncesinden kalma bir memnuniyetle baktı.'],
     ['{n} escaped and was found two hours later, four meters away. A great adventure.', '{n} kaçtı ve iki saat sonra dört metre ötede bulundu. Büyük bir macera.'],
@@ -617,7 +625,7 @@ const TRICK_FAIL: [string, string][] = [
 export function listingOptions(c: Ctx): { tier: HomeTier; mode: 'rent' | 'buy'; loan: boolean }[] {
   const p = c.p;
   const now = currentTier(p);
-  const equity = p.home.owned ? Math.round(p.home.value * 0.95) - (p.home.loan?.balance ?? 0) : 0;
+  const equity = p.home.owned ? Math.round(p.home.value * 0.95) - mortgagePayoff(p.home.loan) : 0;
   const funds = p.money + equity;
   const income = yearlyIncome(p, salary(c));
   const out: { tier: HomeTier; mode: 'rent' | 'buy'; loan: boolean }[] = [];
@@ -630,7 +638,7 @@ export function listingOptions(c: Ctx): { tier: HomeTier; mode: 'rent' | 'buy'; 
     if (def.price != null && !(p.home.owned && t === now)) {
       const price = tierPrice(c, def);
       if (funds >= price) out.push({ tier: t, mode: 'buy', loan: false });
-      else if (funds >= price * 0.2 && income > 0 && salary(c) * 4 >= price - funds) out.push({ tier: t, mode: 'buy', loan: true });
+      else if (funds >= price * 0.2 && income > 0 && canBorrow(c.age, salary(c), price - funds, p.countryId)) out.push({ tier: t, mode: 'buy', loan: true });
     }
   }
   return out;
@@ -749,7 +757,7 @@ export const homeActivities: ActivityDef[] = [
   // ------------------------------------------------ Money: homes
   {
     id: 'home_search',
-    label: (c) => c.t('Look for a new home', 'Yeni ev bak'),
+    label: (c) => c.t('Look for a new home', 'Ev ara'),
     description: (c) => c.t('Rent or buy, if you can afford it', 'Kirala ya da satın al, bütçen yetiyorsa'),
     group: 'Money',
     minAge: 18,
