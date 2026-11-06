@@ -70,7 +70,7 @@ function build(): { shared: Table; us: Table; ca: Table; uk: Table } {
     ['levelled', 'leveled'], ['fuelled', 'fueled'], ['totalled', 'totaled'], ['marshalled', 'marshaled'],
     ['unravelling', 'unraveling'], ['jeweller', 'jeweler'], ['jewellers', 'jewelers'], ['jewellery', 'jewelry'],
     ['counsellor', 'counselor'], ['counsellors', 'counselors'], ['counselling', 'counseling'],
-    ['councillor', 'councilor'], ['councillors', 'councilors'], ['skilful', 'skillful'], ['wilful', 'willful'],
+    ['skilful', 'skillful'], ['wilful', 'willful'],
     ['fulfil', 'fulfill'], ['fulfils', 'fulfills'], ['enrol', 'enroll'], ['instalment', 'installment'], ['instalments', 'installments'],
     ['licence', 'license'], ['licences', 'licenses'], ['defence', 'defense'], ['offence', 'offense'], ['offences', 'offenses'], ['pretence', 'pretense'],
     ['grey', 'gray'], ['greyer', 'grayer'], ['greyest', 'grayest'], ['greying', 'graying'], ['greyish', 'grayish'],

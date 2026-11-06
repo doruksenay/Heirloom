@@ -1,3 +1,4 @@
+import { localizeEn } from '../src/i18n/dialect';
 import { describe, expect, it } from 'vitest';
 import { ageUp, allowedInJail, choose, doActivity, newGame } from '../src/engine/game';
 import { makeCtx } from '../src/engine/context';
@@ -224,7 +225,7 @@ describe('activities in prison', () => {
     for (const [id, pool] of Object.entries(PRISON_LINES)) {
       const def = all.find((a) => a.id === id)!;
       expect(def.jailOk).toBe(true);
-      const prison = new Set(pool.map((p) => p[0]));
+      const prison = new Set(pool.map((p) => localizeEn(p[0], 'us')));
       const s = build('en', 30, SETUPS[0], 9);
       s.player.jailYears = 5;
       const lines = runMany(s, def, 20).filter((t) => !/twisted an ankle/.test(t));
