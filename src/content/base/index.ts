@@ -21,6 +21,8 @@ import { adultMoreActivities, adultMoreEvents, adultMoreOnYear } from './events-
 import { streetActivities, streetEvents, streetNetWorth, streetOnYear, streetTiles } from './street';
 import { abroadActivities, abroadEvents, abroadOnYear } from './abroad';
 import { kidMilestoneEvents, kidMilestonesOnYear } from './kid-milestones';
+import { earlyR8Events } from './events-early-r8';
+import { ancestorEvents } from './events-ancestors';
 
 /**
  * Optional choices that spend real money show it (review 5 §3.7: a gap year at 18 quietly started adult life in
@@ -76,6 +78,8 @@ export const basePack: ContentPack = {
     ...streetEvents,
     ...abroadEvents,
     ...kidMilestoneEvents,
+    ...earlyR8Events,
+    ...ancestorEvents,
   ],
   activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities, ...adoptionActivities, ...youngMoreActivities, ...adultMoreActivities, ...streetActivities, ...abroadActivities],
   onYear: (c) => {

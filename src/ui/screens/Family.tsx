@@ -15,6 +15,7 @@ import { cityName } from '../../engine/places';
 import { HeirCardView, torchView } from '../HeirCard';
 import { capsName } from '../caps';
 import { skinTone } from '../../engine/skin';
+import { familyBookText } from '../chronicle';
 
 const KIN: Record<RelationKind, [string, string]> = {
   mother: ['Mother', 'Mother'],
@@ -61,6 +62,17 @@ export function Family({ app }: { app: AppApi }) {
     .filter((x) => x.person && x.person.deathYear === undefined && x.rel.kind !== 'ex')
     .sort((a, b) => ORDER.indexOf(a.rel.kind) - ORDER.indexOf(b.rel.kind));
 
+  const shareBook = async () => {
+    const text = familyBookText(s, app.lang);
+    track('share_family_book', { gen: d.generation });
+    try {
+      await navigator.clipboard.writeText(text);
+      app.toast(T('Family book copied. Paste it anywhere.'));
+    } catch {
+      app.toast(text);
+    }
+  };
+
   return (
     <div class="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -84,6 +96,12 @@ export function Family({ app }: { app: AppApi }) {
         </div>
       </div>
 
+      {d.lives.length > 0 && (
+        <button type="button" class="btn ghost" onClick={shareBook}>
+          <Icon name="share" size={18} /> {T('Share the family book')}
+        </button>
+      )}
+
       <div class="tree" aria-label={T('Generations')}>
         {d.lives.map((life, i) => (
           <div class="tree-row" key={life.personId}>
@@ -100,6 +118,7 @@ export function Family({ app }: { app: AppApi }) {
                   {life.partnerName ? ` & ${life.partnerName}` : ''}
                 </div>
                 <div class="item-sub">{lifeLine(life)}</div>
+                {life.finalWords && <div class="item-sub" style={{ fontStyle: 'italic', color: 'var(--text-soft)' }}>{`"${life.finalWords}"`}</div>}
                 {life.heirloomNote && <span class="chip accent" style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{life.handedOver ? T('Handed on {item}', { item: life.heirloomNote }) : T('Left {item}', { item: life.heirloomNote })}</span>}
               </div>
             </div>

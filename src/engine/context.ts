@@ -6,6 +6,7 @@ import { familyNamePool, getCountry } from './world';
 import { allJobs } from '../content/registry';
 import { CAREER_TOP_MIN_LEVELS, RANK_RULES, titleFor } from './careers';
 import { kinNamesTr } from '../content/base/kin-names';
+import { localizeEn } from '../i18n/dialect';
 
 export const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Math.round(v)));
 
@@ -301,7 +302,8 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
       p.money = Math.round(p.money + d);
     },
     log(text, tone?: Tone) {
-      const e = { age: s.year - p.birthYear, year: s.year, text, tone };
+      // lines written without Ctx.t (the interactions, goals) get the dialect here; a second pass changes nothing
+      const e = { age: s.year - p.birthYear, year: s.year, text: s.lang === 'tr' ? text : localizeEn(text, p.countryId), tone };
       p.log.push(e);
       logTap.fn?.(s, e, logTap.src);
     },
@@ -436,7 +438,8 @@ export function makeCtx(s: GameState, vars: Record<string, string | number> = {}
 
   const lang = s.lang ?? 'en';
   // round 7 (content-fix): Turkish lines call parents and grandparents annen/baban/deden, never by first name
-  return { s, p, age, rng, vars, h, lang, t: (en, tr) => (lang === 'tr' ? kinNamesTr(s, tr) : en) };
+  // English lines are spelled and worded for the country of the life (i18n/dialect.ts): American in the US, British in the UK
+  return { s, p, age, rng, vars, h, lang, t: (en, tr) => (lang === 'tr' ? kinNamesTr(s, tr) : localizeEn(en, p.countryId)) };
 }
 
 /**

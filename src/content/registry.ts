@@ -5,6 +5,7 @@ import { BASE_JOBS, type JobDef } from '../engine/careers';
 import { basePack } from './base';
 import { crimePack } from './crime';
 import { cultureTrPack } from './culture-tr';
+import { cultureEnPack } from './culture-en';
 import { famePack } from './fame';
 import { bossPack } from './boss';
 import { campusPack } from './campus';
@@ -15,7 +16,7 @@ import { campusPack } from './campus';
  * require the player to opt in to adult content (with an 18+ confirmation).
  * New expansions: create a folder next to base/ and crime/, export a ContentPack, add it here.
  */
-export const PACKS: ContentPack[] = [basePack, famePack, bossPack, campusPack, cultureTrPack, crimePack];
+export const PACKS: ContentPack[] = [basePack, famePack, bossPack, campusPack, cultureTrPack, cultureEnPack, crimePack];
 
 export function getPack(id: string): ContentPack | undefined {
   return PACKS.find((p) => p.id === id);

@@ -22,6 +22,7 @@ import { courtPending, isPetty, peekCrime } from '../content/base/street-law';
 import { MORE_LAST_WORDS } from '../content/base/heirloom-more';
 import { kidReadyForBaby } from '../content/base/kid-milestones';
 import { allJobs, enabledPacks, findActivity, findEvent, eventsFor, packNetWorth, resolveEnabledPacks } from '../content/registry';
+import { localizeEn } from '../i18n/dialect';
 import { logTap } from './context'; // round 7 continuity: event ids for the log tap (scripts/continuity-scan.ts)
 import { ANNIVERSARY_EVENTS, anniversaryDue, markAnniversary, markTravelled, stateAllows } from './continuity';
 
@@ -143,7 +144,12 @@ const FOUNDER_STORIES: Record<'clock' | 'ring' | 'quilt' | 'recipes', FounderSto
 /** "İspanya'nın", "Birleşik Krallık'ın", "Amerika Birleşik Devletleri'nin" (round 7: "İspanya'nın Barselona şehrinde", review 6 §4.18). */
 const countryGenTr = (name: string) => gen(name);
 
-const txt = (t: string | ((c: Ctx) => string) | undefined, c: Ctx) => (typeof t === 'function' ? t(c) : t);
+// event titles, texts and choice labels: plain strings do not pass through Ctx.t, so English is localized here too
+// (i18n/dialect.ts; running it twice changes nothing)
+const txt = (t: string | ((c: Ctx) => string) | undefined, c: Ctx) => {
+  const r = typeof t === 'function' ? t(c) : t;
+  return r === undefined || c.lang === 'tr' ? r : localizeEn(r, c.p.countryId);
+};
 
 // ---------------------------------------------------------------- creation
 

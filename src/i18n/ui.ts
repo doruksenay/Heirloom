@@ -247,6 +247,13 @@ export const TR: Record<string, string> = {
     '{name} ailesini sürdürecek çocuk yok. Hikâye burada bitiyor ama yeni bir aile başlayabilir.',
   // end of a dynasty (engine, round 2)
   'The {name} family story ends here': '{name} ailesinin hikâyesi burada bitiyor',
+  'Share the family book': 'Aile defterini paylaş',
+  'Family book copied. Paste it anywhere.': 'Aile defteri kopyalandı. İstediğin yere yapıştır.',
+  'One generation of the {name} family, {from}–{to}.': 'Tek kuşak: {name} ailesi, {from}–{to}.',
+  '{n} generations of the {name} family, {from}–{to}.': '{n} kuşak: {name} ailesi, {from}–{to}.',
+  'Gen {n} · {name} ({from}–{to}): {where}.': '{n}. kuşak · {name} ({from}–{to}): {where}.',
+  'Gen {n} · {name} (born {from}), passed the torch at {age}: {where}.': '{n}. kuşak · {name} ({from} doğumlu), {age} yaşında meşaleyi devretti: {where}.',
+  'Gen {n} · You: {name}, now {age}.': '{n}. kuşak · Sen: {name}, şimdi {age} yaşında.',
   'One generation, {from}–{to}.': 'Tek kuşak, {from}–{to}.',
   '{n} generations, {from}–{to}.': '{n} kuşak, {from}–{to}.',
   '{item} went to the town museum, with a small card that tells the family story.':
