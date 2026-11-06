@@ -12,6 +12,7 @@ import { cityName } from '../../engine/places';
 import { Icon } from '../icons';
 import { track } from '../../platform/analytics';
 import { Tip } from '../Tip';
+import { lifeCardData, shareCardImage } from '../chronicle';
 
 export function Summary({ app }: { app: AppApi }) {
   const s = app.game!;
@@ -80,6 +81,12 @@ export function Summary({ app }: { app: AppApi }) {
     } catch {
       app.toast(text);
     }
+  };
+
+  const shareCard = async () => {
+    track('share_card', { kind: 'life', gen: r.generation });
+    const ok = await shareCardImage(app, lifeCardData(s, r, app.lang), `heirloom-${r.name.split(' ')[0].toLowerCase()}.png`, `${r.name} · #HeirloomLifeSim`);
+    if (!ok) await share();
   };
 
   return (
@@ -171,7 +178,10 @@ export function Summary({ app }: { app: AppApi }) {
             {dynastyEnd.join(' ')}
           </div>
         )}
-        <button type="button" class="btn" onClick={share}>
+        <button type="button" class="btn" onClick={shareCard}>
+          <Icon name="share" size={18} /> {T('Share as a card')}
+        </button>
+        <button type="button" class="btn ghost" onClick={share}>
           <Icon name="share" size={18} /> {r.gender === 'female' ? T('Share her story') : T('Share his story')}
         </button>
         <button type="button" class="btn ghost" onClick={app.endGame}>

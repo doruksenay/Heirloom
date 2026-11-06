@@ -15,7 +15,7 @@ import { cityName } from '../../engine/places';
 import { HeirCardView, torchView } from '../HeirCard';
 import { capsName } from '../caps';
 import { skinTone } from '../../engine/skin';
-import { familyBookText } from '../chronicle';
+import { familyBookText, familyCardData, shareCardImage } from '../chronicle';
 
 const KIN: Record<RelationKind, [string, string]> = {
   mother: ['Mother', 'Mother'],
@@ -62,6 +62,11 @@ export function Family({ app }: { app: AppApi }) {
     .filter((x) => x.person && x.person.deathYear === undefined && x.rel.kind !== 'ex')
     .sort((a, b) => ORDER.indexOf(a.rel.kind) - ORDER.indexOf(b.rel.kind));
 
+  const shareBookCard = async () => {
+    track('share_card', { kind: 'family', gen: d.generation });
+    const ok = await shareCardImage(app, familyCardData(s), `heirloom-${d.familyName.toLowerCase()}-family.png`, `${T('The {name} family', { name: d.familyName })} · #HeirloomLifeSim`);
+    if (!ok) await shareBook();
+  };
   const shareBook = async () => {
     const text = familyBookText(s, app.lang);
     track('share_family_book', { gen: d.generation });
@@ -97,9 +102,14 @@ export function Family({ app }: { app: AppApi }) {
       </div>
 
       {d.lives.length > 0 && (
-        <button type="button" class="btn ghost" onClick={shareBook}>
-          <Icon name="share" size={18} /> {T('Share the family book')}
-        </button>
+        <div class="row" style={{ gap: '8px' }}>
+          <button type="button" class="btn" style={{ flex: 1 }} onClick={shareBookCard}>
+            <Icon name="share" size={18} /> {T('Share as a card')}
+          </button>
+          <button type="button" class="btn ghost" style={{ flex: 1 }} onClick={shareBook}>
+            <Icon name="share" size={18} /> {T('Share the family book')}
+          </button>
+        </div>
       )}
 
       <div class="tree" aria-label={T('Generations')}>

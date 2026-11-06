@@ -248,6 +248,10 @@ export const TR: Record<string, string> = {
   // end of a dynasty (engine, round 2)
   'The {name} family story ends here': '{name} ailesinin hikâyesi burada bitiyor',
   'Share the family book': 'Aile defterini paylaş',
+  'Share as a card': 'Kart olarak paylaş',
+  'Card saved. Share it anywhere.': 'Kart kaydedildi. İstediğin yerde paylaş.',
+  'Family book': 'Aile defteri',
+  'generations': 'kuşak',
   'Family book copied. Paste it anywhere.': 'Aile defteri kopyalandı. İstediğin yere yapıştır.',
   'One generation of the {name} family, {from}–{to}.': 'Tek kuşak: {name} ailesi, {from}–{to}.',
   '{n} generations of the {name} family, {from}–{to}.': '{n} kuşak: {name} ailesi, {from}–{to}.',
