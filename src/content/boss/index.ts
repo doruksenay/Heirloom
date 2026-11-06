@@ -33,6 +33,7 @@ import { afterYear, moraleGrowth, moreActivities, moreEvents } from './extra';
 import { say, sayWith, type Pair } from '../base/lines';
 import { inTr } from '../base/events-flavour';
 import { kinNamesTr } from '../base/kin-names';
+import { bossExtraEvents } from './events-extra';
 
 // "Boss" expansion: start a company, grow it, raise money, sell it, take it public, or lose everything.
 export const BOSS_ENTITLEMENT = 'pack.boss';
@@ -925,7 +926,7 @@ export const bossPack: ContentPack = {
   description: 'Start a company, hire, raise money, sell it or take it public. Pass the family business down.',
   rating: 'all',
   entitlement: BOSS_ENTITLEMENT,
-  events: [...events, ...moreEvents].map(tidyEvent),
+  events: [...events, ...moreEvents, ...bossExtraEvents].map(tidyEvent),
   activities: [...activities, ...moreActivities].map(tidyActivity),
   onYear,
   netWorth: (s) => {

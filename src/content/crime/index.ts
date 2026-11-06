@@ -9,6 +9,8 @@ import { prisonEvents } from './events-prison';
 import { streetEvents } from './events-street';
 import { crimeLaterActivities, crimeLaterEvents, crimeLaterGoals } from './later';
 import { convictFor, crimeState, isPetty, localMoney, peekCrime, yearsServed } from './state';
+import { crimeMoreAEvents } from './events-more-a';
+import { crimeMoreBEvents } from './events-more-b';
 
 // "Crime World" expansion (18+). Bundled with the app, unlocked by purchase + adult-content opt-in.
 // Tone: satirical with real consequences (prison, lost jobs, broken relationships). No real-world how-to.
@@ -41,7 +43,7 @@ export const crimePack: ContentPack = {
   description: 'Burglary, gangs, heists, big trials and prison life in depth. Builds on the free street crime: every choice has a cost, and your family remembers.',
   rating: 'mature',
   entitlement: CRIME_ENTITLEMENT,
-  events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents, ...crimeLaterEvents],
+  events: [...streetEvents, ...justiceEvents, ...prisonEvents, ...afterEvents, ...crimeLaterEvents, ...crimeMoreAEvents, ...crimeMoreBEvents],
   activities: [...crimeActivities, ...crimeLaterActivities],
 
   // heat cooling and noticing a release run in the free game (base/street.ts streetOnYear) on the same state

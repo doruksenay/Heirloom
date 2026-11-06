@@ -33,6 +33,8 @@ import {
   type Honors,
   type Major,
 } from './state';
+import { campusMoreAEvents } from './events-more-a';
+import { campusMoreBEvents } from './events-more-b';
 
 // "Campus" expansion: majors, GPA, clubs, internships, Erasmus, honors and grad school.
 export const CAMPUS_ENTITLEMENT = 'pack.campus';
@@ -1466,7 +1468,7 @@ export const campusPack: ContentPack = {
   description: 'University life: pick a major, chase a 4.0, join clubs, land internships, study abroad and go all the way to a PhD.',
   rating: 'all',
   entitlement: CAMPUS_ENTITLEMENT,
-  events: [...events, ...campusLaterEvents],
+  events: [...events, ...campusLaterEvents, ...campusMoreAEvents, ...campusMoreBEvents],
   activities: [...activities, ...campusLaterActivities],
   jobs: [
     {

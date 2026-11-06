@@ -8,6 +8,7 @@ import { moreFameActivities } from './activities-more';
 import { say, sayWith, type Pair } from '../base/lines';
 import { bandNameEvent } from '../base/street-fame';
 import { fameLaterActivities, fameLaterEvents, fameLaterGoals, fameSchedule } from './later';
+import { fameExtraEvents } from './events-extra';
 
 // "Fame" expansion: music, social media and acting careers, the single-player side of Popmundo.
 // Builds on the free first steps (base/street-fame.ts: busking, open mics, posting videos, a local band, a small
@@ -891,7 +892,7 @@ export const famePack: ContentPack = {
   description: 'Record deals, albums, tours, acting, awards and scandals. Picks up your free following and takes it all the way.',
   rating: 'all',
   entitlement: FAME_ENTITLEMENT,
-  events: [...events, ...moreFameEvents, ...fameLaterEvents],
+  events: [...events, ...moreFameEvents, ...fameLaterEvents, ...fameExtraEvents],
   activities: [...activities, ...moreFameActivities, ...fameLaterActivities],
   onYear,
   schedule: fameSchedule,
