@@ -220,9 +220,18 @@ export interface Profile {
   settings: Settings;
   ribbons?: string[]; // collected end-of-life ribbons
   introSeen?: boolean; // first-launch "how it works" pages
+  feedback?: FeedbackEntry[]; // what the player asked for in the feedback sheet (kept on the phone, last 20)
   tips?: string[]; // one-time coaching tips already dismissed
   daily?: DailyProfile; // Daily Challenge streak and results (see engine/daily.ts)
   cloud?: CloudProfile; // opt-in cloud save, Daily leaderboard and gift codes (see platform/cloud.ts)
+}
+
+/** One piece of feedback from the "What should we add?" sheet. */
+export interface FeedbackEntry {
+  at: string; // ISO time
+  cats: string[]; // ids from platform/feedback.ts
+  text: string;
+  sent: boolean; // false when it could not be delivered (offline, no key): it stays here
 }
 
 /** The cloud side of the profile. Never uploaded itself; nothing here is personal. */

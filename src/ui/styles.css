@@ -168,6 +168,7 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 /* forms */
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.field textarea { border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 12px 14px; font: inherit; font-size: 16px; resize: none; line-height: 1.4; }
 .field input, .field select { min-height: 48px; border-radius: var(--radius-m); border: 1px solid var(--line); background: var(--surface-2); color: var(--text); padding: 0 14px; font: inherit; font-size: 16px; }
 .seg { display: flex; gap: 6px; background: var(--surface); border-radius: var(--radius-m); padding: 4px; }
 .seg button { flex: 1; min-height: 40px; border: none; border-radius: calc(var(--radius-m) - 4px); background: transparent; color: var(--muted); font-weight: 600; }

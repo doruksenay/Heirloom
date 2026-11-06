@@ -12,6 +12,7 @@ import { LangSwitch } from './Intro';
 import { countRandomLife, randomLifeCountry, randomLivesStarted } from '../../engine/new-life';
 import { setDailyRegion } from '../../engine/daily';
 import { Icon } from '../icons';
+import { FeedbackCard } from '../FeedbackSheet';
 
 // a Turkish phone plays the Türkiye daily plan, even when the family screen (not this one) opens first
 setDailyRegion(deviceLang() === 'tr' ? 'tr' : 'global');
@@ -90,6 +91,8 @@ export function NewLife({ app }: { app: AppApi }) {
       <button type="button" class="btn primary" onClick={quickStart} style={{ minHeight: '56px' }}>
         {T('Start a random life')}
       </button>
+
+      <FeedbackCard app={app} />
 
       <DailyCard app={app} />
 

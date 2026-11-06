@@ -72,6 +72,32 @@ export function track(event: string, props: Props = {}) {
   else if (timer === undefined) timer = window.setTimeout(() => void flush(), 15000);
 }
 
+/**
+ * Sends ONE event the player asked to send (their own feedback message), even if usage analytics are off: pressing Send
+ * is the consent for that message. Nothing else rides along but the app version, platform and language, and the random
+ * install id is not attached. Returns false when there is no key (the message then stays on the phone only).
+ */
+export async function sendExplicit(event: string, props: Props): Promise<boolean> {
+  if (isDev()) console.debug('[feedback]', event, props);
+  if (!KEYS.posthog.key) return false;
+  try {
+    const res = await fetch(`${KEYS.posthog.host}/capture/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: KEYS.posthog.key,
+        event,
+        distinct_id: uuid(),
+        properties: { platform: platform(), app_version: __APP_VERSION__, ...props, $process_person_profile: false },
+      }),
+      keepalive: true,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function flush() {
   window.clearTimeout(timer);
   timer = undefined;
