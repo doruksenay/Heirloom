@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import type { AppApi } from '../app-state';
 import { interact, interactionsFor, usesWith, INTERACTIONS_PER_PERSON } from '../../engine/interactions';
 import { Icon } from '../icons';
+import { RibbonIcon } from '../art/RibbonIcon';
 import { allRibbons, ribbonDesc, ribbonName } from '../../engine/ribbons';
 import { T, Tn, fmtInt } from '../../i18n/ui';
 import { Tip } from '../Tip';
@@ -190,13 +191,20 @@ export function Family({ app }: { app: AppApi }) {
             {T('{n}/{max} collected', { n: (app.profile.ribbons ?? []).length, max: allRibbons().length })}
           </span>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: '8px' }}>
           {allRibbons().map((rb) => {
             const got = (app.profile.ribbons ?? []).includes(rb.id);
             return (
-              <span key={rb.id} class={`chip ${got ? 'accent' : ''}`} title={ribbonDesc(rb, app.lang)} style={got ? undefined : { opacity: 0.55 }}>
-                {got ? ribbonName(rb, app.lang) : '???'}
-              </span>
+              <div
+                key={rb.id}
+                title={ribbonDesc(rb, app.lang)}
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', padding: '8px 4px 6px', borderRadius: '12px', background: 'var(--surface)', opacity: got ? 1 : 0.7, textAlign: 'center', minWidth: 0 }}
+              >
+                <RibbonIcon id={rb.id} size={44} locked={!got} />
+                <span class="muted" style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1.2, color: got ? 'var(--text-soft)' : undefined, overflowWrap: 'anywhere' }}>
+                  {got ? ribbonName(rb, app.lang) : '???'}
+                </span>
+              </div>
             );
           })}
         </div>

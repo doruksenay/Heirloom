@@ -4,6 +4,7 @@ import { buyFurniture, furniturePrice } from '../../engine/game';
 import { FURNITURE, SLOTS, STYLE_SETS, currentTier, furniture, homeTier, setProgress, type FurnitureDef } from '../../engine/home';
 import { alivePets, displayName, kindLabel, petAge, petsOf, type Pet, type PetKind } from '../../engine/pets';
 import { homeTitle } from '../../content/base/activities-home';
+import { HeirloomArt } from '../art/HeirloomArt';
 import { heirloomDef } from '../../engine/heirlooms';
 import { fmtMoney } from '../../engine/context';
 import { Icon } from '../icons';
@@ -833,9 +834,7 @@ export function Home({ app }: { app: AppApi }) {
             const def = heirloomDef(h.defId);
             return (
               <div class="item" key={h.uid}>
-                <div class="icon-box">
-                  <Icon name={def.icon} />
-                </div>
+                <HeirloomArt id={h.defId} size={56} />
                 <div class="grow">
                   <div class="item-title">{h.name}</div>
                   <div class="item-sub">

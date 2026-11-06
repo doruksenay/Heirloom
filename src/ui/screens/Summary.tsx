@@ -8,6 +8,7 @@ import { continueAsChild, heirCards, heirOptions, heirs } from '../../engine/gam
 import { HeirCardView, fromCard } from '../HeirCard';
 import { ageOf } from '../../engine/context';
 import { Avatar } from '../Avatar';
+import { SceneArt } from '../scenes/SceneArt';
 import { cityName } from '../../engine/places';
 import { Icon } from '../icons';
 import { track } from '../../platform/analytics';
@@ -92,6 +93,7 @@ export function Summary({ app }: { app: AppApi }) {
   return (
     <div class="screen" style={{ background: 'var(--bg-deep)' }}>
       <div class="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center', border: '1px solid var(--accent-soft)', padding: '26px 20px' }}>
+        <SceneArt id={handed ? 'pass_the_torch' : 'final_words'} />
         <div class="eyebrow" style={{ color: 'var(--accent)', letterSpacing: '0.14em' }}>
           {handed ? T('Passing the torch') : r.age >= 70 ? T('A life well lived') : T('Gone too soon')}
         </div>

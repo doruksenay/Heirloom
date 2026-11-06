@@ -18,6 +18,8 @@ import { DailyStrip, dateLabel } from './Daily';
 import { resultFor, todayKey } from '../../engine/daily';
 import { capsName } from '../caps';
 import { skinTone } from '../../engine/skin';
+import { SceneArt } from '../scenes/SceneArt';
+import { sceneFor } from '../scenes/map';
 
 const MILESTONES = [1, 3, 6, 12, 18, 25, 40, 60, 80, 100];
 /** Categories whose label means nothing to a player ("random" is how the engine files odd moments). */
@@ -170,6 +172,7 @@ export function Life({ app }: { app: AppApi }) {
                 {HIDDEN_CATEGORIES.includes(pending.category) ? '' : ` · ${T(pending.category)}`}
               </div>
             </div>
+            {sceneFor(pending.eventId, pending.category) && <SceneArt id={sceneFor(pending.eventId, pending.category)!} />}
             <h2 id="ev-title" style={{ fontSize: '25px', fontWeight: 800, lineHeight: 1.15 }}>
               {pending.title}
             </h2>
