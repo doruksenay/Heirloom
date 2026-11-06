@@ -1,5 +1,6 @@
 import type { GameState, LifeRecord, Player } from './types';
 import { packRibbons } from '../content/registry';
+import { MORE_RIBBONS } from './ribbons-more';
 
 /** End-of-life ribbons. Collected across all families in the profile, BitLife-style. First match wins. */
 export interface RibbonDef {
@@ -11,13 +12,22 @@ export interface RibbonDef {
   test: (r: LifeRecord, p: Player, s: GameState) => boolean;
 }
 
-export const RIBBONS: RibbonDef[] = [
+/**
+ * Order matters: the first match wins. The rare, vivid ribbons of ribbons-more.ts sit between 'big_family' and
+ * 'soulmates'. After the broad ones ('soulmates', 'top_ladder', 'keeper' ... together about two lives in three) they
+ * would almost never be awarded, and 'ordinary' would vanish; their tests keep out of debt and of the lone wolf, so
+ * 'broke' and 'lone_wolf' still read the same.
+ */
+const EARLY_RIBBONS: RibbonDef[] = [
   { id: 'centenarian', name: 'Centenarian', desc: 'Lived to 100 or more.', nameTr: 'Asırlık', descTr: '100 yaş ve üstünü gördü.', test: (r) => r.age >= 100 },
   { id: 'gone_soon', name: 'Gone Too Soon', desc: 'Died before 30.', nameTr: 'Erken Gidenler', descTr: '30 yaşından önce öldü.', test: (r) => r.age < 30 },
   { id: 'black_sheep', name: 'Black Sheep', desc: 'Convicted more than once.', nameTr: 'Kara Koyun', descTr: 'Birden fazla kez mahkûm oldu.', test: (_r, p) => p.criminalRecord >= 2 },
   { id: 'tycoon', name: 'Tycoon', desc: 'Ended a life worth a million (US dollars).', nameTr: 'Kodaman', descTr: 'Hayatını bir milyon (ABD doları) servetle tamamladı.', test: (r, p) => isTycoon(r.netWorth, p.money) },
   { id: 'overachiever', name: 'Overachiever', desc: 'Completed every life goal.', nameTr: 'Başarı Avcısı', descTr: 'Bütün hayat hedeflerini tamamladı.', test: (_r, p) => !!p.goals?.length && p.goals.every((g) => g.done) },
   { id: 'big_family', name: 'Big Family', desc: 'Raised four or more children.', nameTr: 'Kalabalık Aile', descTr: 'Dört ya da daha fazla çocuk büyüttü.', test: (r) => r.children >= 4 },
+];
+
+const BROAD_RIBBONS: RibbonDef[] = [
   { id: 'soulmates', name: 'Soulmates', desc: '40+ years with the same partner.', nameTr: 'Ruh İkizleri', descTr: 'Aynı kişiyle 40 yıldan fazla.', test: (r) => (r.partnerYears ?? 0) >= 40 },
   { id: 'top_ladder', name: 'Top of the Ladder', desc: 'Reached the highest title in a career.', nameTr: 'Zirvedeki', descTr: 'Bir kariyerin en üst unvanına ulaştı.', test: (_r, p) => p.achievements.includes('top_job') },
   { id: 'scholar', name: 'Scholar', desc: 'University degree and 90+ Smarts.', nameTr: 'Bilge', descTr: 'Üniversite diploması ve 90+ Zekâ.', test: (_r, p) => p.education === 'university' && p.stats.smarts >= 90 },
@@ -25,9 +35,14 @@ export const RIBBONS: RibbonDef[] = [
   { id: 'star', name: 'Local Legend', desc: 'Won the talent show or went viral.', nameTr: 'Mahallenin Yıldızı', descTr: 'Yetenek yarışmasını kazandı ya da viral oldu.', test: (_r, p) => p.achievements.includes('talent_show') || p.achievements.includes('viral') },
   { id: 'broke', name: 'In the Red', desc: 'Ended a life in debt.', nameTr: 'Eksidekiler', descTr: 'Hayatını borç içinde tamamladı.', test: (r) => r.netWorth < 0 },
   { id: 'lone_wolf', name: 'Lone Wolf', desc: 'No partner, no children, 60+ years.', nameTr: 'Yalnız Kurt', descTr: 'Eş yok, çocuk yok, 60+ yıl.', test: (r) => !r.partnerName && r.children === 0 && r.age >= 60 },
+];
+
+const FINAL_RIBBONS: RibbonDef[] = [
   { id: 'content', name: 'Content', desc: 'Died with 85+ Happiness.', nameTr: 'Huzurlu', descTr: '85+ Mutlulukla öldü.', test: (_r, p) => p.stats.happiness >= 85 },
   { id: 'ordinary', name: 'Quietly Ordinary', desc: 'A normal life, and that is fine.', nameTr: 'Sıradan ve Güzel', descTr: 'Normal bir hayat; bunda bir sorun yok.', test: () => true },
 ];
+
+export const RIBBONS: RibbonDef[] = [...EARLY_RIBBONS, ...MORE_RIBBONS, ...BROAD_RIBBONS, ...FINAL_RIBBONS];
 
 /**
  * A tycoon is worth a million in the end, counting the home, the car and the business and subtracting what is owed,
