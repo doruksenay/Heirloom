@@ -76,3 +76,9 @@ describe('torch idiom', () => {
     expect(localizeEn('One torch in the drawer.', 'us')).toBe('One flashlight in the drawer.');
   });
 });
+
+describe('flat-pack', () => {
+  it('stays flat-pack in every dialect', () => {
+    for (const c of ['us', 'ca', 'uk']) expect(localizeEn('You bought a flat-pack wardrobe and the flat pack was heavy.', c)).toBe('You bought a flat-pack wardrobe and the flat pack was heavy.');
+  });
+});

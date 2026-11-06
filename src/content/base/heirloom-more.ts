@@ -77,7 +77,7 @@ export const MORE_BORROW: MoreTable<{ ask: (n: string) => Pair; back: (n: string
   },
   kilim: {
     ages: [22, 70],
-    ask: (n) => [`${n} has moved into a flat with bare floors and asks to borrow the kilim for the first winter.`, `${n} yeni taşındığı çıplak evin ilk kışı için kilimi ödünç istiyor.`],
+    ask: (n) => [`${n} has moved into a new place with bare floors and asks to borrow the kilim for the first winter.`, `${n} yeni taşındığı çıplak evin ilk kışı için kilimi ödünç istiyor.`],
     back: (n) => [`The kilim came back in spring, beaten clean on a balcony. ${n} says the flat only felt like home while it was there.`, `Kilim baharda, bir balkonda tozu güzelce alınmış olarak geri geldi. ${n}, evin ancak kilim oradayken yuva gibi geldiğini söylüyor.`],
   },
   typewriter: {
@@ -697,7 +697,7 @@ export const MORE_PARTNER_IDEA: MoreTable<{ idea: (n: string) => Pair; yes: Pair
   ],
   typewriter: [
     {
-      idea: (n) => [`${n} says the typewriter is too loud for the flat and wants it put away.`, `${n}, daktilonun bu ev için fazla gürültülü olduğunu söylüyor ve kaldırılmasını istiyor.`],
+      idea: (n) => [`${n} says the typewriter is too loud for the place and wants it put away.`, `${n}, daktilonun bu ev için fazla gürültülü olduğunu söylüyor ve kaldırılmasını istiyor.`],
       yes: ['The typewriter moved to a high shelf and only comes down for birthday cards. Those are somehow louder now.', 'Daktilo yüksek bir rafa kalktı ve artık sadece doğum günü kartları için iniyor. O kartlar nedense artık daha gür.'],
     },
     {

@@ -92,9 +92,12 @@ function play(seed: number, p: Profile, countryId = 'tr'): GameState {
     if (s.dead) break;
     ageUp(s);
     answer();
+    if (s.player.countryId === 'tr') livedInTr.add(s);
   }
   return s;
 }
+/** Lives that spent some years in Türkiye (they moved there and on again): the Türkiye pack ran for them in those years. */
+const livedInTr = new WeakSet<GameState>();
 
 describe('Türkiye culture pack', () => {
   it('plays 200 Turkish lives: every event fires, every activity runs, no English in Turkish', { timeout: 120_000 }, () => {
@@ -182,7 +185,7 @@ describe('Türkiye culture pack', () => {
       const s = play(seed, profile([cultureTrPack.entitlement!]), seed % 2 ? 'uk' : 'de');
       expect(s.enabledPacks).toContain('culture_tr');
       // a life that moved to Türkiye (abroad.ts) lives the Türkiye pack from then on; this test is about lives elsewhere
-      if (s.player.countryId === 'tr' || (s.player.ext?.emig as { from?: string } | undefined)?.from === 'tr') continue;
+      if (s.player.countryId === 'tr' || livedInTr.has(s) || (s.player.ext?.emig as { from?: string } | undefined)?.from === 'tr') continue;
       expect(Object.keys(s.player.eventLastAge).filter((id) => id.startsWith('tr.'))).toEqual([]);
       expect(activitiesFor(s.enabledPacks).filter((a) => a.id.startsWith('tr_') && a.available?.({ p: s.player } as Ctx))).toEqual([]);
       expect((s.player.goals ?? []).filter((g) => g.id.startsWith('tr_'))).toEqual([]);

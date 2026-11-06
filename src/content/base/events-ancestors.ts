@@ -146,7 +146,7 @@ const oldTimer = anc({
 
 const richOnes = (c: Ctx) => pastLives(c).filter((l) => l.netWorth >= wage(c, 150_000));
 const PEOPLE: [string, string][] = [
-  ['The landlord', 'Ev sahibi'],
+  ['The shopkeeper', 'Bakkal'],
   ['A waiter', 'Garson'],
   ['A distant cousin', 'Uzaktan bir kuzenin'],
 ];

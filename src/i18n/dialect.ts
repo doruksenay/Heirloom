@@ -117,7 +117,7 @@ const TABLES = build();
 type Rule = [RegExp, string | ((m: string, ...g: string[]) => string)];
 
 // a flat is an apartment, but not "fell flat", "a flat tyre" or "ironed flat"
-const NOT_FLAT = '(?! (?:tyre|tire|battery|white|screen|rate|fee|note|shoes|surface|line|road|pack|bread|rock|cap|beer|soda|stone|out\\b))';
+const NOT_FLAT = '(?![ -](?:tyre|tire|battery|white|screen|rate|fee|note|shoes|surface|line|road|pack|bread|rock|cap|beer|soda|stone|out\\b))';
 const FLAT_ADJ = '(?:the|each|every|another|same|other|whole|entire|your|my|his|her|their|our|new|small|shared|first|own|this|that|old|tiny|rented|little|cheap|bigger|nicer|one-bedroom|two-bedroom|three-bedroom|studio|top-floor|ground-floor)';
 const SHARED_RULES: Rule[] = [
   [/\b(a|A) block of flats\b/g, (_m, a) => (a === 'A' ? 'An apartment building' : 'an apartment building')],
@@ -192,6 +192,8 @@ export function localizeEn(text: string, countryId: string): string {
   return out.replace(WORD, (w, offset: number, whole: string) => {
     const r = look(w.toLowerCase());
     if (r === undefined) return w;
+    // "flat-pack" furniture is the same in every dialect
+    if (/^flat$/i.test(w) && /^-?pack/i.test(whole.slice(offset + w.length, offset + w.length + 6))) return w;
     // "passed the torch" is the idiom (the dynasty hand-over), not the lamp: it is written "torch" everywhere
     if (/^torch(es)?$/i.test(w) && IDIOM_BEFORE.test(whole.slice(Math.max(0, offset - 40), offset))) return w;
     return matchCase(w, r);
