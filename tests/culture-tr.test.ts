@@ -370,15 +370,22 @@ describe('Türkiye life milestones (round 5)', () => {
 
   it('the wedding parties come the year after the nikâh: kına for a bride, düğün for a groom, takı at the party', () => {
     for (const gender of ['female', 'male'] as const) {
-      const s = grow(27, gender, 12);
-      s.pending = null;
-      const c = makeCtx(s);
-      const sp = c.h.newPerson({ gender: gender === 'female' ? 'male' : 'female', age: 27 });
-      c.h.addRelation(sp, 'spouse', 80);
-      s.player.achievements.push('married');
-      for (const r of s.player.relations) if (r.personId === sp.id) r.sinceYear = s.year;
-      // a clean slate: no earlier wedding party, askerlik done, no court date or nudge in the way
-      s.player.ext = { ...(s.player.ext ?? {}), culture_tr: { ...st(s), wed: undefined, asker: 'er' } };
+      // the test is about the party, not about a parent dying the same year: skip seeds where a grief event takes the year
+      let s = grow(27, gender, 12);
+      for (let seed = 12; seed < 40; seed++) {
+        s = grow(27, gender, seed);
+        s.pending = null;
+        const c0 = makeCtx(s);
+        const sp0 = c0.h.newPerson({ gender: gender === 'female' ? 'male' : 'female', age: 27 });
+        c0.h.addRelation(sp0, 'spouse', 80);
+        s.player.achievements.push('married');
+        for (const r of s.player.relations) if (r.personId === sp0.id) r.sinceYear = s.year;
+        s.player.ext = { ...(s.player.ext ?? {}), culture_tr: { ...st(s), wed: undefined, asker: 'er' } };
+        const probe = JSON.parse(JSON.stringify(s)) as GameState;
+        ageUp(probe);
+        if (!/grief/.test(probe.pending?.eventId ?? '')) break;
+      }
+      // (the clean slate is set in the loop above: no earlier wedding party, askerlik done)
       ageUp(s);
       expect((s.pending as GameState['pending'])?.eventId).toBe(gender === 'female' ? 'tr.kina' : 'tr.dugun_salonu');
       const n = s.player.log.length;

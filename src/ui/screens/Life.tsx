@@ -148,6 +148,16 @@ export function Life({ app }: { app: AppApi }) {
       </div>
 
       <LifeTip app={app} age={age} />
+      {p.lastChange && !s.pending && (
+        <div class="chip-row change-row" aria-label={T('What changed')}>
+          {(Object.entries(p.lastChange) as [string, number][]).map(([k, d]) => (
+            <span key={k} class={`chip ${d < 0 ? 'bad' : 'accent'}`}>
+              {k === 'money' ? T('Bank') : T(k[0].toUpperCase() + k.slice(1))} {d > 0 ? '+' : '−'}
+              {k === 'money' ? fmtShort(Math.abs(d), p.countryId, app.lang) : Math.abs(d)}
+            </span>
+          ))}
+        </div>
+      )}
       <Log log={p.log} currentAge={age} />
       <Stats stats={p.stats} compact={!statsOpen} onToggle={() => setStatsOpen(!statsOpen)} />
       <AgeButton

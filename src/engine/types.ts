@@ -115,6 +115,8 @@ export interface Player extends Person {
   achievements: string[];
   /** Set by an event that ends the life; the engine finishes the life after the event resolves. */
   deathCause?: string;
+  /** What the last choice changed (money and the four stats, non-zero only); shown as chips until the next age-up. */
+  lastChange?: Partial<Record<StatKey | 'money', number>>;
   /** Expansion-specific state, keyed by pack id. Must stay JSON-serializable. */
   ext?: Record<string, unknown>;
 }

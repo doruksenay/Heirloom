@@ -24,6 +24,24 @@ import { kidMilestoneEvents, kidMilestonesOnYear } from './kid-milestones';
 import { earlyR8Events } from './events-early-r8';
 import { ancestorEvents } from './events-ancestors';
 import { legendEvents } from './events-legend';
+import { kidWaveEvents } from './events-w-kid';
+import { serviceWaveEvents } from './events-w-service';
+import { moralWaveEvents } from './events-w-moral';
+import { bodyWaveEvents } from './events-w-body';
+import { loveWaveEvents } from './events-w-love';
+
+/**
+ * The five content waves (love, body, moral, service/travel, first twelve years) were tuned on their own; together they
+ * add ~260 events to a pool that draws about one event a year, so they are scaled down to leave room for the older
+ * and pack events (the packs' "every event fires" tests are the canary). Weight functions keep their shape.
+ */
+const WAVE_SCALE = 0.6;
+const scaled = (evs: EventDef[]): EventDef[] =>
+  evs.map((e) => {
+    const w = e.weight;
+    if (w === undefined) return e;
+    return { ...e, weight: typeof w === 'number' ? w * WAVE_SCALE : (c) => w(c) * WAVE_SCALE };
+  });
 
 /**
  * Optional choices that spend real money show it (review 5 §3.7: a gap year at 18 quietly started adult life in
@@ -82,6 +100,11 @@ export const basePack: ContentPack = {
     ...earlyR8Events,
     ...ancestorEvents,
     ...legendEvents,
+    ...scaled(kidWaveEvents),
+    ...scaled(serviceWaveEvents),
+    ...scaled(moralWaveEvents),
+    ...scaled(bodyWaveEvents),
+    ...scaled(loveWaveEvents),
   ],
   activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities, ...adoptionActivities, ...youngMoreActivities, ...adultMoreActivities, ...streetActivities, ...abroadActivities],
   onYear: (c) => {

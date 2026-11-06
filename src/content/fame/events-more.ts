@@ -229,6 +229,7 @@ export const moreFameEvents: EventDef[] = [
   {
     id: 'fame.festival',
     category: 'fame',
+    weight: 80,
     minAge: 16,
     cooldown: 5,
     when: (c) => music(c) && free(c) && fs(c).fans >= 80000,
@@ -505,7 +506,7 @@ export const moreFameEvents: EventDef[] = [
   {
     id: 'fame.brand_disaster',
     category: 'fame',
-    weight: 20,
+    weight: 80,
     once: true,
     when: (c) => {
       const last = c.p.eventLastAge['fame.brand_deal'];

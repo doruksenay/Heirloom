@@ -1070,7 +1070,8 @@ export function dynastyRepeatFactor(s: GameState, def: EventDef): number {
 function pickRandomEvent(s: GameState): EventDef | undefined {
   const c = makeCtx(s);
   const pool = eventsFor(s.enabledPacks).filter((d) => eligible(c, d));
-  return c.rng.weighted(pool, (d) => (typeof d.weight === 'function' ? d.weight(c) : d.weight ?? 10) * dynastyRepeatFactor(s, d));
+  // pack content is not diluted by the free events (the base pool grew by hundreds): its eligible events count double
+  return c.rng.weighted(pool, (d) => (typeof d.weight === 'function' ? d.weight(c) : d.weight ?? 10) * dynastyRepeatFactor(s, d) * (d.id.startsWith('base.') ? 1 : 2));
 }
 
 /** Runs an event: applies it directly, or opens it as a pending choice. Returns true if a choice is pending. */
@@ -1115,6 +1116,7 @@ function openEventInner(s: GameState, def: EventDef): boolean {
 export function ageUp(s: GameState): void {
   if (s.pending || s.dead) return;
   s.year++;
+  s.player.lastChange = undefined;
   s.player.actionsThisYear = {};
   s.player.bonusActions = 0;
   const c = makeCtx(s);
@@ -1173,6 +1175,7 @@ export function choose(s: GameState, choiceId: string): void {
   s.pending = null;
   const c = makeCtx(s, { ...pend.vars });
   const logStart = s.player.log.length;
+  const before = { money: s.player.money, ...s.player.stats };
   const prevSrc = logTap.src;
   logTap.src = pend.eventId;
   try {
@@ -1181,6 +1184,15 @@ export function choose(s: GameState, choiceId: string): void {
     if (line) c.h.log(line, tone);
   } finally {
     logTap.src = prevSrc;
+  }
+  {
+    const ch2: NonNullable<GameState['player']['lastChange']> = {};
+    for (const k of ['money', 'happiness', 'health', 'smarts', 'looks'] as const) {
+      const now = k === 'money' ? s.player.money : s.player.stats[k];
+      const d = Math.round(now - before[k]);
+      if (d) ch2[k] = d;
+    }
+    s.player.lastChange = Object.keys(ch2).length ? ch2 : undefined;
   }
   markTravelled(s.player, pend.eventId, choiceId, s.year); // round 7: a trip abroad unlocks the travel events
   // the event's title goes on the first line it wrote, so the log reads in context (review item 4)

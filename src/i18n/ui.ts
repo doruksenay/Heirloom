@@ -49,6 +49,7 @@ export const TR: Record<string, string> = {
   'Age up': 'Yaşlan',
   'AGE UP': 'YAŞLAN',
   'Life story': 'Hayat hikâyesi',
+  'What changed': 'Ne değişti',
   Happiness: 'Mutluluk',
   Health: 'Sağlık',
   Smarts: 'Zekâ',

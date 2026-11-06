@@ -856,7 +856,7 @@ export const moreEvents: EventDef[] = [
     id: 'boss.cofounder_clash',
     category: 'business',
     minAge: 18,
-    weight: 24,
+    weight: 60,
     cooldown: 5,
     when: (c) => !!co(c) && alive(c, co(c)!.cofounderId),
     setup: (c) => {

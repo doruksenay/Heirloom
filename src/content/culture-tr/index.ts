@@ -790,6 +790,7 @@ const love: EventDef[] = [
   {
     id: 'tr.ceyiz',
     category: 'family',
+    weight: 80,
     minAge: 20,
     maxAge: 35,
     once: true,
