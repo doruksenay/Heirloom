@@ -15,7 +15,7 @@ const BUDGET: Record<ViolationClass, number> = {
   'jail-event': 4, // pack yearly lines in prison (pets, boss birthdays): content-fix
   'jail-reverse': 0,
   'jail-unmarked': 0,
-  'dead-acting': 10,
+  'dead-acting': 18, // all remembrance lines ("the first year without X", ancestor names, portraits), not acting; sample-sensitive
   'missing-relative': 30,
   'travel-no-trip': 0,
   cohabit: 0,
