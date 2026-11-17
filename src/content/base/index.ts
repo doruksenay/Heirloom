@@ -29,6 +29,7 @@ import { serviceWaveEvents } from './events-w-service';
 import { moralWaveEvents } from './events-w-moral';
 import { bodyWaveEvents } from './events-w-body';
 import { loveWaveEvents } from './events-w-love';
+import { echoWaveEvents } from './events-w-echo';
 
 /**
  * The five content waves (love, body, moral, service/travel, first twelve years) were tuned on their own; together they
@@ -105,6 +106,7 @@ export const basePack: ContentPack = {
     ...scaled(moralWaveEvents),
     ...scaled(bodyWaveEvents),
     ...scaled(loveWaveEvents),
+    ...echoWaveEvents,
   ],
   activities: [...baseActivities, ...elderActivities, ...careerActivities, ...homeActivities, ...adoptionActivities, ...youngMoreActivities, ...adultMoreActivities, ...streetActivities, ...abroadActivities],
   onYear: (c) => {

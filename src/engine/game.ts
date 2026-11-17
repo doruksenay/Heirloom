@@ -1553,6 +1553,7 @@ function closeLife(s: GameState, handover?: { heir: Person }): LifeRecord {
   }
   s.dead = record;
   s.pending = null;
+  for (const f of Object.keys(p.flags)) if (f.startsWith('mr_')) (s.dynasty.echoes ??= {})[f] = { generation: s.dynasty.generation, name: p.firstName };
   s.dynasty.lives.push(record);
   s.dynasty.legacyScore += legacy;
   // keep the finished life in the people table: the family tree shows it, and after a hand-over it lives on as a relative

@@ -187,6 +187,11 @@ export interface Dynasty {
    * generations who is no longer in the heir's own relations (engine/context.ts freshFirstNames). Older saves have none.
    */
   closeNames?: Record<string, string[]>;
+  /**
+   * Dynasty echoes: the moral choices (flags `mr_*`) an earlier life made, by flag, with the generation and the name of
+   * the person. Written when a life closes (engine/game.ts closeLife), read by the echo events (content/base/events-w-echo.ts).
+   */
+  echoes?: Record<string, { generation: number; name: string }>;
 }
 
 export interface PendingChoice {
