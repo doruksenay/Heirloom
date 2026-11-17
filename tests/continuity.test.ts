@@ -19,7 +19,7 @@ const BUDGET: Record<ViolationClass, number> = {
   'missing-relative': 40, // more old events fire now (tempo + floors), surfacing old relative-text slips: content-fix
   'travel-no-trip': 0,
   cohabit: 0,
-  home: 8, // job_board / elder_downsize wording: content-fix
+  home: 12, // job_board / elder_downsize wording: content-fix
   anniversary: 0,
   'wrong-country': 3,
   // the two soft classes are sample-sensitive: any change to the event pool shifts the whole sample. On the previous

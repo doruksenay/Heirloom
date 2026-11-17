@@ -26,13 +26,6 @@ const partA: EventDef[] = [
     text: (c) => c.t('Everyone has got off. A tidy bag is left on the seat, and it clearly holds a laptop and an envelope. The driver is watching the mirror.', 'Herkes inmiş. Koltukta düzgün bir çanta kalmış; içinde belli ki bir dizüstü bilgisayar ve bir zarf var. Şoför dikiz aynasından bakıyor.'),
     choices: [
       opt('hand', ['Hand it to the driver', 'Şoföre teslim et'], (c) => out(c, { hap: 3 }, 'You hand it over. The driver nods like you did the obvious thing, which is the nicest way anyone has said "thank you" all month.', 'Çantayı veriyorsun. Şoför, bariz olanı yapmışsın gibi başını sallıyor; bu ay duyduğun en kibar teşekkür.'), { tone: 'good' }),
-      opt('look', ['Look inside for a name', 'İçine bakıp isim ara'], (c) => {
-        if (c.rng.chance(0.6)) {
-          lg(c, 2);
-          return out(c, { hap: 4, usd: 60 }, 'A business card, a phone call, a very relieved stranger. They insist on a reward and you accept it, after a brief and dignified argument.', 'Bir kartvizit, bir telefon, çok rahatlamış bir yabancı. Ödül vermekte ısrar ediyor, kısa ve onurlu bir itirazdan sonra kabul ediyorsun.');
-        }
-        return out(c, { hap: -1 }, 'No name anywhere. You carry it to the lost-property desk and spend an hour waiting for a clerk to find the form. Good deed, bad afternoon.', 'Hiçbir yerde isim yok. Çantayı kayıp eşya bürosuna götürüp memurun formu bulmasını bir saat bekliyorsun. İyi iş, kötü öğleden sonra.');
-      }),
       opt('keep', ['Keep it', 'Çantayı al'], (c) => {
         c.h.stat('happiness', -3);
         return out(c, { usd: 140 }, 'You sell the laptop on a forum. The envelope was somebody\'s medical papers; you read them before you could stop yourself, and you cannot unread them.', 'Dizüstüyü bir ilan sitesinde satıyorsun. Zarf birinin sağlık evraklarıymış; durduramadan okuyorsun ve bir daha unutamıyorsun.');
@@ -57,13 +50,6 @@ const partA: EventDef[] = [
         return out(c, { hap: 1, sma: -1 }, 'It works. A high mark, a stomach that feels like wet cement, and a lesson learned by someone else.', 'İşe yarıyor. Yüksek bir not, ıslak çimento gibi bir mide ve başkasına ait bir ders.');
       }, { badge: 'Risky', tone: 'bad' }),
       opt('ignore', ['Study the honest way', 'Dürüstçe çalış'], (c) => out(c, { sma: 2, hap: 1 }, 'You close the chat and read your notes until two. The mark is middling and entirely yours.', 'Sohbeti kapatıp sabaha karşı ikiye kadar notlarına çalışıyorsun. Not ortalama ama tamamen senin.'), { tone: 'good' }),
-      opt('tell', ['Tell the teacher', 'Öğretmene haber ver'], (c) => {
-        if (c.rng.chance(0.5)) {
-          lg(c, 2);
-          return out(c, { hap: 2, sma: 1 }, 'The exam is quietly swapped. Nobody ever finds out who told, and you walk past the whole class with a perfectly straight face.', 'Sınav sessizce değiştiriliyor. Kimin söylediğini kimse bilmiyor; bütün sınıfın yanından dümdüz bir yüzle geçiyorsun.');
-        }
-        return out(c, { hap: -4 }, 'Somebody guesses who told. For a month, seats near you stay empty and the lunch table gets very quiet.', 'Biri kimin söylediğini tahmin ediyor. Bir ay boyunca yanındaki sıralar boş kalıyor, yemekhane masası çok sessizleşiyor.');
-      }, { badge: 'Risky' }),
     ],
   },
   {
@@ -123,7 +109,6 @@ const partA: EventDef[] = [
         if (c.rng.chance(0.25)) return out(c, { hap: -6, usd: -400 }, 'Someone was recording. A hearing, a fine, and a family name that now comes up in the wrong kind of conversation.', 'Biri kayıt alıyormuş. Bir duruşma, bir para cezası ve artık yanlış tür sohbetlerde anılan bir soyadı.');
         return out(c, { hap: 2, usd: -150 }, 'The stamp lands the next day. It was so easy that you feel worse about it than you expected.', 'Mühür ertesi gün vuruluyor. O kadar kolay oldu ki, beklediğinden de kötü hissediyorsun.');
       }, { badge: 'Illegal', tone: 'bad' }),
-      opt('wait', ['Refuse and wait it out', 'Reddet, sabırla bekle'], (c) => { lg(c, 3); return out(c, { hap: -1, usd: -100 }, 'Four more months, three more queues and one very patient lawyer. You get the permit and a clean conscience that you cannot spend.', 'Dört ay, üç kuyruk ve çok sabırlı bir avukat daha. Ruhsatı ve harcayamayacağın temiz bir vicdanı alıyorsun.'); }, { tone: 'good' }),
       opt('report', ['Report him', 'Şikâyet et'], (c) => {
         if (c.rng.chance(0.5)) { lg(c, 6); return out(c, { hap: 3 }, 'He is moved to another office, and the permit comes through in a week. A neighbour you barely know shakes your hand at the bakery.', 'Başka bir birime alınıyor, ruhsat bir haftada çıkıyor. Pek tanımadığın bir komşu fırında elini sıkıyor.'); }
         return out(c, { hap: -3 }, 'Nothing happens to him. Everything slows down for you. The folder, you notice, has migrated to the bottom of a different pile.', 'Ona hiçbir şey olmuyor. Senin için her şey yavaşlıyor. Dosya başka bir yığının en altına göç etmiş.');
@@ -201,7 +186,6 @@ const partA: EventDef[] = [
         if (c.rng.chance(0.6)) { lg(c, 3); return out(c, { hap: 3 }, 'Your description is exact; the driver is found within the week. The cyclist\'s mother sends you a letter you keep in a drawer.', 'Tarifin tam doğru; sürücü haftasına bulunuyor. Bisikletlinin annesi sana bir mektup yolluyor, çekmecede saklıyorsun.'); }
         return out(c, { hap: 1, usd: -40 }, 'Three hearings and two lost workdays later, the case is still open. You do not regret it, though your calendar does.', 'Üç duruşma ve iki kayıp iş gününden sonra dava hâlâ açık. Pişman değilsin, takvimin ise pişman.');
       }, { tone: 'good' }),
-      opt('half', ['Say you only saw part of it', 'Sadece bir kısmını gördüğünü söyle'], (c) => out(c, { hap: -2 }, '"It was dark, I wasn\'t sure." It was not dark. The officer writes it down without looking up, and the family looks at you for a second too long.', '"Karanlıktı, emin değilim." Karanlık değildi. Memur başını kaldırmadan yazıyor, aile sana bir saniye fazla bakıyor.')),
       opt('nothing', ['Say you saw nothing', 'Hiçbir şey görmediğini söyle'], (c) => { c.h.stat('happiness', -5); return c.t('"I was looking at my phone." The case goes cold. Months later you pass the roadside flowers and find you have started taking the other pavement.', '"Telefonuma bakıyordum." Dosya soğuyor. Aylar sonra yol kenarındaki çiçeklerin önünden geçiyorsun ve artık karşı kaldırımı kullanmaya başladığını fark ediyorsun.'); }, { tone: 'bad' }),
     ],
   },
@@ -322,7 +306,6 @@ const partB: EventDef[] = [
         return out(c, { hap: -3, usd: -120 }, 'It was not forgiven. A warning, a smaller bonus, and a cold week. Still, you sleep at night and the numbers are right.', 'Affedilmiyor. Bir uyarı, daha küçük bir prim ve soğuk bir hafta. Yine de geceleri uyuyorsun ve rakamlar doğru.');
       }, { tone: 'good', badge: 'Risky' }),
       opt('hide', ['Quietly correct it and say nothing', 'Sessizce düzelt, kimseye söyleme'], (c) => out(c, { hap: -1 }, 'You fix it before the invoice goes out. Whether that was honesty or just tidiness, you are not sure.', 'Fatura çıkmadan düzeltiyorsun. Bunun dürüstlük mü yoksa sadece düzenlilik mi olduğundan emin değilsin.')),
-      opt('blame', ['Let the junior take it', 'Stajyerin üstüne kalsın'], (c) => { lg(c, -2); return out(c, { hap: -6 }, 'They are called in and apologise for something that was not theirs. They thank you, because you looked sympathetic. You can still hear it.', 'Çağrılıyor ve kendisinin olmayan bir şey için özür diliyor. Sana teşekkür ediyor, çünkü anlayışlı görünüyordun. Hâlâ kulağında.'); }, { tone: 'bad', badge: 'Risky' }),
     ],
   },
   {
@@ -486,7 +469,6 @@ const partB: EventDef[] = [
         if (c.rng.chance(0.3)) return out(c, { hap: -3, usd: 20 }, 'The till is short at closing and the cashier pays for it from her wages. You learn this from a neighbour, three days later.', 'Kasa kapanışta açık veriyor ve kasiyer bunu maaşından ödüyor. Bunu üç gün sonra bir komşudan öğreniyorsun.');
         return out(c, { hap: 1, usd: 20 }, 'You buy lunch with it. It is a good lunch. The back of your neck feels strange for a little while.', 'Parayla öğle yemeği yiyorsun. İyi bir yemek. Ensen bir süre tuhaf hissediyor.');
       }, { tone: 'bad' }),
-      opt('later', ['Mean to go back later', 'Sonra gitmeyi düşün'], (c) => out(c, { hap: -1 }, 'You mean to. You mean to for three weeks. At last you leave the extra note in the charity tin, which is not the same thing, but is not nothing.', 'Gitmeyi düşünüyorsun. Üç hafta düşünüyorsun. Sonunda fazla parayı yardım kumbarasına atıyorsun; aynı şey değil ama hiç de sayılmaz.')),
     ],
   },
 ];
@@ -503,10 +485,6 @@ const partC: EventDef[] = [
     choices: [
       opt('cash', ['Take the discount', 'İndirimi kabul et'], (c) => { c.h.flag('mr_cash_deal'); return out(c, { hap: 1, usd: 120 }, 'Done with a handshake. The roof is lovely. You feel a very particular kind of clever that is also a little bit sticky.', 'El sıkışarak bitiyor. Çatı harika. Hem akıllıca hem biraz yapışkan bir his yaşıyorsun.'); }, { badge: 'Risky' }),
       opt('receipt', ['Insist on a proper invoice', 'Düzgün fatura iste'], (c) => { lg(c, 1); return out(c, { hap: 1, usd: -120 }, 'He sighs like a tyre, and writes it down. The invoice sits in a folder, reassuring and boring.', 'Lastik gibi iç çekip yazıyor. Fatura bir dosyada duruyor; güven verici ve sıkıcı.'); }, { tone: 'good' }),
-      opt('hag', ['Haggle with the invoice', 'Faturalı pazarlık yap'], (c) => {
-        if (c.rng.chance(0.5)) return out(c, { hap: 3, usd: 40 }, 'He admits you are right, gives you half the cash discount and the invoice, and calls you "boss" with real respect.', 'Haklı olduğunu kabul ediyor, nakit indiriminin yarısını ve faturayı veriyor, sana gerçek bir saygıyla "patron" diyor.');
-        return out(c, { hap: -1, usd: -120 }, 'He will not budge. You pay full price with an invoice and a smile that does not reach your eyes.', 'Hiç yanaşmıyor. Faturalı tam fiyatı gözlerine ulaşmayan bir gülümsemeyle ödüyorsun.');
-      }),
     ],
   },
   {
@@ -566,7 +544,6 @@ const partC: EventDef[] = [
         near(c, 'fr', -6);
         return out(c, { hap: -2 }, 'They tell you not to be a baby and walk out with it. You are left standing by the door, the only one with clean pockets and a cold face.', 'Bebek gibi davranmamanı söyleyip eşyayla çıkıyor. Kapının yanında tek başına, temiz ceplerle ve soğuk bir yüzle kalıyorsun.');
       }, { tone: 'good', badge: 'Risky' }),
-      opt('leave', ['Walk out without them', 'Onsuz çık git'], (c) => out(c, { hap: -1 }, 'You say nothing and leave. Five minutes later your phone buzzes with a photo of the chocolate. No caption needed.', 'Hiçbir şey demeden çıkıyorsun. Beş dakika sonra telefonuna çikolatanın fotoğrafı düşüyor. Alt yazıya gerek yok.')),
     ],
   },
   {
@@ -629,10 +606,6 @@ const partC: EventDef[] = [
     choices: [
       opt('take', ['Take the money and vote as you like', 'Parayı al, istediğine oy ver'], (c) => { c.h.flag('mr_vote_cash'); return out(c, { hap: -2, usd: 100 }, 'Nobody can check your ballot. You tell yourself that. The envelope is spent by Thursday.', 'Oy pusulanı kimse kontrol edemez. Bunu kendine söylüyorsun. Zarf perşembeye harcanmış oluyor.'); }, { badge: 'Illegal', tone: 'bad' }),
       opt('return', ['Return it with a letter', 'Mektupla iade et'], (c) => { lg(c, 3); return out(c, { hap: 2 }, 'You post it back to the party office with one line: "Not for sale." You will not know if it mattered. It mattered to you.', 'Parti bürosuna tek satırla geri yolluyorsun: "Satılık değil." Bir önemi oldu mu bilemeyeceksin. Senin için oldu.'); }, { tone: 'good' }),
-      opt('report', ['Report it to the authorities', 'Yetkililere bildir'], (c) => {
-        if (c.rng.chance(0.5)) { lg(c, 6); return out(c, { hap: 3 }, 'An investigation. A resignation. A small paragraph in the paper with no names, only the phrase "alert residents". You are one of them.', 'Bir soruşturma. Bir istifa. Gazetede isimsiz küçük bir paragraf: "uyanık sakinler". Onlardan birisin.'); }
-        return out(c, { hap: -2 }, 'They take your statement and thank you. Nothing happens. At the polling station the man with the smile holds the door for you.', 'İfadeni alıp teşekkür ediyorlar. Hiçbir şey olmuyor. Sandıkta gülümseyen adam senin için kapıyı tutuyor.');
-      }, { badge: 'Risky' }),
     ],
   },
   {
@@ -693,7 +666,6 @@ const partC: EventDef[] = [
         near(c, 'fr', -10);
         return out(c, { hap: -4 }, 'They don\'t believe you. Then they do, but the anger lands on the messenger. You lose a friend for a year, and get them back in the eleventh month, thinner and older.', 'Sana inanmıyor. Sonra inanıyor ama öfke haberciye yöneliyor. Bir yıl dostunu kaybediyorsun, on birinci ayda daha zayıf ve yaşlı geri dönüyor.');
       }, { badge: 'Risky' }),
-      opt('confront', ['Speak to the partner first', 'Önce partnerle konuş'], (c) => out(c, { hap: 1 }, 'You give them a week to say it themselves. They manage three days. Then a very ordinary phone call changes two lives.', 'Kendilerinin söylemesi için bir hafta veriyorsun. Üç gün dayanıyorlar. Sonra çok sıradan bir telefon iki hayatı değiştiriyor.')),
       opt('silent', ['Say nothing', 'Hiçbir şey söyleme'], (c) => out(c, { hap: -3 }, 'It was not your place, you tell yourself. It all comes out in spring anyway, and your friend learns that you knew. The friendship cools.', 'Sana düşmezdi, diyorsun kendine. Her şey baharda yine de ortaya çıkıyor ve arkadaşın senin de bildiğini öğreniyor. Dostluk soğuyor.'), { tone: 'bad' }),
     ],
   },
@@ -771,7 +743,6 @@ const partC: EventDef[] = [
         if (c.rng.chance(0.55)) return out(c, { hap: 3, usd: 150 }, 'The client is annoyed, then oddly impressed, then orders more. A manager who is angry at honesty is a manager with a problem, you find.', 'Müşteri sinirleniyor, sonra tuhaf biçimde etkileniyor, sonra daha fazla sipariş veriyor. Dürüstlüğe kızan yönetici, sorunu olan yönetici, öğreniyorsun.');
         return out(c, { hap: -3 }, 'The client cancels. Your manager says "I wouldn\'t have said that", which is a threat.', 'Müşteri iptal ediyor. Yöneticin "ben böyle söylemezdim" diyor; bu bir tehdit.');
       }, { badge: 'Risky', tone: 'good' }),
-      opt('soft', ['Say "we are confirming dates"', '"Tarihleri netleştiriyoruz" de'], (c) => out(c, { hap: 0 }, 'Technically true, practically fuzzy. The client sighs and gives you the week. You decide it is a compromise, and not a compromise of the right kind.', 'Teknik olarak doğru, pratikte bulanık. Müşteri iç çekip haftayı veriyor. Bunun bir uzlaşma olduğuna karar veriyorsun, doğru türden olmayan bir uzlaşma.')),
     ],
   },
   {
@@ -789,7 +760,6 @@ const partC: EventDef[] = [
         if (c.rng.chance(0.5)) { near(c, 'fr', -15); return out(c, { hap: -5, usd: 600 }, 'Somebody saw the shop receipt. Nobody says anything for a week. Then everybody says everything. You are richer, and your phone is a lot quieter.', 'Biri bilet fişini görmüş. Bir hafta kimse bir şey demiyor. Sonra herkes her şeyi diyor. Daha zenginsin ve telefonun çok daha sessiz.'); }
         return out(c, { hap: 1, usd: 600 }, 'Nobody ever knows. You buy something expensive and keep it in the cupboard because you can\'t quite enjoy it.', 'Kimse hiç bilmiyor. Pahalı bir şey alıyor ve tam zevk alamadığın için dolapta saklıyorsun.');
       }, { badge: 'Risky', tone: 'bad' }),
-      opt('only', ['Split with the one who bought it', 'Bileti alanla böl'], (c) => out(c, { hap: 2, usd: 300 }, 'A sensible half and half. The others may never know how little they know.', 'Mantıklı bir yarı yarıya. Diğerleri ne kadar az bildiklerini hiç öğrenmeyebilir.')),
     ],
   },
   {
@@ -807,10 +777,6 @@ const partC: EventDef[] = [
         if (c.rng.chance(0.6)) { lg(c, 1); return out(c, { hap: 3, usd: -10 }, 'The neighbour looks at you for a long time, then fetches a dustpan. You sweep glass for an hour. He gives you back the ball, and a plum.', 'Komşu uzun uzun sana bakıyor, sonra bir faraş getiriyor. Bir saat cam süpürüyorsun. Sana topu ve bir erik geri veriyor.'); }
         return out(c, { hap: -3, usd: -20 }, 'He shouts, the dog shouts, and your pocket money is gone for three months. But you sleep like a log.', 'O bağırıyor, köpek bağırıyor, harçlığın üç ay boyunca gidiyor. Ama kütük gibi uyuyorsun.');
       }, { tone: 'good', badge: 'Risky' }),
-      opt('run', ['Run', 'Kaç'], (c) => {
-        if (c.rng.chance(0.4)) return out(c, { hap: -5 }, 'A shape in a window sees your jumper. The next day the neighbour is at your door with a bill and your actual mother.', 'Bir penceredeki gölge kazağını görmüş. Ertesi gün komşu elinde fatura ve gerçek annenle kapında.');
-        return out(c, { hap: -1 }, 'Nobody ever knows. You avoid the greenhouse for the rest of the summer, which turns out to be an effort.', 'Kimse bilmiyor. Yaz boyunca seradan kaçınıyorsun, bu da emek istiyor.');
-      }, { badge: 'Risky' }),
       opt('blame', ['Say it was another kid', 'Başka bir çocuğun yaptığını söyle'], (c) => { lg(c, -1); return out(c, { hap: -4 }, 'A boy who was never even there gets blamed. You watch him get told off by his dad. The ball never feels the same again.', 'Orada hiç bulunmamış bir çocuk suçlanıyor. Babasından azar işitmesini izliyorsun. Top bir daha eskisi gibi olmuyor.'); }, { tone: 'bad' }),
     ],
   },
@@ -830,7 +796,6 @@ const partC: EventDef[] = [
     choices: [
       opt('confess', ['Own up right now', 'Hemen itiraf et'], (c) => { near(c, 'sib', 8); lg(c, 1); return out(c, { hap: 1 }, 'You say "It was me" in a very small voice. You are grounded for a week. Your sibling gives you half their dessert, which is a bigger sacrifice than you realise.', '"Bendim" diyorsun, çok küçük bir sesle. Bir hafta cezalısın. Kardeşin tatlısının yarısını sana veriyor; farkında olduğundan büyük bir fedakârlık.'); }, { tone: 'good' }),
       opt('quiet', ['Let them take it', 'Üstlenmesine izin ver'], (c) => { near(c, 'sib', -8); return out(c, { hap: -4 }, 'Your sibling is sent to their room. You eat dinner as if it were a courtroom exhibit. At night you hear them not-crying.', 'Kardeşin odasına gönderiliyor. Yemeği sanki mahkeme delili gibi yiyorsun. Gece ağlamadıklarını duyuyorsun.'); }, { tone: 'bad' }),
-      opt('late', ['Confess later, in private', 'Sonra, özelde itiraf et'], (c) => { near(c, 'sib', 3); return out(c, { hap: 0 }, 'You tell them in the dark that it was you. They say they know. They say they would have done the same, which is both kind and terrifying.', 'Karanlıkta ona bunu senin yaptığını söylüyorsun. Biliyormuş. Aynısını kendisinin de yapacağını söylüyor; hem nazik hem ürpertici.'); }),
     ],
   },
   {
@@ -865,7 +830,6 @@ const partC: EventDef[] = [
         lg(c, -2);
         return out(c, { hap: -3 }, 'It lands badly. Chairs scrape. A week passes before the phone rings again. Eventually, it does, and the first question is "are you eating?" You are forgiven, the way old people are.', 'Kötü iniyor. Sandalyeler gıcırdıyor. Telefon tekrar çalmadan bir hafta geçiyor. Sonunda çalıyor ve ilk soru "yemek yiyor musun?" Affediliyorsun, yaşlıların affedildiği gibi.');
       }, { badge: 'Risky', tone: 'big' }),
-      opt('letter', ['Leave it in a letter', 'Bir mektup bırak'], (c) => { lg(c, 3); return out(c, { hap: 2 }, 'You write it clearly and seal it, with instructions: "after". It is the most honest thing you have written. You put it back in the drawer, lighter.', 'Açıkça yazıp "sonra" talimatıyla mühürlüyorsun. Yazdığın en dürüst şey. Çekmeceye daha hafif geri koyuyorsun.'); }),
       opt('grave', ['Keep it to the end', 'Sonuna kadar sakla'], (c) => out(c, { hap: -2 }, 'Some things are not meant for telling. You decide this one is, and hold on. It sits in your chest at night like a stone you are used to.', 'Bazı şeyler anlatılmak için değildir. Bunun öyle olduğuna karar verip sıkı tutuyorsun. Geceleri göğsünde alıştığın bir taş gibi duruyor.')),
     ],
   },
@@ -914,7 +878,6 @@ const partC: EventDef[] = [
         return out(c, { hap: 1, usd: 700 }, 'It pays. You spend the money carefully, as if it might notice. You do not tell anyone, and you stop sitting near the legal department.', 'Kazandırıyor. Parayı sanki fark edecekmiş gibi dikkatle harcıyorsun. Kimseye söylemiyor, hukuk bölümünün yanına oturmayı bırakıyorsun.');
       }, { badge: 'Illegal', tone: 'bad' }),
       opt('forget', ['Forget you heard it', 'Duymamış ol'], (c) => { lg(c, 2); return out(c, { hap: 1 }, 'On Monday the price jumps. You read the headline with the exact feeling of a person who is right about something that did not matter.', 'Pazartesi fiyat fırlıyor. Başlığı, önemli olmayan bir konuda haklı çıkmış birinin tam da hissiyle okuyorsun.'); }, { tone: 'good' }),
-      opt('tell', ['Tell compliance you overheard it', 'Uyum birimine duyduğunu bildir'], (c) => { lg(c, 3); return out(c, { hap: -1 }, 'A solemn man in a tie takes notes and thanks you in the tone of someone who is about to have a long, bad week. You leave, vaguely, a bit unpopular.', 'Kravatlı ciddi bir adam not alıyor ve uzun, kötü bir haftaya girmek üzere olan birinin tonuyla teşekkür ediyor. Hafifçe, biraz sevilmeyen biri olarak ayrılıyorsun.'); }),
     ],
   },
   {
