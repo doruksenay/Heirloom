@@ -448,7 +448,7 @@ export const streetCrimeEvents: EventDef[] = [
     id: 'base.court_date',
     category: 'crime',
     minAge: 12,
-    weight: 500,
+    weight: 5000, // a scheduled moment: must win the yearly draw
     cooldown: 1,
     // one court date per petty charge: it recurs only as often as the player gets caught (each one settles a charge)
     maxPerLife: 12,
@@ -885,7 +885,7 @@ export const streetCrimeEvents: EventDef[] = [
   {
     id: 'base.jail_out',
     category: 'crime',
-    weight: 300,
+    weight: 100000, // a scheduled moment (the release year only): must win the yearly draw
     cooldown: 1,
     maxPerLife: 4, // once per release
     when: (c) => free(c) && (peekCrime(c.p)?.releasedYear ?? 0) === c.s.year,

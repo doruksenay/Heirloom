@@ -692,6 +692,8 @@ interface EngineExt {
    * odd job cleared the title, and a surgeon's life record read "University graduate". Older saves lack it.
    */
   peakJob?: { id: string; level: number; salary: number };
+  /** The year in which the yearly draw opened a decision; once it is resolved the year may get a second one (see choose). */
+  follow?: number;
 }
 const engineExt = (p: Player): EngineExt => ((p.ext ??= {}).engine ??= {}) as EngineExt;
 
@@ -1067,11 +1069,23 @@ export function dynastyRepeatFactor(s: GameState, def: EventDef): number {
   return ago >= 1 && ago <= DYNASTY_REPEAT_LIVES ? DYNASTY_REPEAT_FACTOR : 1;
 }
 
+/**
+ * The older events were written with weights of 4-10 when the pool was a few hundred events; today the eligible pool
+ * adds up to thousands, and a 6 fires in about one life of a thousand. A plain weight (not a function) never counts
+ * for less than this, so the quiet small moments of every age still turn up.
+ */
+export const WEIGHT_FLOOR = 40;
+/** Career moments (base.job_*) only exist while the player has that job; once a life that has it is looking for them, they need real weight. */
+export const JOB_WEIGHT_FLOOR = 260;
+
 function pickRandomEvent(s: GameState): EventDef | undefined {
   const c = makeCtx(s);
   const pool = eventsFor(s.enabledPacks).filter((d) => eligible(c, d));
   // pack content is not diluted by the free events (the base pool grew by hundreds): its eligible events count double
-  return c.rng.weighted(pool, (d) => (typeof d.weight === 'function' ? d.weight(c) : d.weight ?? 10) * dynastyRepeatFactor(s, d) * (d.id.startsWith('base.') ? 1 : 2));
+  return c.rng.weighted(pool, (d) => {
+    const w = typeof d.weight === 'function' ? d.weight(c) : Math.max(d.weight ?? 10, d.weight === 0 ? 0 : d.id.startsWith('base.job_') ? JOB_WEIGHT_FLOOR : WEIGHT_FLOOR);
+    return w * dynastyRepeatFactor(s, d) * (d.id.startsWith('base.') ? 1 : 2);
+  });
 }
 
 /** Runs an event: applies it directly, or opens it as a pending choice. Returns true if a choice is pending. */
@@ -1152,7 +1166,10 @@ export function ageUp(s: GameState): void {
   }
   if (c.rng.chance(0.85)) {
     const ev = pickRandomEvent(s);
-    if (ev && openEvent(s, ev)) return;
+    if (ev && openEvent(s, ev)) {
+      engineExt(s.player).follow = s.year;
+      return;
+    }
     if (s.player.deathCause) return finishLife(s);
     if (c.rng.chance(0.35)) {
       const ev2 = pickRandomEvent(s);
@@ -1200,7 +1217,26 @@ export function choose(s: GameState, choiceId: string): void {
   if (first && pend.title && !first.title) first.title = pend.title;
   checkGoals(s);
   watchDebt(c);
-  if (s.player.deathCause) finishLife(s);
+  if (s.player.deathCause) return finishLife(s);
+  followOn(s);
+}
+
+/**
+ * A year is not over after one decision: BitLife gives one to three a year and so do we. When the yearly draw opened
+ * a decision and the player has resolved it, a second random event may follow in the same year (more often for a
+ * child, whose moments are light). Only the yearly draw does this, never an activity, a scheduled life-stage event,
+ * grief or an anniversary, and never twice in a year.
+ */
+export const FOLLOW_ON_CHANCE = { child: 0.5, rest: 0.4 };
+function followOn(s: GameState): void {
+  const eng = engineExt(s.player);
+  if (eng.follow !== s.year || s.pending || s.dead) return;
+  eng.follow = undefined;
+  const c = makeCtx(s);
+  if (!c.rng.chance(c.age < 13 ? FOLLOW_ON_CHANCE.child : FOLLOW_ON_CHANCE.rest)) return;
+  const ev = pickRandomEvent(s);
+  if (ev) openEvent(s, ev);
+  if (s.player.deathCause && !s.pending) finishLife(s);
 }
 
 export function rewindsLeft(s: GameState): number {

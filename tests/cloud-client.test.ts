@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Api } from '../server/src/logic';
 import { MemoryStore } from '../server/src/store';
-import { planCategories } from '../server/src/plan';
+import { planCategories, SCORE_LIMITS } from '../server/src/plan';
 import type { GameState, Profile } from '../src/engine/types';
 import { newGame, ageUp, choose } from '../src/engine/game';
 
@@ -266,7 +266,8 @@ describe('cloud client: Daily leaderboard', () => {
     }
     const h = makeHost();
     h.profile = { ...h.profile, cloud: { board: true, nickname: 'Ada' } };
-    const scores = Object.fromEntries(cats.map((c) => [c, c === 'age' ? 99 : 1_000]));
+    // high scores, but inside what the server accepts for each category (family, pets and loved top out at 80-120)
+    const scores = Object.fromEntries(cats.map((c) => [c, c === 'age' ? 99 : Math.min(1_000, SCORE_LIMITS[c][1])]));
     const r = await cloud.submitDaily({ date, scores, medals: {} });
     expect(r?.n).toBe(10);
     for (const c of cats) expect(r?.pct[c]).toBe(100);

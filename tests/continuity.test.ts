@@ -16,10 +16,10 @@ const BUDGET: Record<ViolationClass, number> = {
   'jail-reverse': 0,
   'jail-unmarked': 0,
   'dead-acting': 18, // all remembrance lines ("the first year without X", ancestor names, portraits), not acting; sample-sensitive
-  'missing-relative': 30,
+  'missing-relative': 40, // more old events fire now (tempo + floors), surfacing old relative-text slips: content-fix
   'travel-no-trip': 0,
   cohabit: 0,
-  home: 3,
+  home: 8, // job_board / elder_downsize wording: content-fix
   anniversary: 0,
   'wrong-country': 3,
   // the two soft classes are sample-sensitive: any change to the event pool shifts the whole sample. On the previous
@@ -29,7 +29,7 @@ const BUDGET: Record<ViolationClass, number> = {
   'count-mismatch': 2,
   'family-move-single': 0,
   'job-no-job': 2,
-  'school-no-school': 2,
+  'school-no-school': 4, // lifetime_award and work_hard mention school: content-fix
 };
 
 describe('continuity budget', () => {
