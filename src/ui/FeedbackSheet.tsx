@@ -24,7 +24,7 @@ export function FeedbackCard({ app }: { app: AppApi }) {
         </span>
         <span class="grow" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <strong>{T('What should we add?')}</strong>
-          <span class="muted" style={{ fontSize: '14px' }}>{last ? T('Thanks! Tell us more any time.') : T('Tell us what you want in the game.')}</span>
+          <span class="muted" style={{ fontSize: 'calc(14px * var(--fs, 1))' }}>{last ? T('Thanks! Tell us more any time.') : T('Tell us what you want in the game.')}</span>
         </span>
       </button>
       {open && <FeedbackSheet app={app} onClose={() => setOpen(false)} />}
@@ -52,7 +52,7 @@ function FeedbackSheet({ app, onClose }: { app: AppApi; onClose: () => void }) {
     <div class="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="fb-title">
         <div class="row between">
-          <h2 id="fb-title" class="title-l" style={{ fontSize: '22px' }}>{T('What should we add?')}</h2>
+          <h2 id="fb-title" class="title-l" style={{ fontSize: 'calc(22px * var(--fs, 1))' }}>{T('What should we add?')}</h2>
           <button type="button" class="btn small ghost" onClick={onClose} aria-label={T('Close')}>✕</button>
         </div>
         <p class="muted" style={{ margin: 0 }}>{T('Pick what you would like most. You can pick more than one.')}</p>
@@ -66,9 +66,9 @@ function FeedbackSheet({ app, onClose }: { app: AppApi; onClose: () => void }) {
         <div class="field">
           <label for="fb-text">{T('Anything else? In your own words')}</label>
           <textarea id="fb-text" rows={3} maxLength={FEEDBACK_MAX_CHARS} value={text} onInput={(e) => setText(e.currentTarget.value)} placeholder={T('A feature, a country, a story…')} />
-          <span class="muted num" style={{ fontSize: '12px', alignSelf: 'flex-end' }}>{text.length}/{FEEDBACK_MAX_CHARS}</span>
+          <span class="muted num" style={{ fontSize: 'calc(12px * var(--fs, 1))', alignSelf: 'flex-end' }}>{text.length}/{FEEDBACK_MAX_CHARS}</span>
         </div>
-        <p class="muted" style={{ margin: 0, fontSize: '12px', lineHeight: 1.4 }}>
+        <p class="muted" style={{ margin: 0, fontSize: 'calc(12px * var(--fs, 1))', lineHeight: 1.4 }}>
           {T('Sent anonymously with the app version and language. No name, no save.')}
         </p>
         <button type="button" class="btn primary" disabled={!entry || busy} onClick={send}>

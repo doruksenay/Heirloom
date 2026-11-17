@@ -12,6 +12,7 @@ import type { LifeRecord } from '../../engine/types';
 import { track } from '../../platform/analytics';
 import type { Person, Relation, RelationKind } from '../../engine/types';
 import { Avatar } from '../Avatar';
+import { HeirloomArt } from '../art/HeirloomArt';
 import { cityName } from '../../engine/places';
 import { HeirCardView, torchView } from '../HeirCard';
 import { capsName } from '../caps';
@@ -82,7 +83,7 @@ export function Family({ app }: { app: AppApi }) {
   return (
     <div class="screen">
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div class="eyebrow">{T('Dynasty')}</div>
+        <div class="eyebrow">{T('Family album')}</div>
         <h1 class="title-xl">{T('The {name} family', { name: d.familyName })}</h1>
       </div>
       <div class="tiles">
@@ -113,48 +114,59 @@ export function Family({ app }: { app: AppApi }) {
         </div>
       )}
 
-      <div class="tree" aria-label={T('Generations')}>
-        {d.lives.map((life, i) => (
-          <div class="tree-row" key={life.personId}>
-            <div class="tree-rail">
-              {i > 0 && <div class="line" style={{ flex: 'none', height: '18px' }} />}
-              <div class="dot" style={i > 0 ? { marginTop: 0 } : undefined} />
-              <div class="line" />
-            </div>
-            <div class="tree-body">
-              <div class="eyebrow">{T('Gen {n}', { n: life.generation })}</div>
-              <div class="card tight" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div class="album" aria-label={T('Generations')}>
+        {d.lives.map((life, i) => {
+          // older pages fade: the photos of the first generations are the most sepia
+          const fade = d.lives.length > 1 ? Math.round(((d.lives.length - 1 - i) / (d.lives.length - 1)) * 70) / 100 : 0;
+          return (
+            <figure class="polaroid" key={life.personId} style={{ '--tilt': `${i % 2 ? 1.2 : -1.2}deg`, '--fade': String(fade) }}>
+              <div class="photo">
+                <Avatar id={life.personId + life.name} gender={life.gender} age={Math.min(life.age, 60)} size={84} label={life.name} />
+              </div>
+              <figcaption>
+                <div class="eyebrow">{T('Gen {n}', { n: life.generation })}</div>
                 <div class="item-title">
                   {life.name}
                   {life.partnerName ? ` & ${life.partnerName}` : ''}
                 </div>
                 <div class="item-sub">{lifeLine(life)}</div>
-                {life.finalWords && <div class="item-sub" style={{ fontStyle: 'italic', color: 'var(--text-soft)' }}>{`"${life.finalWords}"`}</div>}
+                {life.finalWords && <div class="item-sub hand">{`"${life.finalWords}"`}</div>}
                 {life.heirloomNote && <span class="chip accent" style={{ alignSelf: 'flex-start', marginTop: '4px' }}>{life.handedOver ? T('Handed on {item}', { item: life.heirloomNote }) : T('Left {item}', { item: life.heirloomNote })}</span>}
-              </div>
-            </div>
+              </figcaption>
+            </figure>
+          );
+        })}
+        <figure class="polaroid you" style={{ '--tilt': '0deg', '--fade': '0' }}>
+          <div class="photo">
+            <Avatar id={p.id + p.firstName} gender={p.gender} age={Math.max(age, 1)} size={84} label={p.firstName} tone={skinTone(s, p)} />
           </div>
-        ))}
-        <div class="tree-row you">
-          <div class="tree-rail">
-            {d.lives.length > 0 && <div class="line" style={{ flex: 'none', height: '18px' }} />}
-            <div class="dot" style={d.lives.length > 0 ? { marginTop: 0 } : undefined} />
-          </div>
-          <div class="tree-body">
+          <figcaption>
             <div class="eyebrow" style={{ color: 'var(--accent)' }}>
               {T('Gen {n} · You', { n: d.generation })}
             </div>
-            <div class="card tight" style={{ border: '1px solid var(--accent)' }}>
-              <div class="item-title">
-                {p.firstName} {p.lastName}
-              </div>
-              <div class="item-sub">
-                {playerAge(s)} · {p.jobTitle && p.jobId ? p.jobTitle : cityName(p.city, app.lang)}
-              </div>
+            <div class="item-title">
+              {p.firstName} {p.lastName}
             </div>
-          </div>
-        </div>
+            <div class="item-sub">
+              {playerAge(s)} · {p.jobTitle && p.jobId ? p.jobTitle : cityName(p.city, app.lang)}
+            </div>
+          </figcaption>
+        </figure>
       </div>
+
+      {d.heirlooms.length > 0 && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <h2 class="title-l">{T('Keepsake box')}</h2>
+          <div class="keepsakes">
+            {d.heirlooms.map((h) => (
+              <div class="keepsake" key={h.uid}>
+                <HeirloomArt id={h.defId} size={64} label={h.name} />
+                <span class="item-sub">{h.name}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <h2 class="title-l">{T('Living family')}</h2>
@@ -187,7 +199,7 @@ export function Family({ app }: { app: AppApi }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
           <h2 class="title-l">{T('Ribbons')}</h2>
-          <span class="muted num" style={{ fontSize: '13px' }}>
+          <span class="muted num" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
             {T('{n}/{max} collected', { n: (app.profile.ribbons ?? []).length, max: allRibbons().length })}
           </span>
         </div>
@@ -201,7 +213,7 @@ export function Family({ app }: { app: AppApi }) {
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', padding: '8px 4px 6px', borderRadius: '12px', background: 'var(--surface)', opacity: got ? 1 : 0.7, textAlign: 'center', minWidth: 0 }}
               >
                 <RibbonIcon id={rb.id} size={44} locked={!got} />
-                <span class="muted" style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1.2, color: got ? 'var(--text-soft)' : undefined, overflowWrap: 'anywhere' }}>
+                <span class="muted" style={{ fontSize: 'calc(11px * var(--fs, 1))', fontWeight: 700, lineHeight: 1.2, color: got ? 'var(--text-soft)' : undefined, overflowWrap: 'anywhere' }}>
                   {got ? ribbonName(rb, app.lang) : '???'}
                 </span>
               </div>
@@ -236,7 +248,7 @@ function PersonSheet({ app, personId, onClose }: { app: AppApi; personId: string
         <div class="row">
           <Avatar id={person.id + person.firstName} gender={person.gender} age={age} size={64} label={person.firstName} tone={skinTone(s, person)} />
           <div class="grow">
-            <h2 id="person-name" class="title-l" style={{ fontSize: '22px' }}>
+            <h2 id="person-name" class="title-l" style={{ fontSize: 'calc(22px * var(--fs, 1))' }}>
               {person.firstName} {person.lastName}
             </h2>
             <div class="muted">
@@ -316,7 +328,7 @@ function TorchSheet({ app, onClose }: { app: AppApi; onClose: () => void }) {
     <div class="sheet-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="torch-title">
         <div class="row between">
-          <h2 id="torch-title" class="title-l" style={{ fontSize: '22px' }}>
+          <h2 id="torch-title" class="title-l" style={{ fontSize: 'calc(22px * var(--fs, 1))' }}>
             {T('Who carries on?')}
           </h2>
           <button type="button" class="btn small ghost" onClick={onClose} aria-label={T('Close')}>

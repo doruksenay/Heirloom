@@ -1,0 +1,6 @@
+/* The "Easy-read font" setting: Lexend (designed for reading fluency); latin + latin-ext cover English and Turkish.
+   The files are only fetched when the font is actually used. */
+@import '@fontsource/lexend/latin-400.css';
+@import '@fontsource/lexend/latin-ext-400.css';
+@import '@fontsource/lexend/latin-600.css';
+@import '@fontsource/lexend/latin-ext-600.css';

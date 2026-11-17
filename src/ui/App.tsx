@@ -48,7 +48,7 @@ class Boundary extends Component<{ children: ComponentChildren; onReset: () => v
 const NAV: { tab: Tab; label: string; icon: string }[] = [
   { tab: 'life', label: 'Life', icon: 'life' },
   { tab: 'home', label: 'Home', icon: 'home' },
-  { tab: 'family', label: 'Family', icon: 'family' },
+  { tab: 'family', label: 'Album', icon: 'family' },
   { tab: 'activities', label: 'Activities', icon: 'bolt' },
   { tab: 'store', label: 'Store', icon: 'bag' },
 ];

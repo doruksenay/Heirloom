@@ -81,7 +81,7 @@ export function Activities({ app }: { app: AppApi }) {
       />
       {/* an optional bonus under the list, never a gate above it (review 5 §3.11) */}
       {!s.player.bonusActions && !hasPlus(s) && !s.pending && s.player.jailYears === 0 && (
-        <div class="row between muted" style={{ fontSize: '13px', gap: '10px', padding: '2px 4px' }}>
+        <div class="row between muted" style={{ fontSize: 'calc(13px * var(--fs, 1))', gap: '10px', padding: '2px 4px' }}>
           <span class="grow">{T('Bonus: a short ad gives you 2 more activities this year.')}</span>
           <button
             type="button"

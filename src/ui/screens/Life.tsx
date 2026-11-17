@@ -4,6 +4,7 @@ import { TORCH_AGE, ageUp, canPassTorch, canRewind, choose, lifeStage, playerAge
 import { useState } from 'preact/hooks';
 import { JOB_BOARD_EVENT } from '../../content/base/job-board';
 import { JobBoard } from './JobBoard';
+import { DilemmaCard, isDilemma } from '../EventCards';
 import { fmtShort } from '../money';
 import { getCountry } from '../../engine/world';
 import { cityName } from '../../engine/places';
@@ -81,6 +82,7 @@ export function Life({ app }: { app: AppApi }) {
     !!pending &&
     (pending.choices.some((c) => !!c.badge) || (age >= 16 && !QUIET_CATEGORIES.includes(pending.category)));
   const showRewind = !!pending && matters && canRewind(s);
+  const cardMode = !!pending && app.profile.settings.cardEvents !== false && isDilemma(pending.eventId) && pending.choices.length >= 2;
   const watch = s.dynasty.heirlooms.find((h) => h.defId === 'clock');
 
   return (
@@ -98,7 +100,7 @@ export function Life({ app }: { app: AppApi }) {
           </div>
         )}
         <div class="row" style={{ gap: '2px' }}>
-          <span class="muted num" style={{ fontSize: '13px', fontWeight: 600, marginRight: '4px' }}>
+          <span class="muted num" style={{ fontSize: 'calc(13px * var(--fs, 1))', fontWeight: 600, marginRight: '4px' }}>
             {s.year}
           </span>
           {s.daily ? (
@@ -183,18 +185,24 @@ export function Life({ app }: { app: AppApi }) {
               </div>
             </div>
             {sceneFor(pending.eventId, pending.category) && <SceneArt id={sceneFor(pending.eventId, pending.category)!} />}
-            <h2 id="ev-title" style={{ fontSize: '25px', fontWeight: 800, lineHeight: 1.15 }}>
-              {pending.title}
-            </h2>
-            {pending.body && <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--text-soft)', fontSize: '16px' }}>{pending.body}</p>}
-            <div class="list" style={{ gap: '10px' }}>
-              {pending.choices.map((ch) => (
-                <button type="button" class="choice" key={ch.id} disabled={ch.disabled} onClick={() => app.act((g) => choose(g, ch.id))}>
-                  <span>{ch.label}</span>
-                  {ch.badge && <span class={`chip ${ch.disabled ? '' : ch.badge === 'Risky' || ch.badge === 'Riskli' ? 'bad' : 'accent'}`}>{badgeText(ch.badge)}</span>}
-                </button>
-              ))}
-            </div>
+            {cardMode ? (
+              <DilemmaCard pending={pending} onChoose={(id) => app.act((g) => choose(g, id))} />
+            ) : (
+              <>
+              <h2 id="ev-title" style={{ fontSize: 'calc(25px * var(--fs, 1))', fontWeight: 800, lineHeight: 1.15 }}>
+                {pending.title}
+              </h2>
+              {pending.body && <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--text-soft)', fontSize: 'calc(16px * var(--fs, 1))' }}>{pending.body}</p>}
+              <div class="list" style={{ gap: '10px' }}>
+                {pending.choices.map((ch) => (
+                  <button type="button" class="choice" key={ch.id} disabled={ch.disabled} onClick={() => app.act((g) => choose(g, ch.id))}>
+                    <span>{ch.label}</span>
+                    {ch.badge && <span class={`chip ${ch.disabled ? '' : ch.badge === 'Risky' || ch.badge === 'Riskli' ? 'bad' : 'accent'}`}>{badgeText(ch.badge)}</span>}
+                  </button>
+                ))}
+              </div>
+              </>
+            )}
             {showRewind && watch && (
               <button
                 type="button"
@@ -242,7 +250,7 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
   const last = s.dynasty.lives[s.dynasty.lives.length - 1];
   if (s.dynasty.generation >= 2 && !seen('gen2') && last?.handedOver) {
     return (
-      <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family tree'), run: () => app.go('family') }}>
+      <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family album'), run: () => app.go('family') }}>
         {T('Generation {n}. {name} handed the family over to you and is still around: find them on the Family tab.', { n: s.dynasty.generation, name: last.name.split(' ')[0] })}
       </Tip>
     );
@@ -250,7 +258,7 @@ function LifeTip({ app, age }: { app: AppApi; age: number }) {
   if (s.dynasty.generation >= 2 && !seen('gen2')) {
     // round 7: say who it was (review 6 §3.15: a grandchild heir read "your mother's or father's life")
     return (
-      <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family tree'), run: () => app.go('family') }}>
+      <Tip app={app} id="gen2" icon="family" action={{ label: T('See the family album'), run: () => app.go('family') }}>
         {T('Generation {n}. {Kin} life is now part of the family tree, and everything they left behind is yours.', { n: s.dynasty.generation, Kin: heirKinOf(s, app.lang) })}
       </Tip>
     );

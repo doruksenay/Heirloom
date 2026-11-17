@@ -790,7 +790,7 @@ export function Home({ app }: { app: AppApi }) {
         {p.home.owned && (
           <div style={{ textAlign: 'right' }}>
             <div class="eyebrow">{T('Value')}</div>
-            <div class="num" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '18px' }}>
+            <div class="num" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'calc(18px * var(--fs, 1))' }}>
               {fmtMoney(p.home.value, p.countryId, app.lang)}
             </div>
           </div>
@@ -804,7 +804,7 @@ export function Home({ app }: { app: AppApi }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
           <h2 class="title-l">{T('Pets')}</h2>
-          <span class="muted" style={{ fontSize: '13px' }}>
+          <span class="muted" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
             {T('They stay with the house')}
           </span>
         </div>
@@ -815,7 +815,7 @@ export function Home({ app }: { app: AppApi }) {
           ))}
         </div>
         {remembered.length > 0 && (
-          <div class="muted" style={{ fontSize: '13px' }}>
+          <div class="muted" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
             {T('In memory: {names}', { names: remembered.map((x) => displayName(x, app.lang)).join(', ') })}
           </div>
         )}
@@ -824,7 +824,7 @@ export function Home({ app }: { app: AppApi }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
           <h2 class="title-l">{T('Heirlooms')}</h2>
-          <span class="muted" style={{ fontSize: '13px' }}>
+          <span class="muted" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
             {T('Passed down, never sold')}
           </span>
         </div>
@@ -856,7 +856,7 @@ export function Home({ app }: { app: AppApi }) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div class="section-head">
           <h2 class="title-l">{T('Decorate')}</h2>
-          <span class="muted num" style={{ fontSize: '13px' }}>
+          <span class="muted num" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
             {T('Bank {m}', { m: fmtMoney(p.money, p.countryId, app.lang) })}
           </span>
         </div>
@@ -868,7 +868,7 @@ export function Home({ app }: { app: AppApi }) {
             {T('By style')}
           </button>
         </div>
-        {view === 'style' && <div class="muted" style={{ fontSize: '13px' }}>{T('Complete a style set for +1 Happiness every year.')}</div>}
+        {view === 'style' && <div class="muted" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>{T('Complete a style set for +1 Happiness every year.')}</div>}
         {groups.map((g) => (
           <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div class="row between">
@@ -901,14 +901,14 @@ function MortgageCard({ app }: { app: AppApi }) {
           <Icon name="home" size={18} />
           <span class="item-title">{T('Mortgage')}</span>
         </div>
-        <span class="muted num" style={{ fontSize: '13px' }}>
+        <span class="muted num" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
           {Tn(loan.yearsLeft, '{n} year to go', '{n} years to go')}
         </span>
       </div>
       <div class="bar" role="meter" aria-label={T('Paid off')} aria-valuenow={paid} aria-valuemin={0} aria-valuemax={100}>
         <div style={{ width: `${paid}%`, background: 'var(--accent)' }} />
       </div>
-      <div class="row between" style={{ fontSize: '13px' }}>
+      <div class="row between" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
         <span class="muted">
           {T('Left to pay')} <b class="num">{money(loan.balance)}</b>
         </span>

@@ -107,14 +107,14 @@ export function CloudSettings({ app }: { app: AppApi }) {
             <div class="daily-cat">
               <span class="grow">
                 <span class="muted small">{T('Family code')}</span>
-                <b class="num" style={{ fontSize: '19px', letterSpacing: '0.05em', userSelect: 'text', whiteSpace: 'nowrap' }}>{c.code}</b>
+                <b class="num" style={{ fontSize: 'calc(19px * var(--fs, 1))', letterSpacing: '0.05em', userSelect: 'text', whiteSpace: 'nowrap' }}>{c.code}</b>
               </span>
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1px' }}>
                 <span class="muted small">PIN</span>
                 <button
                   type="button"
                   class="num"
-                  style={{ fontSize: '19px', fontWeight: 700, background: 'none', border: 0, padding: 0, color: 'inherit', userSelect: 'text' }}
+                  style={{ fontSize: 'calc(19px * var(--fs, 1))', fontWeight: 700, background: 'none', border: 0, padding: 0, color: 'inherit', userSelect: 'text' }}
                   onClick={() => setShowPin(!showPin)}
                   aria-label={showPin ? T('Hide') : T('Show')}
                 >

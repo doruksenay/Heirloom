@@ -82,7 +82,7 @@ export function Intro({ app }: { app: AppApi }) {
           </Scene>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <h1 class="title-xl">{cur.title}</h1>
-            <p class="muted" style={{ margin: 0, lineHeight: 1.55, fontSize: '17px' }}>
+            <p class="muted" style={{ margin: 0, lineHeight: 1.55, fontSize: 'calc(17px * var(--fs, 1))' }}>
               {cur.body}
             </p>
           </div>
@@ -105,7 +105,7 @@ export function Intro({ app }: { app: AppApi }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <h1 class="title-xl">{T('One question before you start')}</h1>
-            <p class="muted" style={{ margin: 0, lineHeight: 1.55, fontSize: '17px' }}>
+            <p class="muted" style={{ margin: 0, lineHeight: 1.55, fontSize: 'calc(17px * var(--fs, 1))' }}>
               {T('Can we collect anonymous usage data and crash reports? It shows us where players get stuck and what breaks. No names, no saves, nothing that identifies you. You can change this any time in Settings.')}
             </p>
           </div>

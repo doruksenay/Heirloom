@@ -36,7 +36,7 @@ export function JobBoard({ app }: { app: AppApi }) {
       <div class="sheet jobs" role="dialog" aria-modal="true" aria-labelledby="jobs-title">
         <div class="row between">
           <div>
-            <h2 id="jobs-title" class="title-l" style={{ fontSize: '24px' }}>
+            <h2 id="jobs-title" class="title-l" style={{ fontSize: 'calc(24px * var(--fs, 1))' }}>
               {T('Job listings')}
             </h2>
             <div class="muted small">{Tn(rows.filter((r) => r.qualifies).length, '{n} opening you can apply for. Salaries are per year.', '{n} openings you can apply for. Salaries are per year.')}</div>

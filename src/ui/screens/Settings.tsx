@@ -8,6 +8,13 @@ import { track } from '../../platform/analytics';
 import type { Lang } from '../../engine/types';
 import { DATING_PREFS, datingPref, datingPrefLabel, setDatingPref } from '../../content/base/dating';
 import { CloudSettings } from './CloudSettings';
+import { textSizeOf, type TextSize } from '../a11y';
+
+const TEXT_SIZES: { id: TextSize; label: string }[] = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'large', label: 'Large' },
+  { id: 'xlarge', label: 'Extra large' },
+];
 
 const LANGS: { id: Lang; label: string }[] = [
   { id: 'en', label: 'English' },
@@ -49,6 +56,38 @@ export function Settings({ app }: { app: AppApi }) {
           ))}
         </div>
         {app.game && <div class="item-sub">{T('Stories already written stay in the language they were written in.')}</div>}
+      </section>
+
+      <section class="card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <h2 class="title-l">{T('Reading and comfort')}</h2>
+        <div class="item-title">{T('Text size')}</div>
+        <div class="seg" role="group" aria-label={T('Text size')}>
+          {TEXT_SIZES.map((x) => (
+            <button type="button" key={x.id} aria-pressed={textSizeOf(st) === x.id} onClick={() => set({ textSize: x.id })}>
+              {T(x.label)}
+            </button>
+          ))}
+        </div>
+        {([
+          ['easyFont', 'Easy-read font', 'A clear, evenly spaced font for long reading.', st.easyFont === true],
+          ['reduceMotion', 'Reduce motion', 'Turns off animations and transitions.', st.reduceMotion === true],
+          ['highContrast', 'High contrast', 'Stronger text and outlines.', st.highContrast === true],
+        ] as const).map(([key, title, sub, on]) => (
+          <div class="toggle-row" key={key}>
+            <div>
+              <div class="item-title">{T(title)}</div>
+              <div class="item-sub">{T(sub)}</div>
+            </div>
+            <button type="button" class="switch" role="switch" aria-checked={on} aria-label={T(title)} onClick={() => set({ [key]: !on })} />
+          </div>
+        ))}
+        <div class="toggle-row">
+          <div>
+            <div class="item-title">{T('Card view for hard choices')}</div>
+            <div class="item-sub">{T('Moral dilemmas appear as a card you can swipe or tap.')}</div>
+          </div>
+          <button type="button" class="switch" role="switch" aria-checked={st.cardEvents !== false} aria-label={T('Card view for hard choices')} onClick={() => set({ cardEvents: st.cardEvents === false })} />
+        </div>
       </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -168,7 +207,7 @@ export function Settings({ app }: { app: AppApi }) {
           {T('Privacy policy')}
         </a>
       )}
-      <div class="muted" style={{ fontSize: '12px', textAlign: 'center' }}>
+      <div class="muted" style={{ fontSize: 'calc(12px * var(--fs, 1))', textAlign: 'center' }}>
         {T('Heirloom: Life Simulator · {v} test build', { v: `v${__APP_VERSION__}` })}
       </div>
     </div>

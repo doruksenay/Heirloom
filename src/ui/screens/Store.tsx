@@ -114,7 +114,7 @@ export function Store({ app }: { app: AppApi }) {
                   </div>
                 )}
                 <div class="row between pack-foot">
-                  <span class="muted" style={{ fontSize: '13px' }}>
+                  <span class="muted" style={{ fontSize: 'calc(13px * var(--fs, 1))' }}>
                     {prod.free
                       ? T('Included for everyone')
                       : prod.mature

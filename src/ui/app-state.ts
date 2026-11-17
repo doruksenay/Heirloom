@@ -4,6 +4,7 @@ import { refreshPacks } from '../engine/game';
 import { loadDaily, loadGame, loadMode, loadProfile, saveDaily, saveGame, saveMode, saveProfile } from '../platform/storage';
 import { newDailyGame, todayKey, trackDaily } from '../engine/daily';
 import { applyTheme, getTheme, isThemeOwned, type ThemeDef } from '../themes/registry';
+import { applyA11y } from './a11y';
 import { AdMobProvider, type AdPlacement } from '../platform/ads';
 import { expandEntitlements } from '../platform/purchases';
 import { isNative, syncStatusBar } from '../platform/native';
@@ -97,6 +98,9 @@ export function useApp(): AppApi {
     const t = getTheme(profile.settings.themeId);
     return isThemeOwned(t, profile.entitlements) ? t : getTheme('evening');
   })();
+
+  const a11yKey = [profile.settings.textSize, profile.settings.easyFont, profile.settings.reduceMotion, profile.settings.highContrast].join('|');
+  useEffect(() => applyA11y(profile.settings), [a11yKey]);
 
   useEffect(() => {
     applyTheme(theme);

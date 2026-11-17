@@ -17,7 +17,7 @@ export function AdOverlay({ app }: { app: AppApi }) {
     <div class="sheet-backdrop" style={{ alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }}>
       <div class="card" role="dialog" aria-modal="true" aria-label={T('Ad')} style={{ width: 'min(90%, 360px)', display: 'flex', flexDirection: 'column', gap: '14px', textAlign: 'center' }}>
         <div class="eyebrow">{T('Ad placeholder · test build')}</div>
-        <div style={{ aspectRatio: '16 / 9', borderRadius: 'var(--radius-m)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '40px', fontWeight: 800 }}>
+        <div style={{ aspectRatio: '16 / 9', borderRadius: 'var(--radius-m)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 'calc(40px * var(--fs, 1))', fontWeight: 800 }}>
           {left > 0 ? left : '✓'}
         </div>
         <div class="muted">{T('Reward: {r}', { r: uiLang() === 'tr' ? reward.labelTr : reward.label })}</div>

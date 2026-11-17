@@ -104,12 +104,12 @@ export function Summary({ app }: { app: AppApi }) {
             {handed ? T('Born {year}', { year: r.birthYear }) : `${r.birthYear} – ${r.deathYear}`} · {cityName(r.city, app.lang)}
           </div>
         </div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: '56px', fontWeight: 800, lineHeight: 1, color: 'var(--accent)' }}>{r.age}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 'calc(56px * var(--fs, 1))', fontWeight: 800, lineHeight: 1, color: 'var(--accent)' }}>{r.age}</div>
         <div class="eyebrow" style={{ marginTop: '-6px' }}>
           {handed ? T('Handed over at {n}', { n: r.age }) : T('years lived')} · {T('legacy +{n}', { n: fmtInt(r.legacy) })}
         </div>
         {ribbon && (
-          <div class="chip accent" style={{ fontSize: '14px', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', whiteSpace: 'normal' }}>
+          <div class="chip accent" style={{ fontSize: 'calc(14px * var(--fs, 1))', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', whiteSpace: 'normal' }}>
             <span>{newRibbon ? T('New ribbon: {name}', { name: rName }) : T('Ribbon: {name}', { name: rName })}</span>
             <span style={{ fontWeight: 500, opacity: 0.85 }}>{ribbonDesc(ribbon, app.lang)}</span>
           </div>

@@ -214,6 +214,13 @@ export interface Settings {
   /** Anonymous usage stats and crash reports. undefined = not asked yet (nothing is sent). */
   analytics?: boolean;
   sound: boolean;
+  /** Accessibility (ui/a11y.ts). All optional: older profiles keep the defaults. */
+  textSize?: 'normal' | 'large' | 'xlarge';
+  easyFont?: boolean; // Lexend instead of the theme fonts
+  reduceMotion?: boolean; // true: no animation; undefined follows the device setting
+  highContrast?: boolean;
+  /** Card layout for moral-dilemma events (ui/EventCards.tsx). Default on. */
+  cardEvents?: boolean;
 }
 
 /** Things that live outside a single save: purchases and settings. */
